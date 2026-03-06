@@ -1,10 +1,12 @@
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use clap::Parser;
 use tracing::{error, info};
 
-use mesoclaw_core::config::{default_config_path, default_data_dir, load_or_create_config};
-use mesoclaw_core::db;
+use mesoclaw_core::boot;
+use mesoclaw_core::config::{default_config_path, load_or_create_config};
+use mesoclaw_core::gateway::GatewayServer;
 
 #[derive(Parser)]
 #[command(name = "mesoclaw-daemon", about = "MesoClaw headless daemon")]
@@ -22,7 +24,6 @@ async fn main() {
 
     let config = match load_or_create_config(&config_path) {
         Ok(c) => {
-            // Tracing isn't initialized yet, so use eprintln for early messages
             eprintln!("Config loaded from {}", config_path.display());
             c
         }
@@ -41,48 +42,30 @@ async fn main() {
 
     info!(identity = %config.identity_name, "Starting MesoClaw daemon");
 
-    let data_dir = config
-        .data_dir
-        .as_ref()
-        .map(PathBuf::from)
-        .unwrap_or_else(default_data_dir);
+    let host = config.gateway_host.clone();
+    let port = config.gateway_port;
 
-    let db_path = config
-        .db_path
-        .as_ref()
-        .map(PathBuf::from)
-        .unwrap_or_else(|| data_dir.join("mesoclaw.db"));
-
-    let pool = match db::init_pool(&db_path) {
-        Ok(p) => {
-            info!(path = %db_path.display(), "Database initialized");
-            p
-        }
+    // Initialize all services
+    let services = match boot::init_services(config).await {
+        Ok(s) => s,
         Err(e) => {
-            error!(
-                "Failed to initialize database at {}: {e}",
-                db_path.display()
-            );
+            error!("Failed to initialize services: {e}");
             std::process::exit(1);
         }
     };
 
-    if let Err(e) = db::with_db(&pool, db::run_migrations).await {
-        error!("Failed to run migrations: {e}");
+    // Convert services into gateway AppState
+    let state = Arc::new(mesoclaw_core::gateway::state::AppState::from(services));
+    let gateway = GatewayServer::new(state);
+
+    // Graceful shutdown on SIGTERM/SIGINT
+    let shutdown = async {
+        tokio::signal::ctrl_c().await.ok();
+        info!("Shutdown signal received, draining connections...");
+    };
+
+    if let Err(e) = gateway.start_with_shutdown(&host, port, shutdown).await {
+        error!("Gateway server error: {e}");
         std::process::exit(1);
     }
-    info!("Database migrations applied");
-
-    info!(
-        host = %config.gateway_host,
-        port = %config.gateway_port,
-        "MesoClaw daemon ready"
-    );
-
-    // TODO: Start axum gateway server here — Phase 3
-    // STUB: waiting for shutdown signal until gateway is implemented
-    tokio::signal::ctrl_c()
-        .await
-        .expect("Failed to listen for Ctrl+C");
-    info!("Shutting down");
 }

@@ -154,7 +154,7 @@ mesoclaw/
 │   │   ├── src/
 │   │   │   ├── lib.rs      # Module exports + Result<T> alias
 │   │   │   ├── error.rs    # MesoError enum (16 variants, thiserror)
-│   │   │   ├── boot.rs     # init_services() -- single boot entry point
+│   │   │   ├── boot.rs     # init_services() -> Services -> AppState, single boot entry point
 │   │   │   ├── config/     # TOML config (schema + load/save + OS paths)
 │   │   │   ├── db/         # rusqlite pool + WAL + migrations + spawn_blocking
 │   │   │   ├── event_bus/  # EventBus trait + TokioBroadcastBus (12 events)
@@ -162,8 +162,8 @@ mesoclaw/
 │   │   │   ├── credential/ # CredentialStore trait + InMemoryCredentialStore
 │   │   │   ├── security/   # SecurityPolicy + AutonomyLevel + rate limiter + audit log
 │   │   │   ├── tools/      # Tool trait + 8 tools (shell, file ops, web search, sysinfo, etc.)
-│   │   │   ├── ai/         # AI providers + models (Phase 3)
-│   │   │   ├── gateway/    # axum HTTP + WS server (Phase 3)
+│   │   │   ├── ai/         # AI agent (rig-core), providers, session manager, tool adapter
+│   │   │   ├── gateway/    # axum HTTP+WS gateway (20 routes, auth middleware, error mapping)
 │   │   │   ├── identity/   # SoulLoader + personas + hot-reload (Phase 4)
 │   │   │   ├── skills/     # SkillRegistry + markdown parsing + Tera (Phase 4)
 │   │   │   ├── user/       # UserProfile + UserLearner + progressive learning (Phase 4)
@@ -174,7 +174,7 @@ mesoclaw/
 │   ├── mesoclaw-mobile/    # Tauri 2 shell (iOS + Android)
 │   ├── mesoclaw-cli/       # clap CLI
 │   ├── mesoclaw-tui/       # ratatui TUI
-│   └── mesoclaw-daemon/    # Headless daemon (config + DB + tracing wired)
+│   └── mesoclaw-daemon/    # Headless daemon (full gateway server)
 └── web/                    # Svelte 5 frontend (Phase 7)
     ├── src/
     └── package.json
@@ -258,7 +258,7 @@ graph TB
     CompModel -.-> CustomProv
 ```
 
-All binary crates receive these traits via `GatewayState` (Clone + Arc\<T\>), never concrete types.
+All binary crates receive these traits via `AppState` (Clone + Arc\<T\>), never concrete types.
 
 ## Credential System
 
@@ -453,94 +453,88 @@ graph TB
 
 ## Gateway Routes
 
-All clients communicate via the HTTP+WebSocket gateway at `127.0.0.1:18981`. Routes are grouped by subsystem (~40 total).
+All clients communicate via the HTTP+WebSocket gateway at `127.0.0.1:18981`. Routes are grouped by subsystem (20 implemented in Phase 3).
 
-### Sessions & Chat (5 routes)
-
-| Method | Path | Description |
-|---|---|---|
-| POST | `/api/sessions` | Create new chat session |
-| GET | `/api/sessions` | List all sessions |
-| GET | `/api/sessions/:id` | Get session with messages |
-| DELETE | `/api/sessions/:id` | Delete session |
-| POST | `/api/sessions/:id/messages` | Send message (streaming SSE) |
-
-### Providers (2 routes)
+### Health (1 route, no auth)
 
 | Method | Path | Description |
 |---|---|---|
-| GET | `/api/providers` | List configured AI providers |
-| GET | `/api/providers/:name/models` | List models for a provider |
+| GET | `/health` | Health check |
+
+### Sessions & Chat (7 routes)
+
+| Method | Path | Description |
+|---|---|---|
+| POST | `/sessions` | Create new chat session |
+| GET | `/sessions` | List all sessions |
+| GET | `/sessions/{id}` | Get session details |
+| PUT | `/sessions/{id}` | Update session |
+| DELETE | `/sessions/{id}` | Delete session |
+| GET | `/sessions/{id}/messages` | Get messages for a session |
+| POST | `/sessions/{id}/messages` | Send message to session |
+
+### Chat (1 route)
+
+| Method | Path | Description |
+|---|---|---|
+| POST | `/chat` | Chat with AI agent |
 
 ### Memory (5 routes)
 
 | Method | Path | Description |
 |---|---|---|
-| POST | `/api/memory` | Store memory entry |
-| GET | `/api/memory/search` | Full-text + vector search |
-| GET | `/api/memory/:id` | Get memory entry |
-| PUT | `/api/memory/:id` | Update memory entry |
-| DELETE | `/api/memory/:id` | Delete memory entry |
+| POST | `/memory` | Create memory entry |
+| GET | `/memory` | Recall/search memories |
+| GET | `/memory/{key}` | Get memory by key |
+| PUT | `/memory/{key}` | Update memory by key |
+| DELETE | `/memory/{key}` | Delete memory by key |
 
-### Identity / Soul (3 routes)
-
-| Method | Path | Description |
-|---|---|---|
-| GET | `/api/personas` | List available personas |
-| GET | `/api/personas/:name` | Get persona details |
-| PUT | `/api/personas/active` | Set active persona |
-
-### Skills (5 routes)
+### Configuration (2 routes)
 
 | Method | Path | Description |
 |---|---|---|
-| GET | `/api/skills` | List available skills |
-| GET | `/api/skills/:name` | Get skill details + parameters |
-| POST | `/api/skills/:name/execute` | Execute skill with parameters |
-| POST | `/api/skills/reload` | Reload skills from disk |
-| POST | `/api/skills/validate` | Validate a skill file |
+| GET | `/config` | Get current configuration (auth token redacted) |
+| PUT | `/config` | Update configuration |
 
-### User Profile + Learning (5 routes)
+### Providers & Models (3 routes)
 
 | Method | Path | Description |
 |---|---|---|
-| GET | `/api/user/profile` | Get user profile |
-| PUT | `/api/user/profile` | Update user profile |
-| GET | `/api/user/observations` | Get learned observations |
-| DELETE | `/api/user/observations` | Clear all observations |
-| PUT | `/api/user/learning` | Toggle learning on/off |
+| GET | `/providers` | List configured AI providers |
+| GET | `/providers/{id}` | Get provider details |
+| GET | `/models` | List available models |
 
-### Scheduler (4 routes, feature-gated)
+### Tools (2 routes)
 
 | Method | Path | Description |
 |---|---|---|
-| POST | `/api/scheduler/tasks` | Create scheduled task |
-| GET | `/api/scheduler/tasks` | List scheduled tasks |
-| PUT | `/api/scheduler/tasks/:id` | Update scheduled task |
-| DELETE | `/api/scheduler/tasks/:id` | Delete scheduled task |
+| GET | `/tools` | List available tools |
+| POST | `/tools/{name}/execute` | Execute a tool by name |
 
-### System (4 routes)
+### System (1 route)
 
 | Method | Path | Description |
 |---|---|---|
-| GET | `/api/health` | Health check |
-| GET | `/api/config` | Get current configuration |
-| PUT | `/api/config` | Update configuration |
-| GET | `/api/version` | Version + build info |
+| GET | `/system/info` | System information |
 
-### Web Dashboard (1 route, feature-gated)
-
-| Method | Path | Description |
-|---|---|---|
-| GET | `/` | Serve Svelte SPA (static files) |
-
-### WebSocket Channels
+### WebSocket Channels (1 route)
 
 | Path | Description |
 |---|---|
 | `/ws/chat` | Streaming chat responses |
-| `/ws/events` | Real-time AppEvent stream |
-| `/ws/agents` | Agent tool-call progress |
+
+### Phase 4+ (not yet implemented)
+
+The following route groups are planned for future phases:
+
+| Group | Routes | Phase |
+|---|---|---|
+| Identity / Soul (personas) | 3 routes | Phase 4 |
+| Skills | 5 routes | Phase 4 |
+| User Profile + Learning | 5 routes | Phase 4 |
+| Scheduler | 4 routes (feature-gated) | Phase 8 |
+| Web Dashboard | 1 route (feature-gated) | Phase 6 |
+| WebSocket `/ws/events`, `/ws/agents` | 2 channels | Phase 4+ |
 
 ## Concurrency Rules
 
@@ -552,7 +546,7 @@ These rules are enforced across the entire codebase to prevent async runtime iss
 | No `block_on()` anywhere | Panics inside tokio runtime; use `tokio::spawn` or `.await` |
 | All SQLite ops via `spawn_blocking` | `rusqlite` is synchronous; blocking in async context starves tasks |
 | All errors are `MesoError` | No `Result<T, String>`; use `thiserror` enum with typed variants |
-| `GatewayState` is `Clone + Arc<T>` | Shared across axum handlers without lifetime issues |
+| `AppState` is `Clone + Arc<T>` | Shared across axum handlers without lifetime issues |
 | `EventBus` uses `tokio::sync::broadcast` | Lock-free fan-out to all subscribers |
 | Never hold async locks across `.await` | Prevents deadlocks; acquire, use, drop before yielding |
 

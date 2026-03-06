@@ -92,11 +92,15 @@ flowchart TD
     Call[Function Call] --> Result{Operation Result}
     Result -->|Ok| ReturnValue[Return value]
     Result -->|Err| Match{Match MesoError variant}
-    Match -->|DatabaseError| DB[Log + return 500]
-    Match -->|ConfigError| Cfg[Log + return 400]
-    Match -->|AiError| AI[Log + retry or return 503]
-    Match -->|AuthError| Auth[Return 401]
-    Match -->|NotFound| NF[Return 404]
+    Match -->|NotFound| NF["404 MESO_NOT_FOUND"]
+    Match -->|Auth| Auth["401 MESO_AUTH_REQUIRED"]
+    Match -->|PolicyDenied| PD["403 MESO_POLICY_DENIED"]
+    Match -->|Serialization| Ser["400 MESO_BAD_REQUEST"]
+    Match -->|Config| Cfg["422 MESO_CONFIG_ERROR"]
+    Match -->|RateLimited| RL["429 MESO_RATE_LIMITED"]
+    Match -->|Agent| AI["502 MESO_AGENT_ERROR"]
+    Match -->|Database| DB["503 MESO_DB_ERROR"]
+    Match -->|Tool / Gateway| TG["500 MESO_TOOL_ERROR /<br>MESO_GATEWAY_ERROR"]
 ```
 
 ## Database Operation Flow (async-safe)
@@ -117,14 +121,16 @@ sequenceDiagram
     participant C as Client
     participant S as Server (Gateway)
 
-    C->>S: WS Connect /ws/chat
-    C->>S: { type: "chat", content: "hello" }
-    Note over S: Query memory + build prompt + call LLM
-    S-->>C: { type: "token", content: "Hi" }
-    S-->>C: { type: "token", content: " there" }
-    S-->>C: { type: "tool_call", name: "websearch" }
-    S-->>C: { type: "tool_result", result: "..." }
-    S-->>C: { type: "done" }
+    C->>S: WS Connect /ws/chat?token=xxx
+    C->>S: { "prompt": "hello", "session_id": "optional-uuid" }
+    Note over S: Validate JSON, check agent, call MesoAgent.prompt
+    S-->>C: { "type": "text", "content": "Hi there!" }
+    S-->>C: { "type": "done" }
+    Note over C,S: Error cases
+    C->>S: invalid-json
+    S-->>C: { "type": "error", "error": "invalid JSON: ..." }
+    C->>S: { "prompt": "hello" } (no agent configured)
+    S-->>C: { "type": "error", "error": "no agent configured" }
 ```
 
 ## Persona Loading Flow

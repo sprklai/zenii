@@ -123,4 +123,76 @@ mod tests {
             "Expected config path to end with config.toml, got: {path:?}"
         );
     }
+
+    #[test]
+    fn phase3_config_defaults() {
+        let config = AppConfig::default();
+        assert!(config.gateway_auth_token.is_none());
+        assert_eq!(config.ws_max_connections, 32);
+        assert_eq!(config.agent_max_turns, 20);
+        assert_eq!(config.agent_max_tokens, 4096);
+        assert!(config.agent_system_prompt.is_none());
+    }
+
+    #[test]
+    fn provider_config_deserializes() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("config.toml");
+        std::fs::write(
+            &path,
+            r#"
+provider_name = "anthropic"
+provider_type = "anthropic"
+provider_model_id = "claude-sonnet-4-20250514"
+provider_api_key_env = "ANTHROPIC_API_KEY"
+"#,
+        )
+        .unwrap();
+
+        let config = load_config(&path).unwrap();
+        assert_eq!(config.provider_name, "anthropic");
+        assert_eq!(config.provider_type, "anthropic");
+        assert_eq!(config.provider_model_id, "claude-sonnet-4-20250514");
+        assert_eq!(
+            config.provider_api_key_env,
+            Some("ANTHROPIC_API_KEY".into())
+        );
+    }
+
+    #[test]
+    fn auth_token_optional() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("config.toml");
+
+        std::fs::write(&path, "gateway_port = 18981\n").unwrap();
+        let config = load_config(&path).unwrap();
+        assert!(config.gateway_auth_token.is_none());
+
+        std::fs::write(
+            &path,
+            r#"gateway_auth_token = "secret123"
+"#,
+        )
+        .unwrap();
+        let config = load_config(&path).unwrap();
+        assert_eq!(config.gateway_auth_token, Some("secret123".into()));
+    }
+
+    #[test]
+    fn backwards_compat_aliases() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("config.toml");
+        std::fs::write(
+            &path,
+            r#"
+default_provider = "my-prov"
+default_model = "my-model"
+"#,
+        )
+        .unwrap();
+
+        let config = load_config(&path).unwrap();
+        assert_eq!(config.provider_name, "my-prov");
+        assert_eq!(config.provider_model_id, "my-model");
+    }
 }

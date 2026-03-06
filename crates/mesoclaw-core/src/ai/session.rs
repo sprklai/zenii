@@ -159,10 +159,8 @@ impl SessionManager {
         let id = id.to_string();
 
         db::with_db(&self.db, move |conn| {
-            let rows_affected = conn.execute(
-                "DELETE FROM sessions WHERE id = ?1",
-                rusqlite::params![id],
-            )?;
+            let rows_affected =
+                conn.execute("DELETE FROM sessions WHERE id = ?1", rusqlite::params![id])?;
 
             if rows_affected == 0 {
                 return Err(MesoError::NotFound(format!("session not found: {id}")));

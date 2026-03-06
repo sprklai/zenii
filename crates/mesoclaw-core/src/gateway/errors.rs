@@ -1,6 +1,6 @@
+use axum::Json;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
-use axum::Json;
 use serde::Serialize;
 
 use crate::MesoError;
@@ -35,9 +35,10 @@ impl IntoResponse for MesoError {
             MesoError::Io(_) => (StatusCode::INTERNAL_SERVER_ERROR, "MESO_IO_ERROR"),
             MesoError::EventBus(_) => (StatusCode::INTERNAL_SERVER_ERROR, "MESO_EVENT_ERROR"),
             MesoError::Channel(_) => (StatusCode::INTERNAL_SERVER_ERROR, "MESO_CHANNEL_ERROR"),
-            MesoError::TomlSerialize(_) => {
-                (StatusCode::INTERNAL_SERVER_ERROR, "MESO_TOML_SERIALIZE_ERROR")
-            }
+            MesoError::TomlSerialize(_) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "MESO_TOML_SERIALIZE_ERROR",
+            ),
             MesoError::Other(_) => (StatusCode::INTERNAL_SERVER_ERROR, "MESO_INTERNAL_ERROR"),
         };
 
@@ -193,10 +194,7 @@ mod tests {
         let mut codes = HashSet::new();
         for err in errors {
             let (_, code) = response_parts(err);
-            assert!(
-                codes.insert(code.clone()),
-                "duplicate error code: {code}"
-            );
+            assert!(codes.insert(code.clone()), "duplicate error code: {code}");
         }
 
         // 20 variants tested (Http skipped because reqwest::Error can't be easily constructed)

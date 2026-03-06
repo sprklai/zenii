@@ -9,9 +9,9 @@ pub mod tools;
 
 #[cfg(feature = "ai")]
 pub mod ai;
+pub mod boot;
 #[cfg(feature = "gateway")]
 pub mod gateway;
-pub mod boot;
 
 pub use error::MesoError;
 

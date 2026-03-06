@@ -56,11 +56,11 @@ pub async fn auth_middleware(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use axum::Router;
     use axum::body::Body;
     use axum::http::{Request as HttpRequest, StatusCode};
     use axum::middleware;
     use axum::routing::get;
-    use axum::Router;
     use tower::ServiceExt;
 
     async fn ok_handler() -> &'static str {
@@ -72,7 +72,10 @@ mod tests {
             .route("/health", get(ok_handler))
             .route("/api/test", get(ok_handler))
             .route("/ws/chat", get(ok_handler))
-            .layer(middleware::from_fn_with_state(token.clone(), auth_middleware))
+            .layer(middleware::from_fn_with_state(
+                token.clone(),
+                auth_middleware,
+            ))
             .with_state(token)
     }
 

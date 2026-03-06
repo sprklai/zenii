@@ -63,7 +63,7 @@ gantt
     section AI
     Phase 2 - AI Integration            :done, p2, after p1, 1
     section Gateway
-    Phase 3 - Gateway Server            :p3, after p2, 1
+    Phase 3 - Gateway Server            :done, p3, after p2, 1
     section Intelligence
     Phase 4 - Agent Intelligence         :p4, after p3, 1
     section Binaries
@@ -130,26 +130,32 @@ gantt
 
 ---
 
-### Phase 3: Gateway Server — `[NOT STARTED]`
+### Phase 3: Gateway Server — `[COMPLETE]`
 
-**Step 8: AI Agent**
-- Rig integration -- `AgentBuilder` wrapper for multi-provider support
-- Session management (create, resume, list)
-- Streaming responses via SSE/WS
+**Step 8: AI Agent + Providers**
+- `MesoAgent` — enum-based dispatch for OpenAI and Anthropic via rig-core 0.31
+- `RigToolAdapter` — bridges MesoClaw `dyn Tool` to rig's `ToolDyn` interface
+- Provider factory — `resolve_api_key`, `build_openai_client`, `build_anthropic_client`
+- `SessionManager` — CRUD for sessions and messages (SQLite-backed)
 
 **Step 9: Gateway Server**
-- axum HTTP server at `127.0.0.1:18981`
-- REST endpoints (CRUD for sessions, messages, memory, config)
-- WebSocket handler for real-time streaming
-- Auth middleware (token-based)
-- `rust-embed` for serving static frontend assets
+- axum HTTP+WS server at `127.0.0.1:18981` with 20 routes
+- 11 handler modules: health, sessions, messages, chat, memory, config, providers, tools, system, models, ws
+- Bearer token auth middleware (configurable, health bypasses auth)
+- CORS support (configurable origins)
+- Error mapping — unique MESO_* codes with appropriate HTTP status codes
+- WebSocket `/ws/chat` for streaming chat (text chunk + done protocol)
+- `AppState` — shared state with Arc<dyn Trait> for all services
 
-**Step 10: Boot Sequence**
-- `init_services()` function producing a `Services` bundle
-- Ordered startup: config -> DB -> event bus -> memory -> agent -> gateway
+**Step 10: Boot Sequence + Daemon**
+- `init_services(AppConfig) -> Services` — ordered initialization of all services
+- `Services -> AppState` conversion for gateway consumption
+- `mesoclaw-daemon` — fully wired: config → tracing → boot → gateway with graceful shutdown
 
-- **Tests**: endpoint responses, WS connection, message routing, agent flow, boot sequence ordering
+**New dependencies**: rig-core 0.31, tokio-stream 0.1.17, futures 0.3, tower 0.5 (dev)
+- **Tests**: 96 new tests (233 total), all passing. Zero clippy warnings.
 - **Plan**: [plans/phase3_gateway_server.md](../plans/phase3_gateway_server.md)
+- **Test plan**: [tests/phase3_gateway_server.md](../tests/phase3_gateway_server.md)
 
 ---
 

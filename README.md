@@ -231,10 +231,12 @@ mesoclaw/
 │   └── processes.md        # Process flow diagrams
 ├── plans/
 │   ├── phase1_core_foundation.md  # Phase 1 implementation plan
-│   └── phase2_ai_integration.md   # Phase 2 implementation plan
+│   ├── phase2_ai_integration.md   # Phase 2 implementation plan
+│   └── phase3_gateway_server.md   # Phase 3 implementation plan
 ├── tests/
 │   ├── phase1_core_foundation.md  # Phase 1 test plan + results
 │   ├── phase2_ai_integration.md   # Phase 2 test plan + results (105 tests)
+│   ├── phase3_gateway_server.md  # Phase 3 test plan + results (96 tests)
 │   └── ...
 ├── crates/
 │   ├── mesoclaw-core/      # Shared library (NO Tauri dependency)
@@ -369,6 +371,8 @@ default_provider = "openai"
 default_model = "gpt-4o"
 security_autonomy_level = "supervised"  # supervised | autonomous | strict
 max_tool_retries = 3
+# gateway_auth_token = "your-secret-token"  # Optional bearer token for auth
+# agent_max_turns = 20                       # Max tool-calling turns per request
 ```
 
 ## Gateway Routes (~40)
@@ -397,6 +401,7 @@ Detailed documentation lives in the `docs/` and `plans/` directories:
 - [Process Flows](docs/processes.md) -- Chat request, startup, error handling, WebSocket flows
 - [Phase 1 Plan](plans/phase1_core_foundation.md) -- Detailed implementation plan for core foundation
 - [Phase 2 Plan](plans/phase2_ai_integration.md) -- Memory, security, credentials, and tools
+- [Phase 3 Plan](plans/phase3_gateway_server.md) -- Gateway server, AI agent, boot sequence
 
 ### Implementation Status
 
@@ -404,7 +409,7 @@ Detailed documentation lives in the `docs/` and `plans/` directories:
 |-------|-------|--------|-------|
 | Phase 1: Core Foundation | 1-4 | Complete | 16/16 passing |
 | Phase 2: AI Integration | 5-7 | Complete | 137/137 passing |
-| Phase 3: Gateway Server | 8-10 | Not started | -- |
+| Phase 3: Gateway Server | 8-10 | Complete | 233/233 passing |
 | Phase 4: Agent Intelligence | 10a-10c | Not started | -- |
 | Phase 5: Binary Shells | 11-12 | Not started | -- |
 | Phase 6: Frontend | 13 | Not started | -- |

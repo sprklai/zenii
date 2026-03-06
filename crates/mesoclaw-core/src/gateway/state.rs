@@ -9,6 +9,8 @@ use crate::security::policy::SecurityPolicy;
 use crate::tools::traits::Tool;
 
 #[cfg(feature = "ai")]
+use crate::ai::agent::MesoAgent;
+#[cfg(feature = "ai")]
 use crate::ai::session::SessionManager;
 
 pub struct AppState {
@@ -21,6 +23,8 @@ pub struct AppState {
     pub tools: Vec<Arc<dyn Tool>>,
     #[cfg(feature = "ai")]
     pub session_manager: Arc<SessionManager>,
+    #[cfg(feature = "ai")]
+    pub agent: Option<Arc<MesoAgent>>,
 }
 
 #[cfg(test)]
