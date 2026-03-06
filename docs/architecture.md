@@ -25,8 +25,9 @@ graph TB
             Channels["Channels<br>dyn Channel<br>openclaw-channels"]
         end
         subgraph "Support Layer"
-            Tools["Agent Tools<br>websearch, sysinfo<br>ignore #40;ripgrep#41;"]
-            Security["Security<br>dyn CredentialStore<br>keyring + zeroize"]
+            Tools["Agent Tools<br>8 tools: shell, file ops<br>websearch, sysinfo, patch<br>file search, process"]
+            Security["Security<br>SecurityPolicy + AutonomyLevel<br>rate limiter + audit log"]
+            Creds2["Credentials<br>dyn CredentialStore<br>InMemory + Keyring"]
             Config["Config<br>TOML + serde"]
             EventBus["EventBus<br>dyn EventBus<br>tokio::broadcast"]
         end
@@ -118,6 +119,11 @@ graph TD
     core --> rigcore["rig-core<br>#40;AI#41;"]
     core --> tokio["tokio<br>#40;async runtime#41;"]
     core --> keyring["keyring<br>#40;credentials#41;"]
+    core --> sysinfo["sysinfo<br>#40;system info + processes#41;"]
+    core --> ignore["ignore<br>#40;file search#41;"]
+    core --> diffy["diffy<br>#40;patch/diff#41;"]
+    core --> lru["lru<br>#40;embedding cache#41;"]
+    core --> sqlitevec["sqlite-vec<br>#40;vector search#41;"]
     core --> comrak["comrak<br>#40;markdown parsing#41;"]
     core --> tera["Tera<br>#40;template rendering#41;"]
     core --> notify["notify<br>#40;file watching#41;"]
@@ -152,17 +158,17 @@ mesoclaw/
 │   │   │   ├── config/     # TOML config (schema + load/save + OS paths)
 │   │   │   ├── db/         # rusqlite pool + WAL + migrations + spawn_blocking
 │   │   │   ├── event_bus/  # EventBus trait + TokioBroadcastBus (12 events)
-│   │   │   ├── ai/         # AI providers + models (Phase 2)
+│   │   │   ├── memory/     # Memory trait + SqliteMemoryStore (FTS5 + vectors) + InMemoryStore
+│   │   │   ├── credential/ # CredentialStore trait + InMemoryCredentialStore
+│   │   │   ├── security/   # SecurityPolicy + AutonomyLevel + rate limiter + audit log
+│   │   │   ├── tools/      # Tool trait + 8 tools (shell, file ops, web search, sysinfo, etc.)
+│   │   │   ├── ai/         # AI providers + models (Phase 3)
 │   │   │   ├── gateway/    # axum HTTP + WS server (Phase 3)
-│   │   │   ├── agent/      # Tool calling + orchestration (Phase 4)
-│   │   │   ├── memory/     # FTS5 + vector search (Phase 5)
-│   │   │   ├── credential/ # CredentialStore trait + keyring + in-memory
-│   │   │   ├── identity/   # SoulLoader + personas + hot-reload
-│   │   │   ├── skills/     # SkillRegistry + markdown parsing + Tera
-│   │   │   ├── user/       # UserProfile + UserLearner + progressive learning
-│   │   │   ├── security/   # Encryption, zeroize, audit
-│   │   │   ├── channels/   # Channel trait + implementations
-│   │   │   └── scheduler/  # Cron + scheduled tasks (feature-gated)
+│   │   │   ├── identity/   # SoulLoader + personas + hot-reload (Phase 4)
+│   │   │   ├── skills/     # SkillRegistry + markdown parsing + Tera (Phase 4)
+│   │   │   ├── user/       # UserProfile + UserLearner + progressive learning (Phase 4)
+│   │   │   ├── channels/   # Channel trait + implementations (Phase 8)
+│   │   │   └── scheduler/  # Cron + scheduled tasks, feature-gated (Phase 8)
 │   │   └── tests/          # Integration tests
 │   ├── mesoclaw-desktop/   # Tauri 2 shell (desktop)
 │   ├── mesoclaw-mobile/    # Tauri 2 shell (iOS + Android)

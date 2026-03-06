@@ -47,6 +47,18 @@ pub enum MesoError {
     #[error("tool error: {0}")]
     Tool(String),
 
+    #[error("memory error: {0}")]
+    Memory(String),
+
+    #[error("embedding error: {0}")]
+    Embedding(String),
+
+    #[error("rate limited: {0}")]
+    RateLimited(String),
+
+    #[error("reqwest error: {0}")]
+    Http(#[from] reqwest::Error),
+
     #[error("{0}")]
     Other(String),
 }

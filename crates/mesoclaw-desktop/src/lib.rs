@@ -1,1 +1,1 @@
-// Tauri 2 desktop shell — will be set up in Step 14
+// STUB: Tauri 2 desktop shell — implement Tauri app setup in Phase 7

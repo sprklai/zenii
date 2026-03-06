@@ -230,10 +230,11 @@ mesoclaw/
 │   ├── phases.md           # Implementation phase details
 │   └── processes.md        # Process flow diagrams
 ├── plans/
-│   └── phase1_core_foundation.md  # Detailed implementation plan
+│   ├── phase1_core_foundation.md  # Phase 1 implementation plan
+│   └── phase2_ai_integration.md   # Phase 2 implementation plan
 ├── tests/
-│   ├── phase1_core_foundation.md  # Test plan + results
-│   ├── phase2_ai_integration.md   # (planned)
+│   ├── phase1_core_foundation.md  # Phase 1 test plan + results
+│   ├── phase2_ai_integration.md   # Phase 2 test plan + results (105 tests)
 │   └── ...
 ├── crates/
 │   ├── mesoclaw-core/      # Shared library (NO Tauri dependency)
@@ -395,13 +396,14 @@ Detailed documentation lives in the `docs/` and `plans/` directories:
 - [Implementation Phases](docs/phases.md) -- Phase gate protocol, checklist, phase details
 - [Process Flows](docs/processes.md) -- Chat request, startup, error handling, WebSocket flows
 - [Phase 1 Plan](plans/phase1_core_foundation.md) -- Detailed implementation plan for core foundation
+- [Phase 2 Plan](plans/phase2_ai_integration.md) -- Memory, security, credentials, and tools
 
 ### Implementation Status
 
 | Phase | Steps | Status | Tests |
 |-------|-------|--------|-------|
 | Phase 1: Core Foundation | 1-4 | Complete | 16/16 passing |
-| Phase 2: AI Integration | 5-7 | Not started | -- |
+| Phase 2: AI Integration | 5-7 | Complete | 137/137 passing |
 | Phase 3: Gateway Server | 8-10 | Not started | -- |
 | Phase 4: Agent Intelligence | 10a-10c | Not started | -- |
 | Phase 5: Binary Shells | 11-12 | Not started | -- |

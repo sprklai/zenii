@@ -7,6 +7,15 @@ MesoClaw is a Rust workspace producing 5 binaries from a shared core:
 
 All clients communicate via HTTP+WebSocket gateway (axum at 127.0.0.1:18981).
 
+## v2 Philosophy
+
+MesoClaw v2 is a clean rewrite, not a patch. Core principles:
+
+1. **Use proven crates, don't hand-roll** -- prefer battle-tested crates over custom implementations. Examples: `sysinfo` over parsing `/proc`, `websearch` over hand-rolled provider cascades, `rig-core` over custom AI agent loops, `ignore` over manual file walking. Less code to maintain, fewer platform-specific bugs.
+2. **Port patterns, not code** -- v1 has good architectural patterns (trait-based tools, security policy enforcement, memory abstraction). Port the *design* and adapt to v2 conventions (`MesoError`, `tokio::sync`, `spawn_blocking`), don't copy-paste v1 code with its `Result<T, String>` and `std::sync::Mutex`.
+3. **Lean by default** -- feature-gate optional modules (channels, scheduler, web-dashboard). Default binary includes only what's needed for core operation. Check dependency trees before adding crates.
+4. **Single shared core** -- ALL business logic lives in `mesoclaw-core`. Binary crates are thin shells (<100 lines each). No logic duplication across binaries.
+
 ## References
 
 - **V1 Implementation**: `/home/rakesh/RD/NSRTech/Tauri/tauriclaw` — the original v1 codebase, useful for understanding existing patterns and porting logic
@@ -93,6 +102,23 @@ scripts/build.sh            # Cross-platform build script
 - Enums: `#[non_exhaustive]` on public enums that may grow
 - Async locks: never hold across `.await` points
 - Testing: test success + failure paths, use `tempfile` for FS tests, mock external APIs
+- **No magic numbers**: Never hardcode tunable values (weights, thresholds, limits, timeouts, ratios, intervals, sizes, retry counts, etc.) directly in business logic. Define them as fields in `AppConfig` (or a nested config section) with sensible defaults in `schema.rs`, so users can override via `config.toml`. Read from config at runtime, not compile-time constants. Examples: search scoring weights, token limits, rate-limit windows, batch sizes, cache TTLs, connection pool sizes.
+
+## Agent Usage
+
+Use the **Agent tool** (subagents) to parallelize work and protect context:
+
+- **Explore agents** (`subagent_type=Explore`): Use for broad codebase research, deep file traversal, or understanding unfamiliar modules. Prefer over manual Glob/Grep when the search requires more than 3 queries.
+- **Parallel task agents**: Spawn independent agents when implementing changes across unrelated modules (e.g., updating `mesoclaw-cli` and `mesoclaw-tui` simultaneously, or researching multiple crate alternatives at once).
+- **Research agents**: Delegate dependency research, documentation lookups, or v1 codebase analysis to agents to keep the main context focused on decision-making.
+- **Phase Gate agents**: During Gate 1 (Plan), use agents to research crates, scan the v1 codebase for portable patterns, and audit existing code -- all in parallel.
+
+**When NOT to use agents**:
+- Simple, directed searches (single Glob or Grep suffices)
+- Sequential tasks where each step depends on the previous result
+- Trivial edits to 1-2 files
+
+**Rule**: Do not duplicate work an agent is already doing. Delegate, then use the results.
 
 ## Plan Mode Requirement
 
@@ -112,12 +138,19 @@ Every phase has **3 user gates** -- no skipping allowed:
 
 1. **Gate 1 -- Plan**: Create detailed plan in `plans/phaseN_*.md`. This includes:
    - Scope, API signatures, data models, dependencies
-   - **Dependency research**: Search the internet for candidate crates/libraries. Compare alternatives on: binary size impact, compile time, maintenance activity, dependency tree depth, feature completeness. Prefer lightweight crates that keep the binary lean.
+   - **Dependency research**: Use agents to search the internet for candidate crates/libraries in parallel. Compare alternatives on: binary size impact, compile time, maintenance activity, dependency tree depth, feature completeness. Prefer lightweight crates that keep the binary lean.
    - **Tech selection rationale**: For every dependency chosen (or rejected), document *why* in the plan. Include alternatives considered, trade-offs, and size/performance implications.
+   - **V1 analysis**: Use an Explore agent to scan the v1 codebase (`/home/rakesh/RD/NSRTech/Tauri/tauriclaw`) for portable patterns and logic relevant to the phase.
    - **Assumptions log**: List all assumptions with rationale. Flag any that need user confirmation.
    - Present to user. **User must approve before any code.**
 2. **Gate 2 -- Tests (TDD)**: Write unit tests first based on the approved plan. Present tests to user. **User must approve test design before implementation.**
 3. **Gate 3 -- Completion**: Implement -> `cargo test` -> `cargo clippy` -> present summary with diagrams. **User confirms before next phase.**
+4. **Post-Gate -- Documentation**: After user confirms Gate 3, **mandatory** updates before moving on:
+   - Update `docs/architecture.md` with any new modules, traits, or data flows (add/update Mermaid diagrams)
+   - Update `docs/phases.md` — mark phase as `[COMPLETE]`, fill in deliverables summary
+   - Update `README.md` — reflect new capabilities, commands, or structure changes
+   - Update `no_commit/todo_tracker.md` — mark resolved items `[x]`, add any new TODO/STUB/FIX items discovered
+   - Update `docs/processes.md` if any process flows changed
 
 Between gates, **ask user for inputs** on design decisions, preferences, and constraints. Never assume -- wrong assumptions cost more than a question.
 
@@ -136,10 +169,11 @@ See `docs/phases.md` for full phase details and checklist.
 - **No dead code**: Don't leave commented-out code, unused imports, or placeholder stubs.
 - **Latest packages**: Always use the latest stable versions of all dependencies (Rust crates, npm/bun packages, Tauri plugins). When adding new dependencies, check for the current latest version first. Periodically verify existing deps are up to date via `cargo upgrade --dry-run` and equivalent frontend tooling.
 - **Learn from errors**: When a build/test/runtime error occurs, diagnose the root cause and save the pattern + fix to memory (`~/.claude/projects/*/memory/`) so the same mistake is never repeated.
+- **Parallelize with agents**: When a task involves 2+ independent workstreams (e.g., researching crates, updating unrelated modules, scanning multiple directories), use agents instead of doing them sequentially.
 
 ## Documentation Requirement
 
-After each phase, update `docs/` and `README.md` with Mermaid diagrams showing what changed and how it fits the architecture. See `docs/architecture.md` and `docs/processes.md`.
+After each phase completion (Gate 3 approved), update all docs before proceeding — see **Post-Gate** step in Phase Gate Workflow above. This is not optional. Files to update: `docs/architecture.md`, `docs/phases.md`, `docs/processes.md`, `README.md`, `no_commit/todo_tracker.md`.
 
 ## Markdown Compatibility Rules
 
@@ -147,6 +181,31 @@ After each phase, update `docs/` and `README.md` with Mermaid diagrams showing w
 - **Mermaid parentheses**: Use `#40;` and `#41;` for `(` and `)` inside node labels — bare parentheses trigger "Unsupported markdown: list" in Mermaid 11.x. Does NOT apply to subgraph titles or sequence diagram participants — use plain text or dashes there instead.
 - **Mermaid numbered lists**: Never start node label text with `1.`, `2.`, etc. — Mermaid interprets these as Markdown ordered list items
 - **Directory trees**: Use Unicode box-drawing characters (`├──`, `└──`, `│`) not ASCII `+--` and `|` — the `+` is a valid Markdown list marker and triggers "unsupported list" warnings in renderers
+- **Mermaid styling** (nice-to-have): For simple, non-complex diagrams, add `style` or `classDef` directives to improve readability with color. Use a consistent palette: `#4CAF50` (green/done), `#FF9800` (orange/in-progress), `#2196F3` (blue/info), `#9E9E9E` (gray/not-started), `#F44336` (red/error). Keep styling minimal — don't clutter complex diagrams. Prefer `classDef` for reusable styles over per-node `style` directives.
+- **Mermaid layout**: Use `direction TB` or `direction LR` explicitly for clarity. Group related nodes with `subgraph`. Add spacing with invisible edges (`~~>`) only if layout is unreadable otherwise.
+
+## TODO / MOCK / FIX Tracking
+
+Track incomplete work with standardized comments in code **and** in `no_commit/todo_tracker.md`:
+
+### In-code comment format
+```rust
+// TODO: <description> — <phase or context>
+// MOCK: <description> — <what it replaces, when to remove>
+// FIX: <description> — <what's wrong, severity>
+// STUB: <description> — <what it should become>
+```
+
+### Tracker file
+Maintain `no_commit/todo_tracker.md` with a table of all TODO/MOCK/FIX/STUB items. Update it whenever adding or resolving items. Format:
+
+```markdown
+| Status | Type | File | Line | Description | Phase |
+|--------|------|------|------|-------------|-------|
+| [ ] | TODO | path/to/file.rs | 82 | Start axum gateway | Phase 3 |
+```
+
+Statuses: `[ ]` open, `[x]` done, `[-]` won't do (with reason)
 
 ## Feature Flags
 

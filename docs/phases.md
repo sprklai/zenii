@@ -61,7 +61,7 @@ gantt
     section Foundation
     Phase 1 - Core Foundation           :done, p1, 0, 1
     section AI
-    Phase 2 - AI Integration            :p2, after p1, 1
+    Phase 2 - AI Integration            :done, p2, after p1, 1
     section Gateway
     Phase 3 - Gateway Server            :p3, after p2, 1
     section Intelligence
@@ -99,29 +99,34 @@ gantt
 
 ---
 
-### Phase 2: AI Integration — `[NOT STARTED]`
+### Phase 2: AI Integration — `[COMPLETE]`
 
 **Step 5: Memory System**
-- `Memory` trait + `SqliteMemoryStore` with FTS5 + BM25 ranking
-- `InMemoryStore` for tests
-- Embedding storage and retrieval via sqlite-vec
+- `Memory` trait + `SqliteMemoryStore` with FTS5 + BM25 ranking + hybrid scoring
+- `InMemoryStore` (HashMap-backed) for tests
+- `EmbeddingProvider` trait + `MockEmbeddingProvider` + `LruEmbeddingCache`
+- `VectorIndex` -- sqlite-vec ANN search with id_map
+- Embedding storage and retrieval via sqlite-vec 0.1.6 (stable)
 
 **Step 6: Security + Credentials**
-- `SecurityPolicy` and `AutonomyLevel` definitions
-- `CredentialStore` trait with `KeyringStore` (production) and `InMemoryStore` (tests)
-- zeroize for sensitive data in memory
+- `SecurityPolicy` with `AutonomyLevel` (ReadOnly/Supervised/Full), `RiskLevel`, `ValidationResult`
+- Command risk classification, injection detection, path validation, rate limiting, audit log
+- `CredentialStore` trait with `InMemoryCredentialStore` (KeyringStore planned for Phase 3 wiring)
 
 **Step 7: Tool Definitions**
-- `web_search` via `websearch` crate
-- `system_info` via `sysinfo` crate
-- `file_search` via `ignore` crate
-- `shell` -- command execution with security policy enforcement
-- `file_read` / `file_write` -- filesystem access with sandboxing
-- `patch` -- apply diffs to files
-- `process` -- process management
+- `Tool` trait + `ToolResult` + `ToolInfo`
+- `ShellTool` -- command execution with security policy enforcement
+- `FileReadTool` / `FileWriteTool` / `FileListTool` -- filesystem access with policy validation
+- `WebSearchTool` -- via `websearch` crate (stub, requires API keys)
+- `SystemInfoTool` -- via `sysinfo` crate (os, cpu, memory, hostname, time, env)
+- `FileSearchTool` -- via `ignore` crate (gitignore-respecting)
+- `PatchTool` -- via `diffy` crate (unified diff apply + dry run)
+- `ProcessTool` -- via `sysinfo` crate (list, filter, kill with autonomy gate)
 
-- **Tests**: memory CRUD, FTS queries, credential store/retrieve, tool execution, security policy enforcement
+**New dependencies**: sysinfo 0.38.3, ignore 0.4.25, diffy 0.4.2, lru 0.16.3, sqlite-vec 0.1.6
+- **Tests**: 121 new tests (137 total), all passing. Zero clippy warnings.
 - **Plan**: [plans/phase2_ai_integration.md](../plans/phase2_ai_integration.md)
+- **Test plan**: [tests/phase2_ai_integration.md](../tests/phase2_ai_integration.md)
 
 ---
 

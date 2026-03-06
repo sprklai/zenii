@@ -79,8 +79,8 @@ async fn main() {
         "MesoClaw daemon ready"
     );
 
-    // TODO: Start axum gateway server here
-    // For now, wait for shutdown signal
+    // TODO: Start axum gateway server here — Phase 3
+    // STUB: waiting for shutdown signal until gateway is implemented
     tokio::signal::ctrl_c()
         .await
         .expect("Failed to listen for Ctrl+C");

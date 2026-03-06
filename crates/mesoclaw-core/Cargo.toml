@@ -30,6 +30,13 @@ zeroize = { workspace = true }
 reqwest = { workspace = true }
 tokio-tungstenite = { workspace = true }
 
+# Phase 2: Memory + Tools
+sysinfo = { workspace = true }
+ignore = { workspace = true }
+diffy = { workspace = true }
+lru = { workspace = true }
+sqlite-vec = { workspace = true }
+
 [features]
 default = ["gateway"]
 gateway = ["dep:axum", "dep:tower-http"]
