@@ -1,0 +1,406 @@
+use crate::db::{self, DbPool};
+use crate::{MesoError, Result};
+
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Session {
+    pub id: String,
+    pub title: String,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SessionSummary {
+    pub id: String,
+    pub title: String,
+    pub created_at: String,
+    pub updated_at: String,
+    pub message_count: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Message {
+    pub id: String,
+    pub session_id: String,
+    pub role: String,
+    pub content: String,
+    pub created_at: String,
+}
+
+pub struct SessionManager {
+    db: DbPool,
+}
+
+impl SessionManager {
+    pub fn new(db: DbPool) -> Self {
+        Self { db }
+    }
+
+    pub async fn create_session(&self, title: &str) -> Result<Session> {
+        let id = uuid::Uuid::new_v4().to_string();
+        let now = chrono::Utc::now().to_rfc3339();
+        let title = title.to_string();
+
+        let session_id = id.clone();
+        let session_title = title.clone();
+        let session_now = now.clone();
+
+        db::with_db(&self.db, move |conn| {
+            conn.execute(
+                "INSERT INTO sessions (id, title, created_at, updated_at) VALUES (?1, ?2, ?3, ?4)",
+                rusqlite::params![session_id, session_title, session_now, session_now],
+            )?;
+            Ok(())
+        })
+        .await?;
+
+        Ok(Session {
+            id,
+            title,
+            created_at: now.clone(),
+            updated_at: now,
+        })
+    }
+
+    pub async fn get_session(&self, id: &str) -> Result<Session> {
+        let id = id.to_string();
+
+        db::with_db(&self.db, move |conn| {
+            conn.query_row(
+                "SELECT id, title, created_at, updated_at FROM sessions WHERE id = ?1",
+                rusqlite::params![id],
+                |row| {
+                    Ok(Session {
+                        id: row.get(0)?,
+                        title: row.get(1)?,
+                        created_at: row.get(2)?,
+                        updated_at: row.get(3)?,
+                    })
+                },
+            )
+            .map_err(|e| match e {
+                rusqlite::Error::QueryReturnedNoRows => {
+                    MesoError::NotFound(format!("session not found: {id}"))
+                }
+                other => MesoError::Sqlite(other),
+            })
+        })
+        .await
+    }
+
+    pub async fn list_sessions(&self) -> Result<Vec<SessionSummary>> {
+        db::with_db(&self.db, |conn| {
+            let mut stmt = conn.prepare(
+                "SELECT s.id, s.title, s.created_at, s.updated_at, COUNT(m.id) as message_count
+                 FROM sessions s
+                 LEFT JOIN messages m ON m.session_id = s.id
+                 GROUP BY s.id
+                 ORDER BY s.created_at DESC",
+            )?;
+
+            let rows = stmt
+                .query_map([], |row| {
+                    Ok(SessionSummary {
+                        id: row.get(0)?,
+                        title: row.get(1)?,
+                        created_at: row.get(2)?,
+                        updated_at: row.get(3)?,
+                        message_count: row.get(4)?,
+                    })
+                })?
+                .collect::<std::result::Result<Vec<_>, _>>()?;
+
+            Ok(rows)
+        })
+        .await
+    }
+
+    pub async fn update_session(&self, id: &str, title: &str) -> Result<Session> {
+        let id = id.to_string();
+        let title = title.to_string();
+        let now = chrono::Utc::now().to_rfc3339();
+
+        let update_id = id.clone();
+        let update_title = title.clone();
+        let update_now = now.clone();
+
+        db::with_db(&self.db, move |conn| {
+            let rows_affected = conn.execute(
+                "UPDATE sessions SET title = ?1, updated_at = ?2 WHERE id = ?3",
+                rusqlite::params![update_title, update_now, update_id],
+            )?;
+
+            if rows_affected == 0 {
+                return Err(MesoError::NotFound(format!(
+                    "session not found: {update_id}"
+                )));
+            }
+
+            conn.query_row(
+                "SELECT id, title, created_at, updated_at FROM sessions WHERE id = ?1",
+                rusqlite::params![update_id],
+                |row| {
+                    Ok(Session {
+                        id: row.get(0)?,
+                        title: row.get(1)?,
+                        created_at: row.get(2)?,
+                        updated_at: row.get(3)?,
+                    })
+                },
+            )
+            .map_err(MesoError::from)
+        })
+        .await
+    }
+
+    pub async fn delete_session(&self, id: &str) -> Result<()> {
+        let id = id.to_string();
+
+        db::with_db(&self.db, move |conn| {
+            let rows_affected = conn.execute(
+                "DELETE FROM sessions WHERE id = ?1",
+                rusqlite::params![id],
+            )?;
+
+            if rows_affected == 0 {
+                return Err(MesoError::NotFound(format!("session not found: {id}")));
+            }
+
+            Ok(())
+        })
+        .await
+    }
+
+    pub async fn append_message(
+        &self,
+        session_id: &str,
+        role: &str,
+        content: &str,
+    ) -> Result<Message> {
+        let id = uuid::Uuid::new_v4().to_string();
+        let now = chrono::Utc::now().to_rfc3339();
+        let session_id = session_id.to_string();
+        let role = role.to_string();
+        let content = content.to_string();
+
+        let msg_id = id.clone();
+        let msg_session_id = session_id.clone();
+        let msg_role = role.clone();
+        let msg_content = content.clone();
+        let msg_now = now.clone();
+
+        db::with_db(&self.db, move |conn| {
+            conn.execute(
+                "INSERT INTO messages (id, session_id, role, content, created_at) VALUES (?1, ?2, ?3, ?4, ?5)",
+                rusqlite::params![msg_id, msg_session_id, msg_role, msg_content, msg_now],
+            )?;
+            Ok(())
+        })
+        .await?;
+
+        Ok(Message {
+            id,
+            session_id,
+            role,
+            content,
+            created_at: now,
+        })
+    }
+
+    pub async fn get_messages(&self, session_id: &str) -> Result<Vec<Message>> {
+        let session_id = session_id.to_string();
+
+        db::with_db(&self.db, move |conn| {
+            let mut stmt = conn.prepare(
+                "SELECT id, session_id, role, content, created_at
+                 FROM messages
+                 WHERE session_id = ?1
+                 ORDER BY created_at ASC",
+            )?;
+
+            let rows = stmt
+                .query_map(rusqlite::params![session_id], |row| {
+                    Ok(Message {
+                        id: row.get(0)?,
+                        session_id: row.get(1)?,
+                        role: row.get(2)?,
+                        content: row.get(3)?,
+                        created_at: row.get(4)?,
+                    })
+                })?
+                .collect::<std::result::Result<Vec<_>, _>>()?;
+
+            Ok(rows)
+        })
+        .await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::db;
+    use tempfile::TempDir;
+
+    async fn setup() -> (TempDir, SessionManager) {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("test.db");
+        let pool = db::init_pool(&path).unwrap();
+        db::with_db(&pool, |conn| db::run_migrations(conn))
+            .await
+            .unwrap();
+        let manager = SessionManager::new(pool);
+        (dir, manager)
+    }
+
+    // 1.2.1 — create session
+    #[tokio::test]
+    async fn create_session() {
+        let (_dir, mgr) = setup().await;
+        let session = mgr.create_session("My Chat").await.unwrap();
+
+        assert_eq!(session.title, "My Chat");
+        assert!(!session.id.is_empty());
+        assert!(!session.created_at.is_empty());
+        assert!(!session.updated_at.is_empty());
+    }
+
+    // 1.2.2 — get session
+    #[tokio::test]
+    async fn get_session() {
+        let (_dir, mgr) = setup().await;
+        let created = mgr.create_session("Test").await.unwrap();
+        let fetched = mgr.get_session(&created.id).await.unwrap();
+
+        assert_eq!(fetched.id, created.id);
+        assert_eq!(fetched.title, "Test");
+    }
+
+    // 1.2.3 — get session not found
+    #[tokio::test]
+    async fn get_session_not_found() {
+        let (_dir, mgr) = setup().await;
+        let result = mgr.get_session("nonexistent-id").await;
+
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), MesoError::NotFound(_)));
+    }
+
+    // 1.2.4 — list sessions empty
+    #[tokio::test]
+    async fn list_sessions_empty() {
+        let (_dir, mgr) = setup().await;
+        let sessions = mgr.list_sessions().await.unwrap();
+
+        assert!(sessions.is_empty());
+    }
+
+    // 1.2.5 — list all sessions
+    #[tokio::test]
+    async fn list_sessions_all() {
+        let (_dir, mgr) = setup().await;
+        mgr.create_session("First").await.unwrap();
+        mgr.create_session("Second").await.unwrap();
+
+        let sessions = mgr.list_sessions().await.unwrap();
+        assert_eq!(sessions.len(), 2);
+        // Ordered by created_at DESC, so "Second" first
+        assert_eq!(sessions[0].title, "Second");
+        assert_eq!(sessions[1].title, "First");
+        assert_eq!(sessions[0].message_count, 0);
+    }
+
+    // 1.2.6 — update session
+    #[tokio::test]
+    async fn update_session() {
+        let (_dir, mgr) = setup().await;
+        let created = mgr.create_session("Old Title").await.unwrap();
+        let updated = mgr.update_session(&created.id, "New Title").await.unwrap();
+
+        assert_eq!(updated.id, created.id);
+        assert_eq!(updated.title, "New Title");
+        assert_eq!(updated.created_at, created.created_at);
+    }
+
+    // 1.2.7 — delete session
+    #[tokio::test]
+    async fn delete_session() {
+        let (_dir, mgr) = setup().await;
+        let created = mgr.create_session("To Delete").await.unwrap();
+        mgr.delete_session(&created.id).await.unwrap();
+
+        let result = mgr.get_session(&created.id).await;
+        assert!(matches!(result.unwrap_err(), MesoError::NotFound(_)));
+    }
+
+    // 1.2.8 — delete session not found
+    #[tokio::test]
+    async fn delete_session_not_found() {
+        let (_dir, mgr) = setup().await;
+        let result = mgr.delete_session("nonexistent-id").await;
+
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), MesoError::NotFound(_)));
+    }
+
+    // 1.2.9 — append message
+    #[tokio::test]
+    async fn append_message() {
+        let (_dir, mgr) = setup().await;
+        let session = mgr.create_session("Chat").await.unwrap();
+        let msg = mgr
+            .append_message(&session.id, "user", "Hello!")
+            .await
+            .unwrap();
+
+        assert_eq!(msg.session_id, session.id);
+        assert_eq!(msg.role, "user");
+        assert_eq!(msg.content, "Hello!");
+        assert!(!msg.id.is_empty());
+    }
+
+    // 1.2.10 — get messages ordered
+    #[tokio::test]
+    async fn get_messages_ordered() {
+        let (_dir, mgr) = setup().await;
+        let session = mgr.create_session("Chat").await.unwrap();
+        mgr.append_message(&session.id, "user", "First")
+            .await
+            .unwrap();
+        mgr.append_message(&session.id, "assistant", "Second")
+            .await
+            .unwrap();
+        mgr.append_message(&session.id, "user", "Third")
+            .await
+            .unwrap();
+
+        let messages = mgr.get_messages(&session.id).await.unwrap();
+        assert_eq!(messages.len(), 3);
+        assert_eq!(messages[0].content, "First");
+        assert_eq!(messages[1].content, "Second");
+        assert_eq!(messages[2].content, "Third");
+    }
+
+    // 1.2.11 — get messages empty
+    #[tokio::test]
+    async fn get_messages_empty() {
+        let (_dir, mgr) = setup().await;
+        let session = mgr.create_session("Empty").await.unwrap();
+        let messages = mgr.get_messages(&session.id).await.unwrap();
+
+        assert!(messages.is_empty());
+    }
+
+    // 1.2.12 — append message to invalid session (FK constraint)
+    #[tokio::test]
+    async fn append_message_invalid_session() {
+        let (_dir, mgr) = setup().await;
+        let result = mgr
+            .append_message("nonexistent-session", "user", "Hello")
+            .await;
+
+        assert!(result.is_err());
+    }
+}

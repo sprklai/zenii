@@ -11,8 +11,13 @@ pub struct AppConfig {
     pub memory_db_path: Option<String>,
     pub identity_name: String,
     pub identity_description: String,
-    pub default_provider: String,
-    pub default_model: String,
+    #[serde(alias = "default_provider")]
+    pub provider_name: String,
+    pub provider_type: String,
+    pub provider_base_url: Option<String>,
+    #[serde(alias = "default_model")]
+    pub provider_model_id: String,
+    pub provider_api_key_env: Option<String>,
     pub security_autonomy_level: String,
     pub max_tool_retries: u32,
 
@@ -33,6 +38,16 @@ pub struct AppConfig {
     pub tool_file_read_max_lines: usize,
     pub tool_file_search_max_results: usize,
     pub tool_process_list_limit: usize,
+
+    // Phase 3: Gateway
+    pub gateway_auth_token: Option<String>,
+    pub ws_max_connections: usize,
+    pub gateway_cors_origins: Vec<String>,
+
+    // Phase 3: Agent
+    pub agent_max_turns: usize,
+    pub agent_max_tokens: usize,
+    pub agent_system_prompt: Option<String>,
 }
 
 impl Default for AppConfig {
@@ -46,8 +61,11 @@ impl Default for AppConfig {
             memory_db_path: None,
             identity_name: "MesoClaw".into(),
             identity_description: "AI-powered assistant".into(),
-            default_provider: "openai".into(),
-            default_model: "gpt-4o".into(),
+            provider_name: "openai".into(),
+            provider_type: "openai".into(),
+            provider_base_url: None,
+            provider_model_id: "gpt-4o".into(),
+            provider_api_key_env: None,
             security_autonomy_level: "supervised".into(),
             max_tool_retries: 3,
 
@@ -68,6 +86,16 @@ impl Default for AppConfig {
             tool_file_read_max_lines: 10000,
             tool_file_search_max_results: 100,
             tool_process_list_limit: 200,
+
+            // Gateway
+            gateway_auth_token: None,
+            ws_max_connections: 32,
+            gateway_cors_origins: vec!["http://localhost:*".into()],
+
+            // Agent
+            agent_max_turns: 20,
+            agent_max_tokens: 4096,
+            agent_system_prompt: None,
         }
     }
 }

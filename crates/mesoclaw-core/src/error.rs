@@ -38,6 +38,9 @@ pub enum MesoError {
     #[error("gateway error: {0}")]
     Gateway(String),
 
+    #[error("authentication required: {0}")]
+    Auth(String),
+
     #[error("security policy denied: {0}")]
     PolicyDenied(String),
 

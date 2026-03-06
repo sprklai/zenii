@@ -68,6 +68,11 @@ diffy = "0.4.2"
 lru = "0.16.3"
 sqlite-vec = "0.1.6"
 
+# Phase 3: AI Agent + Gateway
+rig-core = "0.31"
+tokio-stream = "0.1.17"
+futures = "0.3"
+
 [profile.release]
 lto = "thin"
 strip = "debuginfo"

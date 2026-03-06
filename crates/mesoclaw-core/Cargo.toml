@@ -37,9 +37,15 @@ diffy = { workspace = true }
 lru = { workspace = true }
 sqlite-vec = { workspace = true }
 
+# Phase 3: AI Agent + Gateway
+rig-core = { workspace = true, optional = true }
+tokio-stream = { workspace = true }
+futures = { workspace = true }
+
 [features]
-default = ["gateway"]
+default = ["gateway", "ai"]
 gateway = ["dep:axum", "dep:tower-http"]
+ai = ["dep:rig-core"]
 web-dashboard = ["gateway"]
 channels = []
 scheduler = []
@@ -48,3 +54,4 @@ keyring = ["dep:keyring"]
 [dev-dependencies]
 tempfile = "3"
 tokio = { workspace = true, features = ["test-util", "macros"] }
+tower = { version = "0.5", features = ["util"] }
