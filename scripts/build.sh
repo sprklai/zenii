@@ -23,13 +23,19 @@ BUILD_DIR="${WORKSPACE_ROOT}/dist"
 ALL_CRATES="mesoclaw-cli mesoclaw-tui mesoclaw-daemon mesoclaw-desktop"
 
 # Target mappings: friendly name -> Rust triple
-declare -A TARGET_MAP=(
-    ["linux-x86"]="x86_64-unknown-linux-gnu"
-    ["linux-arm"]="aarch64-unknown-linux-gnu"
-    ["macos-x86"]="x86_64-apple-darwin"
-    ["macos-arm"]="aarch64-apple-darwin"
-    ["windows"]="x86_64-pc-windows-gnu"
-)
+# Using a function instead of associative arrays for macOS Bash 3.2 compatibility
+get_rust_target() {
+    case "$1" in
+        linux-x86)  echo "x86_64-unknown-linux-gnu";;
+        linux-arm)  echo "aarch64-unknown-linux-gnu";;
+        macos-x86)  echo "x86_64-apple-darwin";;
+        macos-arm)  echo "aarch64-apple-darwin";;
+        windows)    echo "x86_64-pc-windows-gnu";;
+        *)          return 1;;
+    esac
+}
+
+ALL_TARGETS="linux-x86 linux-arm macos-x86 macos-arm windows"
 
 # ── Defaults ───────────────────────────────────────────────────────────
 TARGET="native"
@@ -62,8 +68,8 @@ list_targets() {
     echo "Available build targets:"
     echo ""
     echo "  native       Build for the current OS/architecture"
-    for key in "${!TARGET_MAP[@]}"; do
-        printf "  %-12s %s\n" "$key" "${TARGET_MAP[$key]}"
+    for key in $ALL_TARGETS; do
+        printf "  %-12s %s\n" "$key" "$(get_rust_target "$key")"
     done
     echo "  all          Build for all targets (requires cross-compilation setup)"
     echo ""
@@ -349,9 +355,9 @@ case "$TARGET" in
         ;;
     "all")
         failed=0
-        for friendly in "${!TARGET_MAP[@]}"; do
-            if ! build_target "${TARGET_MAP[$friendly]}" "$friendly"; then
-                ((failed++))
+        for friendly in $ALL_TARGETS; do
+            if ! build_target "$(get_rust_target "$friendly")" "$friendly"; then
+                failed=$((failed + 1))
             fi
             echo ""
         done
@@ -360,8 +366,9 @@ case "$TARGET" in
         fi
         ;;
     *)
-        if [ -n "${TARGET_MAP[$TARGET]+x}" ]; then
-            build_target "${TARGET_MAP[$TARGET]}" "$TARGET"
+        rust_target="$(get_rust_target "$TARGET")"
+        if [ -n "$rust_target" ]; then
+            build_target "$rust_target" "$TARGET"
         else
             err "Unknown target: $TARGET"
             echo "Use --list-targets to see available targets."
