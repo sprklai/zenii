@@ -13,20 +13,38 @@
 		PromptInputTextarea,
 		PromptInputToolbar,
 		PromptInputSubmit,
+		PromptInputModelSelect,
+		PromptInputModelSelectTrigger,
+		PromptInputModelSelectContent,
+		PromptInputModelSelectItem,
+		PromptInputModelSelectValue,
 		type PromptInputMessage
 	} from '$lib/components/ai-elements/prompt-input';
 	import { messagesStore } from '$lib/stores/messages.svelte';
 	import { sessionsStore } from '$lib/stores/sessions.svelte';
+	import { providersStore } from '$lib/stores/providers.svelte';
 	import { createChatStream } from '$lib/api/websocket';
 	import { goto } from '$app/navigation';
+	import { onMount } from 'svelte';
 
 	let { sessionId = undefined }: { sessionId?: string } = $props();
+
+	onMount(async () => {
+		await providersStore.load();
+		await providersStore.loadDefault();
+	});
+
+	const currentModelLabel = $derived(
+		providersStore.configuredModels.find((m) => m.value === providersStore.selectedModel)
+			?.label ?? ''
+	);
 
 	async function handleSubmit(message: PromptInputMessage) {
 		const prompt = (message.text ?? '').trim();
 		if (!prompt || messagesStore.streaming) return;
 
 		let currentSessionId = sessionId;
+		const isFirstMessage = !currentSessionId || messagesStore.messages.length === 0;
 
 		if (!currentSessionId) {
 			const session = await sessionsStore.create(prompt.slice(0, 50));
@@ -38,18 +56,28 @@
 
 		messagesStore.startStream();
 
-		createChatStream(prompt, currentSessionId, {
-			onToken(content) {
-				messagesStore.appendToken(content);
+		const capturedSessionId = currentSessionId;
+		createChatStream(
+			prompt,
+			currentSessionId,
+			{
+				onToken(content) {
+					messagesStore.appendToken(content);
+				},
+				onDone() {
+					messagesStore.finishStream(capturedSessionId);
+					if (isFirstMessage) {
+						sessionsStore.generateTitle(capturedSessionId);
+					}
+				},
+				onError(error) {
+					messagesStore.setError(error);
+					messagesStore.finishStream(capturedSessionId);
+					console.error('Chat error:', error);
+				}
 			},
-			onDone() {
-				messagesStore.finishStream(currentSessionId!);
-			},
-			onError(error) {
-				messagesStore.finishStream(currentSessionId!);
-				console.error('Chat error:', error);
-			}
-		});
+			providersStore.selectedModel || undefined
+		);
 	}
 </script>
 
@@ -86,6 +114,12 @@
 							</MessageContent>
 						</Message>
 					{/if}
+
+					{#if messagesStore.error}
+						<div class="mx-auto max-w-xl rounded-md border border-red-300 bg-red-50 p-3 text-sm text-red-700 dark:border-red-800 dark:bg-red-950 dark:text-red-300">
+							{messagesStore.error}
+						</div>
+					{/if}
 				</div>
 			{/if}
 		</ConversationContent>
@@ -96,6 +130,28 @@
 		<PromptInput onSubmit={handleSubmit}>
 			<PromptInputTextarea placeholder="Send a message..." />
 			<PromptInputToolbar>
+				{#if providersStore.configuredModels.length > 0}
+					<PromptInputModelSelect
+						value={providersStore.selectedModel}
+						onValueChange={(v) => {
+							if (v) providersStore.selectedModel = v;
+						}}
+					>
+						<PromptInputModelSelectTrigger>
+							<PromptInputModelSelectValue
+								value={currentModelLabel}
+								placeholder="Select model"
+							/>
+						</PromptInputModelSelectTrigger>
+						<PromptInputModelSelectContent>
+							{#each providersStore.configuredModels as model}
+								<PromptInputModelSelectItem value={model.value}>
+									{model.label}
+								</PromptInputModelSelectItem>
+							{/each}
+						</PromptInputModelSelectContent>
+					</PromptInputModelSelect>
+				{/if}
 				<div class="flex-1"></div>
 				<PromptInputSubmit
 					status={messagesStore.streaming ? 'streaming' : 'idle'}

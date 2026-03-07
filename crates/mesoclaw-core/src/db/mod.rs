@@ -106,6 +106,36 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
         )?;
     }
 
+    if version < 3 {
+        conn.execute_batch(
+            "CREATE TABLE IF NOT EXISTS ai_providers (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                base_url TEXT NOT NULL,
+                requires_api_key INTEGER NOT NULL DEFAULT 1,
+                is_active INTEGER NOT NULL DEFAULT 1,
+                is_user_defined INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            );
+
+            CREATE TABLE IF NOT EXISTS ai_models (
+                id TEXT PRIMARY KEY,
+                provider_id TEXT NOT NULL REFERENCES ai_providers(id),
+                model_id TEXT NOT NULL,
+                display_name TEXT NOT NULL,
+                context_limit INTEGER,
+                is_custom INTEGER NOT NULL DEFAULT 0,
+                is_active INTEGER NOT NULL DEFAULT 1,
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_ai_models_provider
+                ON ai_models(provider_id);
+
+            PRAGMA user_version = 3;",
+        )?;
+    }
+
     Ok(())
 }
 
@@ -155,7 +185,7 @@ mod tests {
         let version: u32 = conn
             .pragma_query_value(None, "user_version", |r| r.get(0))
             .unwrap();
-        assert_eq!(version, 2);
+        assert_eq!(version, 3);
     }
 
     #[test]
@@ -193,6 +223,42 @@ mod tests {
 
         assert!(indexes.contains(&"idx_observations_category".to_string()));
         assert!(indexes.contains(&"idx_observations_confidence".to_string()));
+    }
+
+    #[test]
+    fn migration_v3_creates_ai_providers() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("test.db");
+        let conn = Connection::open(&path).unwrap();
+        run_migrations(&conn).unwrap();
+
+        let tables: Vec<String> = conn
+            .prepare("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
+            .unwrap()
+            .query_map([], |r| r.get(0))
+            .unwrap()
+            .filter_map(|r| r.ok())
+            .collect();
+
+        assert!(tables.contains(&"ai_providers".to_string()));
+    }
+
+    #[test]
+    fn migration_v3_creates_ai_models() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("test.db");
+        let conn = Connection::open(&path).unwrap();
+        run_migrations(&conn).unwrap();
+
+        let tables: Vec<String> = conn
+            .prepare("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
+            .unwrap()
+            .query_map([], |r| r.get(0))
+            .unwrap()
+            .filter_map(|r| r.ok())
+            .collect();
+
+        assert!(tables.contains(&"ai_models".to_string()));
     }
 
     #[tokio::test]

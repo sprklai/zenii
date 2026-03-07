@@ -5,8 +5,10 @@ use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use serde::Deserialize;
+use tracing::warn;
 
 use crate::Result;
+use crate::ai::resolve_agent;
 use crate::gateway::state::AppState;
 
 #[derive(Debug, Deserialize)]
@@ -58,6 +60,62 @@ pub async fn delete_session(
 ) -> Result<impl IntoResponse> {
     state.session_manager.delete_session(&id).await?;
     Ok(StatusCode::NO_CONTENT)
+}
+
+pub async fn generate_title(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<String>,
+) -> Result<impl IntoResponse> {
+    let messages = state.session_manager.get_messages(&id).await?;
+
+    let user_msg = messages.iter().find(|m| m.role == "user");
+    let assistant_msg = messages.iter().find(|m| m.role == "assistant");
+
+    let (user_text, assistant_text) = match (user_msg, assistant_msg) {
+        (Some(u), Some(a)) => {
+            let u_text = if u.content.len() > 500 {
+                &u.content[..500]
+            } else {
+                &u.content
+            };
+            let a_text = if a.content.len() > 500 {
+                &a.content[..500]
+            } else {
+                &a.content
+            };
+            (u_text.to_string(), a_text.to_string())
+        }
+        _ => {
+            let session = state.session_manager.get_session(&id).await?;
+            return Ok(Json(session));
+        }
+    };
+
+    let agent = match resolve_agent(None, &state).await {
+        Ok(a) => a,
+        Err(e) => {
+            warn!("generate_title: no agent available: {e}");
+            let session = state.session_manager.get_session(&id).await?;
+            return Ok(Json(session));
+        }
+    };
+
+    let prompt = format!(
+        "Generate a concise 3-7 word title for this conversation. Reply with ONLY the title, no quotes or punctuation.\n\nUser: {user_text}\nAssistant: {assistant_text}"
+    );
+
+    match agent.prompt(&prompt).await {
+        Ok(title) => {
+            let title = title.trim().to_string();
+            let session = state.session_manager.update_session(&id, &title).await?;
+            Ok(Json(session))
+        }
+        Err(e) => {
+            warn!("generate_title: agent failed: {e}");
+            let session = state.session_manager.get_session(&id).await?;
+            Ok(Json(session))
+        }
+    }
 }
 
 #[cfg(test)]

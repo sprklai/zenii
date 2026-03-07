@@ -13,6 +13,7 @@ function createMessagesStore() {
   let loading = $state(false);
   let streaming = $state(false);
   let streamContent = $state("");
+  let error = $state("");
 
   return {
     get messages() {
@@ -26,6 +27,9 @@ function createMessagesStore() {
     },
     get streamContent() {
       return streamContent;
+    },
+    get error() {
+      return error;
     },
 
     async load(sessionId: string) {
@@ -51,6 +55,11 @@ function createMessagesStore() {
     startStream() {
       streaming = true;
       streamContent = "";
+      error = "";
+    },
+
+    setError(msg: string) {
+      error = msg;
     },
 
     appendToken(token: string) {
@@ -78,6 +87,7 @@ function createMessagesStore() {
       messages = [];
       streaming = false;
       streamContent = "";
+      error = "";
     },
   };
 }

@@ -11,6 +11,10 @@ use crate::credential::CredentialStore;
 use crate::tools::Tool;
 use crate::{MesoError, Result};
 
+// Only needed for resolve_agent(), which requires the full AppState
+#[cfg(feature = "ai")]
+use crate::gateway::state::AppState;
+
 use super::adapter::RigToolAdapter;
 use super::providers;
 
@@ -24,8 +28,21 @@ enum AgentInner {
 
 /// MesoAgent wraps a rig-core Agent with provider abstraction.
 /// Supports OpenAI-compatible and Anthropic providers.
+// Debug can't be derived (Agent<M> doesn't impl Debug), use manual impl for test ergonomics.
 pub struct MesoAgent {
     inner: AgentInner,
+}
+
+impl std::fmt::Debug for MesoAgent {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let variant = match &self.inner {
+            AgentInner::OpenAI(_) => "OpenAI",
+            AgentInner::Anthropic(_) => "Anthropic",
+        };
+        f.debug_struct("MesoAgent")
+            .field("provider", &variant)
+            .finish()
+    }
 }
 
 impl MesoAgent {
@@ -77,6 +94,54 @@ impl MesoAgent {
         Ok(Self { inner })
     }
 
+    /// Build a new MesoAgent from provider details (for dynamic per-request agent building).
+    ///
+    /// Provider type is inferred at runtime: `provider_id == "anthropic"` uses the native
+    /// Anthropic client, everything else uses the OpenAI-compatible client with `base_url`.
+    pub async fn from_provider(
+        provider_id: &str,
+        base_url: &str,
+        model_id: &str,
+        requires_api_key: bool,
+        credentials: &dyn CredentialStore,
+        tools: &[Arc<dyn Tool>],
+        config: &AppConfig,
+    ) -> Result<Self> {
+        let api_key =
+            providers::resolve_api_key_for_provider(provider_id, requires_api_key, credentials)
+                .await?;
+        let rig_tools = RigToolAdapter::from_tools(tools);
+
+        let preamble = config
+            .agent_system_prompt
+            .as_deref()
+            .unwrap_or("You are MesoClaw, a helpful AI assistant.");
+
+        let inner = if provider_id == "anthropic" {
+            let client = providers::build_anthropic_client(&api_key)?;
+            let agent = client
+                .agent(model_id)
+                .preamble(preamble)
+                .max_tokens(config.agent_max_tokens as u64)
+                .default_max_turns(config.agent_max_turns)
+                .tools(rig_tools)
+                .build();
+            AgentInner::Anthropic(agent)
+        } else {
+            let client = providers::build_openai_client(&api_key, Some(base_url))?;
+            let agent = client
+                .agent(model_id)
+                .preamble(preamble)
+                .max_tokens(config.agent_max_tokens as u64)
+                .default_max_turns(config.agent_max_turns)
+                .tools(rig_tools)
+                .build();
+            AgentInner::OpenAI(agent)
+        };
+
+        Ok(Self { inner })
+    }
+
     /// Send a simple prompt and get a response.
     pub async fn prompt(&self, input: &str) -> Result<String> {
         match &self.inner {
@@ -104,6 +169,58 @@ impl MesoAgent {
                 .map_err(|e| MesoError::Agent(format!("chat failed: {e}"))),
         }
     }
+}
+
+/// Resolve the agent to use for a chat request.
+///
+/// Resolution chain:
+/// 1. If `requested_model` is Some ("provider_id:model_id") → build agent from provider registry
+/// 2. If None → check default model in provider registry → build agent
+/// 3. If no default → use `state.agent` boot-time fallback
+/// 4. If no fallback → error
+#[cfg(feature = "ai")]
+pub async fn resolve_agent(
+    requested_model: Option<&str>,
+    state: &AppState,
+) -> Result<Arc<MesoAgent>> {
+    // Try requested model first, then default model
+    let model_spec = if let Some(spec) = requested_model {
+        Some(spec.to_string())
+    } else if let Some((pid, mid)) = state.provider_registry.get_default_model().await? {
+        Some(format!("{pid}:{mid}"))
+    } else {
+        None
+    };
+
+    if let Some(spec) = model_spec {
+        let (provider_id, model_id) = spec.split_once(':').ok_or_else(|| {
+            MesoError::Agent(format!(
+                "invalid model format '{spec}': expected 'provider_id:model_id'"
+            ))
+        })?;
+
+        let provider = state.provider_registry.get_provider(provider_id).await?;
+        let tools = state.tools.to_vec();
+
+        let agent = MesoAgent::from_provider(
+            provider_id,
+            &provider.provider.base_url,
+            model_id,
+            provider.provider.requires_api_key,
+            state.credentials.as_ref(),
+            &tools,
+            &state.config,
+        )
+        .await?;
+
+        return Ok(Arc::new(agent));
+    }
+
+    // Fallback to boot-time agent
+    state
+        .agent
+        .clone()
+        .ok_or_else(|| MesoError::Agent("no agent configured".into()))
 }
 
 // Compile-time assertion: MesoAgent must be Send + Sync for use in AppState
@@ -170,6 +287,110 @@ mod tests {
         assert!(result.is_err());
         let err = result.err().unwrap();
         assert!(matches!(err, MesoError::Agent(_)));
+    }
+
+    // from_provider: OpenAI-compatible provider
+    #[tokio::test]
+    async fn from_provider_openai_compatible() {
+        let creds = InMemoryCredentialStore::new();
+        creds.set("api_key:openai", "sk-test").await.unwrap();
+        let config = AppConfig::default();
+        let tools: Vec<Arc<dyn Tool>> = vec![];
+
+        let agent = MesoAgent::from_provider(
+            "openai",
+            "https://api.openai.com/v1",
+            "gpt-4o",
+            true,
+            &creds,
+            &tools,
+            &config,
+        )
+        .await;
+        assert!(agent.is_ok());
+    }
+
+    // from_provider: Anthropic provider
+    #[tokio::test]
+    async fn from_provider_anthropic() {
+        let creds = InMemoryCredentialStore::new();
+        creds.set("api_key:anthropic", "sk-ant-test").await.unwrap();
+        let config = AppConfig::default();
+        let tools: Vec<Arc<dyn Tool>> = vec![];
+
+        let agent = MesoAgent::from_provider(
+            "anthropic",
+            "https://api.anthropic.com",
+            "claude-sonnet-4-20250514",
+            true,
+            &creds,
+            &tools,
+            &config,
+        )
+        .await;
+        assert!(agent.is_ok());
+    }
+
+    // from_provider: OpenRouter with anthropic model uses OpenAI-compatible client
+    #[tokio::test]
+    async fn from_provider_openrouter_anthropic_model() {
+        let creds = InMemoryCredentialStore::new();
+        creds.set("api_key:openrouter", "sk-or-test").await.unwrap();
+        let config = AppConfig::default();
+        let tools: Vec<Arc<dyn Tool>> = vec![];
+
+        let agent = MesoAgent::from_provider(
+            "openrouter",
+            "https://openrouter.ai/api/v1",
+            "anthropic/claude-sonnet-4-20250514",
+            true,
+            &creds,
+            &tools,
+            &config,
+        )
+        .await;
+        assert!(agent.is_ok());
+    }
+
+    // from_provider: no-key-required provider (ollama)
+    #[tokio::test]
+    async fn from_provider_no_key_required() {
+        let creds = InMemoryCredentialStore::new();
+        let config = AppConfig::default();
+        let tools: Vec<Arc<dyn Tool>> = vec![];
+
+        let agent = MesoAgent::from_provider(
+            "ollama",
+            "http://localhost:11434/v1",
+            "llama3",
+            false,
+            &creds,
+            &tools,
+            &config,
+        )
+        .await;
+        assert!(agent.is_ok());
+    }
+
+    // from_provider: missing API key errors
+    #[tokio::test]
+    async fn from_provider_missing_key_errors() {
+        let creds = InMemoryCredentialStore::new();
+        let config = AppConfig::default();
+        let tools: Vec<Arc<dyn Tool>> = vec![];
+
+        let result = MesoAgent::from_provider(
+            "openai",
+            "https://api.openai.com/v1",
+            "gpt-4o",
+            true,
+            &creds,
+            &tools,
+            &config,
+        )
+        .await;
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), MesoError::Credential(_)));
     }
 
     // 1.4.4 — agent respects max turns (config-level check)

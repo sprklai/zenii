@@ -71,6 +71,11 @@ enum Commands {
         #[command(subcommand)]
         action: KeyAction,
     },
+    /// Manage AI providers
+    Provider {
+        #[command(subcommand)]
+        action: ProviderAction,
+    },
 }
 
 #[derive(Subcommand)]
@@ -137,6 +142,42 @@ enum KeyAction {
         /// Provider name
         provider: String,
     },
+    /// List all stored credential keys
+    List,
+}
+
+#[derive(Subcommand)]
+enum ProviderAction {
+    /// List all providers with key status
+    List,
+    /// Test connection to a provider
+    Test {
+        /// Provider ID (e.g. openai, anthropic)
+        provider_id: String,
+    },
+    /// Add a custom provider
+    Add {
+        /// Provider ID (alphanumeric + hyphens)
+        id: String,
+        /// Display name
+        #[arg(long)]
+        name: Option<String>,
+        /// Base URL for the API
+        #[arg(long)]
+        base_url: String,
+    },
+    /// Remove a user-defined provider
+    Remove {
+        /// Provider ID
+        provider_id: String,
+    },
+    /// Set the default model
+    Default {
+        /// Provider ID
+        provider_id: String,
+        /// Model ID
+        model_id: String,
+    },
 }
 
 #[tokio::main]
@@ -178,6 +219,24 @@ async fn main() {
         Commands::Key { action } => match action {
             KeyAction::Set { provider, key } => commands::key::set(&client, &provider, &key).await,
             KeyAction::Remove { provider } => commands::key::remove(&client, &provider).await,
+            KeyAction::List => commands::key::list(&client).await,
+        },
+        Commands::Provider { action } => match action {
+            ProviderAction::List => commands::provider::list(&client).await,
+            ProviderAction::Test { provider_id } => {
+                commands::provider::test_connection(&client, &provider_id).await
+            }
+            ProviderAction::Add { id, name, base_url } => {
+                let display_name = name.as_deref().unwrap_or(&id);
+                commands::provider::add(&client, &id, display_name, &base_url).await
+            }
+            ProviderAction::Remove { provider_id } => {
+                commands::provider::remove(&client, &provider_id).await
+            }
+            ProviderAction::Default {
+                provider_id,
+                model_id,
+            } => commands::provider::set_default(&client, &provider_id, &model_id).await,
         },
     };
 
@@ -303,5 +362,58 @@ mod tests {
         assert_eq!(cli.host, "10.0.0.1");
         assert_eq!(cli.port, 9999);
         assert_eq!(cli.token, Some("secret".to_string()));
+    }
+
+    #[test]
+    fn parse_key_list() {
+        let cli = parse(&["mesoclaw", "key", "list"]);
+        assert!(matches!(
+            cli.command,
+            Commands::Key {
+                action: KeyAction::List
+            }
+        ));
+    }
+
+    #[test]
+    fn parse_provider_list() {
+        let cli = parse(&["mesoclaw", "provider", "list"]);
+        assert!(matches!(
+            cli.command,
+            Commands::Provider {
+                action: ProviderAction::List
+            }
+        ));
+    }
+
+    #[test]
+    fn parse_provider_test() {
+        let cli = parse(&["mesoclaw", "provider", "test", "openai"]);
+        match cli.command {
+            Commands::Provider {
+                action: ProviderAction::Test { provider_id },
+            } => {
+                assert_eq!(provider_id, "openai");
+            }
+            _ => panic!("expected Provider Test"),
+        }
+    }
+
+    #[test]
+    fn parse_provider_default() {
+        let cli = parse(&["mesoclaw", "provider", "default", "openai", "gpt-4o"]);
+        match cli.command {
+            Commands::Provider {
+                action:
+                    ProviderAction::Default {
+                        provider_id,
+                        model_id,
+                    },
+            } => {
+                assert_eq!(provider_id, "openai");
+                assert_eq!(model_id, "gpt-4o");
+            }
+            _ => panic!("expected Provider Default"),
+        }
     }
 }

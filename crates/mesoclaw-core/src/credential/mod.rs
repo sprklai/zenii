@@ -1,3 +1,6 @@
+#[cfg(feature = "keyring")]
+pub mod keyring_store;
+
 use async_trait::async_trait;
 
 use std::collections::HashMap;

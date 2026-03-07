@@ -56,6 +56,9 @@ pub struct AppConfig {
     pub skills_dir: Option<String>,
     pub skill_max_content_size: usize,
 
+    // Phase 8: Credentials
+    pub keyring_service_id: String,
+
     // Phase 4: User Learning
     pub learning_enabled: bool,
     pub learning_denied_categories: Vec<String>,
@@ -117,6 +120,9 @@ impl Default for AppConfig {
             // Skills
             skills_dir: None,
             skill_max_content_size: 100_000,
+
+            // Credentials
+            keyring_service_id: "com.sprklai.mesoclaw".into(),
 
             // User Learning
             learning_enabled: true,

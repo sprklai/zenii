@@ -14,6 +14,8 @@ use crate::user::UserLearner;
 #[cfg(feature = "ai")]
 use crate::ai::agent::MesoAgent;
 #[cfg(feature = "ai")]
+use crate::ai::provider_registry::ProviderRegistry;
+#[cfg(feature = "ai")]
 use crate::ai::session::SessionManager;
 
 pub struct AppState {
@@ -28,6 +30,8 @@ pub struct AppState {
     pub session_manager: Arc<SessionManager>,
     #[cfg(feature = "ai")]
     pub agent: Option<Arc<MesoAgent>>,
+    #[cfg(feature = "ai")]
+    pub provider_registry: Arc<ProviderRegistry>,
     pub soul_loader: Arc<SoulLoader>,
     pub skill_registry: Arc<SkillRegistry>,
     pub user_learner: Arc<UserLearner>,

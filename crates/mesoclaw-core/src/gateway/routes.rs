@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use axum::Router;
 use axum::middleware;
-use axum::routing::{get, post};
+use axum::routing::{delete, get, post};
 use tower_http::cors::{AllowOrigin, CorsLayer};
 use tower_http::trace::TraceLayer;
 
@@ -28,6 +28,10 @@ pub fn build_router(state: Arc<AppState>) -> Router {
                 .put(handlers::sessions::update_session)
                 .delete(handlers::sessions::delete_session),
         )
+        .route(
+            "/sessions/{id}/generate-title",
+            post(handlers::sessions::generate_title),
+        )
         // Messages
         .route(
             "/sessions/{id}/messages",
@@ -51,9 +55,52 @@ pub fn build_router(state: Arc<AppState>) -> Router {
             "/config",
             get(handlers::config::get_config).put(handlers::config::update_config),
         )
-        // Providers
-        .route("/providers", get(handlers::providers::list_providers))
-        .route("/providers/{id}", get(handlers::providers::get_provider))
+        // Credentials (Phase 8)
+        .route(
+            "/credentials",
+            post(handlers::credentials::set_credential)
+                .get(handlers::credentials::list_credentials),
+        )
+        .route(
+            "/credentials/{key}",
+            delete(handlers::credentials::delete_credential),
+        )
+        .route(
+            "/credentials/{key}/exists",
+            get(handlers::credentials::credential_exists),
+        )
+        // Providers (Phase 8 -- multi-provider)
+        .route(
+            "/providers",
+            get(handlers::providers::list_providers)
+                .post(handlers::providers::create_user_provider),
+        )
+        .route(
+            "/providers/with-key-status",
+            get(handlers::providers::list_with_key_status),
+        )
+        .route(
+            "/providers/default",
+            get(handlers::providers::get_default_model).put(handlers::providers::set_default_model),
+        )
+        .route(
+            "/providers/{id}",
+            get(handlers::providers::get_provider)
+                .put(handlers::providers::update_provider)
+                .delete(handlers::providers::delete_user_provider),
+        )
+        .route(
+            "/providers/{id}/test",
+            post(handlers::providers::test_connection),
+        )
+        .route(
+            "/providers/{id}/models",
+            post(handlers::providers::add_model),
+        )
+        .route(
+            "/providers/{id}/models/{model_id}",
+            delete(handlers::providers::delete_model),
+        )
         // Tools
         .route("/tools", get(handlers::tools::list_tools))
         .route("/tools/{name}/execute", post(handlers::tools::execute_tool))

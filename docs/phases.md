@@ -13,7 +13,7 @@
   - [Phase 5: Binary Shells + Tools + Memory](#phase-5-binary-shells--tools--memory--complete)
   - [Phase 6: Frontend](#phase-6-frontend--complete)
   - [Phase 7: Desktop App](#phase-7-desktop-app--complete)
-  - [Phase 8: Channels & Scheduler](#phase-8-channels--scheduler--not-started)
+  - [Phase 8: Credentials, Channels & Scheduler](#phase-8-credentials-channels--scheduler--not-started)
   - [Phase 9: TUI & Cross-Compilation](#phase-9-tui--cross-compilation--not-started)
   - [Phase 10: CI/CD & Quality](#phase-10-cicd--quality--not-started)
   - [Phase 11: Documentation & Community](#phase-11-documentation--community--not-started)
@@ -23,7 +23,7 @@
 
 ## Phase Gate Protocol
 
-Every implementation phase follows this strict workflow. No phase proceeds without user confirmation at each gate.
+Every implementation phase follows this strict workflow. No phase proceeds without user confirmation at each gate. The protocol enforces three user gates — **Plan**, **Tests**, and **Completion** — ensuring alignment at every stage.
 
 ```mermaid
 flowchart TD
@@ -43,7 +43,39 @@ flowchart TD
     Decision -->|Yes| Docs["Update docs and README"]
     Docs --> Next([Phase N+1])
     Decision -->|Changes requested| Tests
+
+    style Start fill:#2196F3,color:#fff
+    style Next fill:#4CAF50,color:#fff
+    style PlanReview fill:#FF9800,color:#fff
+    style TestReview fill:#FF9800,color:#fff
+    style Decision fill:#FF9800,color:#fff
 ```
+
+### Step-by-Step Description
+
+1. **Research** — Search the internet for candidate crates and libraries. Compare alternatives on binary size impact, compile time, maintenance activity, dependency tree depth, and feature completeness. Use Explore agents to scan the v1 codebase for portable patterns relevant to the phase.
+
+2. **Create Plan** — Write a detailed plan to `plans/phaseN_*.md` covering scope, API signatures, data models, dependencies, and tech selection rationale. Document all assumptions and flag any that need user confirmation.
+
+3. **Gate 1: User Reviews Plan** — Present the plan to the user. If changes are requested, revise and re-present. No code is written until the user explicitly approves the plan.
+
+4. **Gather User Inputs** — Collect design decisions, preferences, and constraints from the user. Document these in the plan file. Never assume — wrong assumptions cost more than a question.
+
+5. **Write Tests (TDD)** — Write unit tests first in `tests/phaseN_*.md` and corresponding test code. Cover success paths, failure paths, and edge cases. Tests exist before any implementation code.
+
+6. **Gate 2: User Reviews Tests** — Present the test design to the user. If changes are requested, revise and re-present. No implementation begins until the user approves the test design.
+
+7. **Implement** — Write the implementation code to make all tests pass. Follow existing codebase conventions, keep changes minimal, and avoid over-engineering.
+
+8. **Run Tests** — Execute `cargo test --workspace` and ensure zero failures.
+
+9. **Run Clippy** — Execute `cargo clippy --workspace` and ensure zero warnings.
+
+10. **Present Results** — Provide a phase summary: what was built, what changed, architecture impact, and any new Mermaid diagrams.
+
+11. **Gate 3: User Confirms** — Present the completed work to the user. If changes are requested, loop back to tests/implementation. The user must explicitly confirm before proceeding.
+
+12. **Update Documentation** — After user confirmation, update `docs/architecture.md`, `docs/phases.md`, `README.md`, `no_commit/todo_tracker.md`, and `docs/processes.md` to reflect the changes. This is mandatory — no phase is complete without updated docs.
 
 ## Phase Checklist Template
 
@@ -93,8 +125,8 @@ gantt
     Phase 6 - Frontend                  :done, p6, after p5, 1
     section Desktop
     Phase 7 - Desktop App               :done, p7, after p6, 1
-    section Channels
-    Phase 8 - Channels & Scheduler      :p8, after p7, 1
+    section Credentials/Channels
+    Phase 8 - Credentials, Channels & Scheduler :p8, after p7, 1
     section TUI/Cross
     Phase 9 - TUI & Cross-Compilation   :p9, after p8, 1
     section CI/CD
@@ -280,20 +312,36 @@ gantt
 
 ---
 
-### Phase 8: Channels & Scheduler — `[NOT STARTED]`
+### Phase 8: Credentials, Channels & Scheduler — `[NOT STARTED]`
 
-**Step 15: Channels**
-- `openclaw-channels` integration
-- `ChannelRegistry` for managing external channels (Slack, Discord, etc.)
-- Feature-gated behind `channels` feature flag
+**Step 15.1: Credential & Provider Management**
+- `KeyringStore` -- OS-native credential storage (keyring crate v3), replaces InMemoryCredentialStore
+- `ProviderRegistry` -- multi-provider AI management with DB-backed CRUD (OpenAI, Anthropic, Gemini, OpenRouter, Vercel AI Gateway, Ollama, custom OpenAI-compatible)
+- Gateway routes: 4 credential + 11 provider routes (CRUD, connection testing, default model)
+- Desktop settings page: provider cards, API key show/hide, model management, connection testing
+- CLI: `mesoclaw key set/remove/list`, `mesoclaw provider list/test/add/remove/default`
+- Boot: KeyringStore with InMemory fallback, ProviderRegistry seeding, MesoAgent refactor for multi-provider
+- Cross-binary: CLI, TUI, Desktop, Mobile, Daemon all share same OS keyring
+
+**Step 15.2: Channels**
+- Trait-based messaging: `ChannelLifecycle` + `ChannelSender` split (from opencrust, improved)
+- `ChannelRegistry` -- DashMap-backed concurrent channel management
+- `ConnectorFrame` -- JSON wire protocol for external connector processes
+- Telegram (teloxide): DmPolicy, message splitting, MarkdownV2, bot commands, approval flow
+- Slack (tokio-tungstenite): Raw Socket Mode WebSocket, auto-reconnect, mrkdwn formatting
+- Discord (serenity): Gateway WebSocket, guild/channel allowlists, bot filtering
+- Feature-gated: `channels`, `channels-telegram`, `channels-slack`, `channels-discord`
+- Credentials from keyring: tokens, allowlists stored as JSON arrays
 
 **Step 16: Scheduler**
-- Cron job definitions and execution
+- Cron/interval job system with SQLite persistence (`cron` crate 0.15)
+- `TokioScheduler` -- 1s tick, DashMap job registry, error backoff, stuck detection
+- Job payloads: Heartbeat, AgentTurn, Notify, SendViaChannel
+- Active hours gate, one-shot jobs, graceful shutdown
 - Feature-gated behind `scheduler` feature flag
-- Persistent job storage in SQLite
 
-- **Tests**: channel registration/dispatch, cron parsing, job execution, feature flag isolation
-- **Plan**: [plans/phase8_channels_scheduler.md](../plans/phase8_channels_scheduler.md)
+- **Tests**: ~153 new tests (34 credentials, 86 channels, 34 scheduler)
+- **Plans**: [plans/phase8_credentials.md](../plans/phase8_credentials.md), [plans/phase8_channels.md](../plans/phase8_channels.md), [plans/phase8_scheduler.md](../plans/phase8_scheduler.md)
 
 ---
 

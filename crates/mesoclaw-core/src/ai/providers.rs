@@ -58,6 +58,31 @@ pub fn build_anthropic_client(api_key: &str) -> Result<anthropic::Client> {
         .map_err(|e| MesoError::Agent(format!("failed to build Anthropic client: {e}")))
 }
 
+/// Resolve the API key for a specific provider by ID.
+///
+/// Looks up `api_key:{provider_id}` in the credential store.
+/// For providers that don't require API keys (e.g. ollama), returns a placeholder.
+pub async fn resolve_api_key_for_provider(
+    provider_id: &str,
+    requires_api_key: bool,
+    credentials: &dyn CredentialStore,
+) -> Result<String> {
+    if !requires_api_key {
+        return Ok("no-key-required".into());
+    }
+
+    let key_name = format!("api_key:{provider_id}");
+    if let Some(key) = credentials.get(&key_name).await?
+        && !key.is_empty()
+    {
+        return Ok(key);
+    }
+
+    Err(MesoError::Credential(format!(
+        "no API key found for provider '{provider_id}': set it via the credentials API (key: {key_name})"
+    )))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -126,6 +151,37 @@ mod tests {
     fn custom_base_url_applied() {
         let client = build_openai_client("sk-test", Some("http://localhost:11434/v1"));
         assert!(client.is_ok());
+    }
+
+    // resolve_api_key_for_provider: found in credential store
+    #[tokio::test]
+    async fn resolve_provider_key_from_store() {
+        let creds = InMemoryCredentialStore::new();
+        creds.set("api_key:openai", "sk-test-123").await.unwrap();
+
+        let key = resolve_api_key_for_provider("openai", true, &creds)
+            .await
+            .unwrap();
+        assert_eq!(key, "sk-test-123");
+    }
+
+    // resolve_api_key_for_provider: missing key errors
+    #[tokio::test]
+    async fn resolve_provider_key_missing_errors() {
+        let creds = InMemoryCredentialStore::new();
+        let result = resolve_api_key_for_provider("openai", true, &creds).await;
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), MesoError::Credential(_)));
+    }
+
+    // resolve_api_key_for_provider: no key required returns placeholder
+    #[tokio::test]
+    async fn resolve_provider_key_not_required() {
+        let creds = InMemoryCredentialStore::new();
+        let key = resolve_api_key_for_provider("ollama", false, &creds)
+            .await
+            .unwrap();
+        assert_eq!(key, "no-key-required");
     }
 
     // Credential store takes priority over env

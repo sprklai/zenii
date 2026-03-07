@@ -5,7 +5,7 @@ use tracing::info;
 
 use crate::Result;
 use crate::config::AppConfig;
-use crate::credential::InMemoryCredentialStore;
+use crate::credential::CredentialStore;
 use crate::db::{self, DbPool};
 use crate::event_bus::TokioBroadcastBus;
 use crate::identity::SoulLoader;
@@ -16,7 +16,7 @@ use crate::tools::ToolRegistry;
 use crate::user::UserLearner;
 
 #[cfg(feature = "ai")]
-use crate::ai::{agent::MesoAgent, session::SessionManager};
+use crate::ai::{agent::MesoAgent, provider_registry::ProviderRegistry, session::SessionManager};
 
 #[cfg(feature = "gateway")]
 use crate::gateway::state::AppState;
@@ -27,13 +27,15 @@ pub struct Services {
     pub db: DbPool,
     pub event_bus: Arc<TokioBroadcastBus>,
     pub memory: Arc<InMemoryStore>,
-    pub credentials: Arc<InMemoryCredentialStore>,
+    pub credentials: Arc<dyn CredentialStore>,
     pub security: Arc<SecurityPolicy>,
     pub tools: Arc<ToolRegistry>,
     #[cfg(feature = "ai")]
     pub session_manager: Arc<SessionManager>,
     #[cfg(feature = "ai")]
     pub agent: Option<Arc<MesoAgent>>,
+    #[cfg(feature = "ai")]
+    pub provider_registry: Arc<ProviderRegistry>,
     pub soul_loader: Arc<SoulLoader>,
     pub skill_registry: Arc<SkillRegistry>,
     pub user_learner: Arc<UserLearner>,
@@ -64,8 +66,13 @@ pub async fn init_services(config: AppConfig) -> Result<Services> {
     // 3. Memory
     let memory = Arc::new(InMemoryStore::new());
 
-    // 4. Credentials (InMemory for now, KeyringStore deferred to Phase 5)
-    let credentials = Arc::new(InMemoryCredentialStore::new());
+    // 4. Credentials -- KeyringStore with InMemory fallback
+    #[cfg(feature = "keyring")]
+    let credentials: Arc<dyn CredentialStore> =
+        crate::credential::keyring_store::keyring_or_fallback(&config).await;
+    #[cfg(not(feature = "keyring"))]
+    let credentials: Arc<dyn CredentialStore> =
+        Arc::new(crate::credential::InMemoryCredentialStore::new());
 
     // 5. Security
     let security = Arc::new(SecurityPolicy::default_policy());
@@ -151,7 +158,15 @@ pub async fn init_services(config: AppConfig) -> Result<Services> {
     let user_learner = Arc::new(UserLearner::new(pool.clone(), &config));
     info!("User learner initialized");
 
-    // 11. Agent (may fail if no API key configured — that's OK)
+    // 11. Provider Registry -- seed built-ins, load from DB
+    #[cfg(feature = "ai")]
+    let provider_registry = Arc::new(ProviderRegistry::new(pool.clone()));
+    #[cfg(feature = "ai")]
+    provider_registry.seed_builtin_providers().await?;
+    #[cfg(feature = "ai")]
+    info!("Provider registry initialized");
+
+    // 12. Agent (may fail if no API key configured — that's OK)
     #[cfg(feature = "ai")]
     let tool_vec = tools.to_vec();
     let agent = match MesoAgent::new(&config, credentials.as_ref(), &tool_vec).await {
@@ -182,6 +197,8 @@ pub async fn init_services(config: AppConfig) -> Result<Services> {
         session_manager,
         #[cfg(feature = "ai")]
         agent,
+        #[cfg(feature = "ai")]
+        provider_registry,
         soul_loader,
         skill_registry,
         user_learner,
@@ -204,6 +221,8 @@ impl From<Services> for AppState {
             session_manager: s.session_manager,
             #[cfg(feature = "ai")]
             agent: s.agent,
+            #[cfg(feature = "ai")]
+            provider_registry: s.provider_registry,
             soul_loader: s.soul_loader,
             skill_registry: s.skill_registry,
             user_learner: s.user_learner,

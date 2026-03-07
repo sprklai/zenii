@@ -1,5 +1,6 @@
 pub mod chat;
 pub mod config;
+pub mod credentials;
 pub mod health;
 pub mod identity;
 pub mod memory;
@@ -47,6 +48,11 @@ pub(crate) mod tests {
             Arc::new(SkillRegistry::new(&skills_dir, config.skill_max_content_size).unwrap());
         let user_learner = Arc::new(UserLearner::new(pool.clone(), &config));
 
+        let provider_registry = Arc::new(crate::ai::provider_registry::ProviderRegistry::new(
+            pool.clone(),
+        ));
+        provider_registry.seed_builtin_providers().await.unwrap();
+
         let state = Arc::new(AppState {
             config: Arc::new(config),
             db: pool.clone(),
@@ -57,6 +63,7 @@ pub(crate) mod tests {
             tools: Arc::new(crate::tools::ToolRegistry::new()),
             session_manager: Arc::new(crate::ai::session::SessionManager::new(pool)),
             agent: None,
+            provider_registry,
             soul_loader,
             skill_registry,
             user_learner,

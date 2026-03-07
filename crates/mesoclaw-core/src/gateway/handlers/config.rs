@@ -61,6 +61,7 @@ mod tests {
             tools: Arc::new(crate::tools::ToolRegistry::new()),
             session_manager: base_state.session_manager.clone(),
             agent: None,
+            provider_registry: base_state.provider_registry.clone(),
             soul_loader: base_state.soul_loader.clone(),
             skill_registry: base_state.skill_registry.clone(),
             user_learner: base_state.user_learner.clone(),

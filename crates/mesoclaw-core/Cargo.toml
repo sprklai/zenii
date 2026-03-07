@@ -46,7 +46,7 @@ futures = { workspace = true }
 serde_yaml = { workspace = true }
 
 [features]
-default = ["gateway", "ai"]
+default = ["gateway", "ai", "keyring"]
 gateway = ["dep:axum", "dep:tower-http"]
 ai = ["dep:rig-core"]
 web-dashboard = ["gateway"]

@@ -5,12 +5,14 @@ use axum::extract::{State, WebSocketUpgrade};
 use axum::response::IntoResponse;
 use serde::{Deserialize, Serialize};
 
+use crate::ai::resolve_agent;
 use crate::gateway::state::AppState;
 
 #[derive(Debug, Deserialize)]
 struct WsRequest {
     prompt: String,
     session_id: Option<String>,
+    model: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -52,13 +54,13 @@ async fn handle_ws(mut socket: WebSocket, state: Arc<AppState>) {
             }
         };
 
-        let agent = match state.agent.as_ref() {
-            Some(a) => a,
-            None => {
+        let agent = match resolve_agent(request.model.as_deref(), &state).await {
+            Ok(a) => a,
+            Err(e) => {
                 let err_chunk = WsChunk {
                     r#type: "error".into(),
                     content: None,
-                    error: Some("no agent configured".into()),
+                    error: Some(e.to_string()),
                 };
                 let _ = socket
                     .send(Message::Text(

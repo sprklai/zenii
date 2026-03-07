@@ -5,13 +5,15 @@ use axum::extract::State;
 use axum::response::IntoResponse;
 use serde::{Deserialize, Serialize};
 
+use crate::Result;
+use crate::ai::resolve_agent;
 use crate::gateway::state::AppState;
-use crate::{MesoError, Result};
 
 #[derive(Debug, Deserialize)]
 pub struct ChatRequest {
     pub prompt: String,
     pub session_id: Option<String>,
+    pub model: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -24,10 +26,7 @@ pub async fn chat(
     State(state): State<Arc<AppState>>,
     Json(req): Json<ChatRequest>,
 ) -> Result<impl IntoResponse> {
-    let agent = state
-        .agent
-        .as_ref()
-        .ok_or_else(|| MesoError::Agent("no agent configured".into()))?;
+    let agent = resolve_agent(req.model.as_deref(), &state).await?;
 
     // If session_id provided, store the user message
     if let Some(ref sid) = req.session_id {

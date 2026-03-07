@@ -4,12 +4,12 @@
 	import { sessionsStore } from '$lib/stores/sessions.svelte';
 	import { page } from '$app/state';
 	import { Skeleton } from '$lib/components/ui/skeleton';
-	import { onMount } from 'svelte';
 
 	let sessionId = $derived(page.params.id!);
 
-	onMount(() => {
+	$effect(() => {
 		if (sessionId) {
+			messagesStore.clear();
 			sessionsStore.get(sessionId);
 			messagesStore.load(sessionId);
 		}

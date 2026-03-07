@@ -73,6 +73,21 @@ function createSessionsStore() {
       if (active?.id === id) active = null;
     },
 
+    async generateTitle(id: string) {
+      try {
+        const session = await apiPost<Session>(
+          `/sessions/${encodeURIComponent(id)}/generate-title`,
+          {},
+        );
+        sessions = sessions.map((s) =>
+          s.id === id ? { ...s, title: session.title } : s,
+        );
+        if (active?.id === id) active = session;
+      } catch {
+        // Non-critical — keep existing title on failure
+      }
+    },
+
     setActive(session: Session | null) {
       active = session;
     },

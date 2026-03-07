@@ -46,6 +46,9 @@
 		<Button variant="outline" onclick={() => goto('/settings/providers')}>
 			Providers
 		</Button>
+		<Button variant="outline" onclick={() => goto('/settings/services')}>
+			Services
+		</Button>
 		<Button variant="outline" onclick={() => goto('/settings/persona')}>
 			Persona & Skills
 		</Button>
