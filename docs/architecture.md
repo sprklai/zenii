@@ -162,9 +162,34 @@ mesoclaw/
 │   ├── mesoclaw-cli/       # clap CLI
 │   ├── mesoclaw-tui/       # ratatui TUI
 │   └── mesoclaw-daemon/    # Headless daemon (full gateway server)
-└── web/                    # Svelte 5 frontend (Phase 7)
+└── web/                    # Svelte 5 frontend (SPA)
     ├── src/
-    └── package.json
+    │   ├── app.css          # Tailwind v4 + shadcn theme tokens
+    │   ├── app.html         # SPA shell
+    │   ├── lib/
+    │   │   ├── api/         # HTTP client + WebSocket manager
+    │   │   ├── components/
+    │   │   │   ├── ai-elements/  # svelte-ai-elements (9 component sets)
+    │   │   │   ├── ui/      # shadcn-svelte primitives (14 component sets)
+    │   │   │   ├── AuthGate.svelte
+    │   │   │   ├── ChatView.svelte
+    │   │   │   ├── Markdown.svelte
+    │   │   │   ├── SessionList.svelte
+    │   │   │   └── ThemeToggle.svelte
+    │   │   ├── stores/      # 6 Svelte 5 rune stores ($state)
+    │   │   ├── paraglide/   # i18n (paraglide-js, EN only, 24 keys)
+    │   │   └── utils.ts     # shadcn utility helpers
+    │   └── routes/          # 8 SPA routes
+    │       ├── +page.svelte           # Home
+    │       ├── chat/+page.svelte      # New chat
+    │       ├── chat/[id]/+page.svelte # Existing session
+    │       ├── memory/+page.svelte    # Memory browser
+    │       ├── schedule/+page.svelte  # Placeholder (Phase 8)
+    │       ├── settings/+page.svelte  # General settings
+    │       ├── settings/providers/    # Provider config
+    │       └── settings/persona/      # Identity + skills editor
+    ├── package.json
+    └── vitest.config.ts     # 26 unit tests (vitest)
 ```
 
 ## Default Paths by OS
@@ -521,8 +546,7 @@ All clients communicate via the HTTP+WebSocket gateway at `127.0.0.1:18981`. Rou
 | Group | Routes | Phase |
 |---|---|---|
 | Scheduler | 4 routes (feature-gated) | Phase 8 |
-| Web Dashboard | 1 route (feature-gated) | Phase 6 |
-| WebSocket `/ws/events`, `/ws/agents` | 2 channels | Phase 5+ |
+| WebSocket `/ws/events`, `/ws/agents` | 2 channels | Phase 8+ |
 
 ## Concurrency Rules
 
@@ -548,7 +572,7 @@ Key architectural mistakes from MesoClaw v1 and how v2 prevents them.
 | `block_on()` in event loop | Zero `block_on()` calls; `tokio::spawn` for sync work |
 | `Result<T, String>` everywhere | `MesoError` enum with `thiserror` |
 | Custom AI layer (1400 LOC) | `rig-core` (battle-tested, 18 providers) |
-| 21 Zustand stores | Max 7 Svelte stores, single WS connection |
+| 21 Zustand stores | 6 Svelte 5 rune stores ($state), single WS connection |
 | 165 IPC commands (Tauri v1) | Gateway-only architecture (~40 HTTP routes) |
 | OKLCH color functions in CSS | Pre-computed hex values only |
 | useEffect soup (React) | Single `$effect` per Svelte component, reactive stores |

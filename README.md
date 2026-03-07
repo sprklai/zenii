@@ -222,7 +222,7 @@ graph TD
 
 ```
 mesoclaw/
-├── Cargo.toml              # Workspace root (6 members)
+├── Cargo.toml              # Workspace root (7 members)
 ├── CLAUDE.md               # AI assistant instructions
 ├── README.md               # This file
 ├── scripts/
@@ -235,13 +235,16 @@ mesoclaw/
 │   ├── phase1_core_foundation.md  # Phase 1 implementation plan
 │   ├── phase2_ai_integration.md   # Phase 2 implementation plan
 │   ├── phase3_gateway_server.md   # Phase 3 implementation plan
-│   └── phase4_agent_intelligence.md # Phase 4 implementation plan
+│   ├── phase4_agent_intelligence.md # Phase 4 implementation plan
+│   ├── phase5_combined.md         # Phase 5 implementation plan
+│   └── phase6_frontend.md         # Phase 6 implementation plan
 ├── tests/
 │   ├── phase1_core_foundation.md  # Phase 1 test plan + results
 │   ├── phase2_ai_integration.md   # Phase 2 test plan + results (105 tests)
-│   ├── phase3_gateway_server.md  # Phase 3 test plan + results (96 tests)
+│   ├── phase3_gateway_server.md    # Phase 3 test plan + results (96 tests)
 │   ├── phase4_agent_intelligence.md # Phase 4 test plan + results (94 tests)
-│   └── ...
+│   ├── phase5_combined.md           # Phase 5 test plan + results (20 tests)
+│   └── phase6_frontend.md           # Phase 6 test plan + results (26 tests)
 ├── crates/
 │   ├── mesoclaw-core/      # Shared library (NO Tauri dependency)
 │   ├── mesoclaw-desktop/   # Tauri 2 shell (macOS, Windows, Linux)
@@ -249,7 +252,7 @@ mesoclaw/
 │   ├── mesoclaw-cli/       # clap CLI
 │   ├── mesoclaw-tui/       # ratatui TUI
 │   └── mesoclaw-daemon/    # Headless daemon
-└── web/                    # Svelte 5 frontend (shared by desktop + mobile)
+└── web/                    # Svelte 5 SPA frontend (shared by desktop + mobile)
 ```
 
 ---
@@ -426,6 +429,7 @@ Detailed documentation lives in the `docs/` and `plans/` directories:
 - [Phase 3 Plan](plans/phase3_gateway_server.md) -- Gateway server, AI agent, boot sequence
 - [Phase 4 Plan](plans/phase4_agent_intelligence.md) -- Identity, skills, user learning
 - [Phase 5 Plan](plans/phase5_combined.md) -- ToolRegistry, memory enhancements, CLI binary
+- [Phase 6 Plan](plans/phase6_frontend.md) -- Svelte 5 SPA frontend
 
 ### Implementation Status
 
@@ -436,7 +440,7 @@ Detailed documentation lives in the `docs/` and `plans/` directories:
 | Phase 3: Gateway Server | 8-10 | Complete | 233/233 passing |
 | Phase 4: Agent Intelligence | 10a-10c | Complete | 327/327 passing |
 | Phase 5: Binary Shells + Tools + Memory | 11-12 | Complete | 347/347 passing |
-| Phase 6: Frontend | 13 | Not started | -- |
+| Phase 6: Frontend | 13 | Complete | 347 Rust + 26 JS passing |
 | Phase 7: Desktop & Mobile | 14, 14b | Not started | -- |
 | Phase 8: Channels & Scheduler | 15-16 | Not started | -- |
 | Phase 9: TUI & Cross-Compilation | 17-18 | Not started | -- |

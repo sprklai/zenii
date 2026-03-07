@@ -11,7 +11,7 @@
   - [Phase 3: Gateway Server](#phase-3-gateway-server--complete)
   - [Phase 4: Agent Intelligence](#phase-4-agent-intelligence--complete)
   - [Phase 5: Binary Shells + Tools + Memory](#phase-5-binary-shells--tools--memory--complete)
-  - [Phase 6: Frontend](#phase-6-frontend--not-started)
+  - [Phase 6: Frontend](#phase-6-frontend--complete)
   - [Phase 7: Desktop & Mobile](#phase-7-desktop--mobile--not-started)
   - [Phase 8: Channels & Scheduler](#phase-8-channels--scheduler--not-started)
   - [Phase 9: TUI & Cross-Compilation](#phase-9-tui--cross-compilation--not-started)
@@ -89,7 +89,7 @@ gantt
     section Binaries
     Phase 5 - Binary Shells + Tools + Memory :done, p5, after p4, 1
     section Frontend
-    Phase 6 - Frontend                  :p6, after p5, 1
+    Phase 6 - Frontend                  :done, p6, after p5, 1
     section Desktop/Mobile
     Phase 7 - Desktop & Mobile          :p7, after p6, 1
     section Channels
@@ -234,18 +234,24 @@ gantt
 
 ---
 
-### Phase 6: Frontend — `[NOT STARTED]`
+### Phase 6: Frontend — `[COMPLETE]`
 
-**Step 13: Svelte 5 Frontend**
-- SvelteKit + shadcn-svelte + paraglide-js (i18n)
+**Step 13: Svelte 5 Frontend (SPA)**
+- SvelteKit (adapter-static, SPA mode) + Svelte 5 runes + shadcn-svelte + Tailwind CSS v4
 - 8 routes: home, chat, chat/[id], memory, settings, settings/providers, settings/persona, schedule
-- 7 stores: session, messages, memory, config, providers, theme, i18n
-- ~40 components: chat interface, message bubbles, markdown rendering, settings panels, etc.
-- WebSocket integration for real-time streaming
-- Max 1 `$effect` per Svelte component
+- 6 stores: sessions, messages, memory, config, providers, theme — all Svelte 5 `$state` runes
+- svelte-ai-elements: 9 component sets (message, conversation, response, prompt-input, code, reasoning, loader, tool, copy-button)
+- shadcn-svelte: 14 UI primitive sets (button, input, card, dialog, sidebar, etc.)
+- ChatView with streaming: Conversation + Message + Response (streamdown + shiki) + PromptInput
+- paraglide-js v2 i18n (EN only, 24 message keys, Vite plugin)
+- WebSocket integration for real-time streaming chat
+- Dark/light/system theme with localStorage persistence
 
-- **Tests**: frontend build, component rendering, store reactivity, WS connection
+**New dependencies**: SvelteKit, svelte 5, shadcn-svelte, tailwindcss v4, paraglide-js, vitest, shiki, streamdown
+- **Tests**: 26 unit tests (vitest), build + type-check, 12 manual tests — all passing
 - **Plan**: [plans/phase6_frontend.md](../plans/phase6_frontend.md)
+- **Design**: [docs/plans/2026-03-06-phase6-frontend-design.md](../docs/plans/2026-03-06-phase6-frontend-design.md)
+- **Test plan**: [tests/phase6_frontend.md](../tests/phase6_frontend.md)
 
 ---
 
