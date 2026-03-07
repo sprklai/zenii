@@ -1,0 +1,52 @@
+{
+  "name": "web",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "scripts": {
+    "dev": "vite dev",
+    "build": "vite build",
+    "preview": "vite preview",
+    "prepare": "svelte-kit sync || echo ''",
+    "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+    "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "@inlang/plugin-message-format": "^4.3.0",
+    "@internationalized/date": "^3.10.0",
+    "@lucide/svelte": "^0.562.0",
+    "@sveltejs/adapter-static": "^3.0.10",
+    "@sveltejs/kit": "^2.50.2",
+    "@sveltejs/vite-plugin-svelte": "^6.2.4",
+    "@tailwindcss/vite": "^4.2.1",
+    "@testing-library/svelte": "^5.3.1",
+    "@types/dompurify": "^3.2.0",
+    "jsdom": "^28.1.0",
+    "svelte": "^5.51.0",
+    "svelte-check": "^4.4.2",
+    "tailwind-variants": "^3.2.2",
+    "tailwindcss": "^4.2.1",
+    "tailwindcss-animate": "^1.0.7",
+    "typescript": "^5.9.3",
+    "vite": "^7.3.1",
+    "vitest": "^4.0.18"
+  },
+  "dependencies": {
+    "@inlang/paraglide-js": "^2.13.2",
+    "@shikijs/langs": "^4.0.1",
+    "@shikijs/themes": "^4.0.1",
+    "ai": "^6.0.116",
+    "bits-ui": "^2.16.3",
+    "clsx": "^2.1.1",
+    "dompurify": "^3.3.2",
+    "highlight.js": "^11.11.1",
+    "marked": "^17.0.4",
+    "runed": "^0.31.1",
+    "shiki": "^4.0.1",
+    "svelte-streamdown": "^3.0.1",
+    "svelte-toolbelt": "^0.10.6",
+    "tailwind-merge": "^3.5.0"
+  }
+}

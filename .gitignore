@@ -3,11 +3,16 @@
 **/*.rs.bk
 Cargo.lock
 
-# Frontend
-web/node_modules/
-web/.svelte-kit/
+# Frontend (web/)
+node_modules/
+.svelte-kit/
 web/build/
 web/dist/
+vite.config.js.timestamp-*
+vite.config.ts.timestamp-*
+
+# Paraglide generated (rebuild on compile)
+web/src/lib/paraglide/
 
 # IDE
 .vscode/
@@ -24,6 +29,7 @@ Thumbs.db
 .env
 .env.*
 !.env.example
+!.env.test
 
 # Tauri
 crates/mesoclaw-desktop/gen/
@@ -37,11 +43,11 @@ crates/mesoclaw-desktop/gen/
 # Claude local settings
 .claude/settings.local.json
 
-# Misc
-no_commit
-node_modules/
+# Build outputs
 dist/
 build/
-target/
+
+# Project internal (not committed)
+no_commit/
 plans/
 tests/
