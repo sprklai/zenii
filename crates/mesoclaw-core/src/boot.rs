@@ -1,6 +1,8 @@
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 
+use tokio::sync::RwLock;
 use tracing::info;
 
 use crate::Result;
@@ -19,7 +21,10 @@ use crate::user::UserLearner;
 use crate::channels::registry::ChannelRegistry;
 
 #[cfg(feature = "ai")]
-use crate::ai::{agent::MesoAgent, provider_registry::ProviderRegistry, session::SessionManager};
+use crate::ai::{
+    agent::MesoAgent, context::BootContext, provider_registry::ProviderRegistry,
+    session::SessionManager,
+};
 
 #[cfg(feature = "gateway")]
 use crate::gateway::state::AppState;
@@ -27,6 +32,7 @@ use crate::gateway::state::AppState;
 /// Initialized services bundle for use without the gateway feature.
 pub struct Services {
     pub config: Arc<AppConfig>,
+    pub config_path: PathBuf,
     pub db: DbPool,
     pub event_bus: Arc<TokioBroadcastBus>,
     pub memory: Arc<InMemoryStore>,
@@ -39,6 +45,12 @@ pub struct Services {
     pub agent: Option<Arc<MesoAgent>>,
     #[cfg(feature = "ai")]
     pub provider_registry: Arc<ProviderRegistry>,
+    #[cfg(feature = "ai")]
+    pub boot_context: BootContext,
+    #[cfg(feature = "ai")]
+    pub last_used_model: Arc<RwLock<Option<String>>>,
+    pub context_injection_enabled: Arc<AtomicBool>,
+    pub self_evolution_enabled: Arc<AtomicBool>,
     pub soul_loader: Arc<SoulLoader>,
     pub skill_registry: Arc<SkillRegistry>,
     pub user_learner: Arc<UserLearner>,
@@ -129,6 +141,30 @@ pub async fn init_services(config: AppConfig) -> Result<Services> {
     tool_registry
         .register(Arc::new(crate::tools::patch::PatchTool::new()))
         .unwrap();
+
+    // 10. User learner (needed before tools that reference it)
+    let user_learner = Arc::new(UserLearner::new(pool.clone(), &config));
+
+    // Runtime toggles (mutable via PUT /config)
+    let context_injection_enabled = Arc::new(AtomicBool::new(config.context_injection_enabled));
+    let self_evolution_enabled = Arc::new(AtomicBool::new(config.self_evolution_enabled));
+
+    // Register LearnTool and SkillProposalTool
+    tool_registry
+        .register(Arc::new(crate::tools::learn::LearnTool::new(
+            user_learner.clone(),
+            self_evolution_enabled.clone(),
+        )))
+        .unwrap();
+    tool_registry
+        .register(Arc::new(
+            crate::tools::skill_proposal::SkillProposalTool::new(
+                pool.clone(),
+                self_evolution_enabled.clone(),
+            ),
+        ))
+        .unwrap();
+
     let tools = Arc::new(tool_registry);
     info!("Registered {} tools", tools.len());
 
@@ -163,11 +199,46 @@ pub async fn init_services(config: AppConfig) -> Result<Services> {
     )?);
     info!("Skills loaded from {}", skills_dir.display());
 
-    // 10. User learner
-    let user_learner = Arc::new(UserLearner::new(pool.clone(), &config));
     info!("User learner initialized");
 
-    // 11. Provider Registry -- seed built-ins, load from DB
+    // Run consolidation on boot
+    if let Err(e) = user_learner
+        .consolidate(
+            config.learning_archive_threshold,
+            config.learning_archive_after_days,
+        )
+        .await
+    {
+        tracing::warn!("User learner consolidation failed: {e}");
+    }
+
+    // 11. Boot context
+    #[cfg(feature = "ai")]
+    let boot_context = BootContext::from_system();
+    #[cfg(feature = "ai")]
+    info!(
+        "Boot context: {} {} ({})",
+        boot_context.os, boot_context.arch, boot_context.hostname
+    );
+
+    // Generate/refresh context summaries on boot
+    if config.context_injection_enabled {
+        let context_engine = crate::ai::context::ContextEngine::new(
+            pool.clone(),
+            config.clone(),
+            config.context_injection_enabled,
+        );
+        if let Err(e) = context_engine
+            .store_all_summaries(&soul_loader, &user_learner, &tools, &skill_registry)
+            .await
+        {
+            tracing::warn!("Context summary generation failed: {e}");
+        } else {
+            info!("Context summaries refreshed");
+        }
+    }
+
+    // 12. Provider Registry -- seed built-ins, load from DB
     #[cfg(feature = "ai")]
     let provider_registry = Arc::new(ProviderRegistry::new(pool.clone()));
     #[cfg(feature = "ai")]
@@ -202,6 +273,7 @@ pub async fn init_services(config: AppConfig) -> Result<Services> {
 
     Ok(Services {
         config,
+        config_path: crate::config::default_config_path(),
         db: pool,
         event_bus,
         memory,
@@ -214,6 +286,12 @@ pub async fn init_services(config: AppConfig) -> Result<Services> {
         agent,
         #[cfg(feature = "ai")]
         provider_registry,
+        #[cfg(feature = "ai")]
+        boot_context,
+        #[cfg(feature = "ai")]
+        last_used_model: Arc::new(RwLock::new(None)),
+        context_injection_enabled,
+        self_evolution_enabled,
         soul_loader,
         skill_registry,
         user_learner,
@@ -228,6 +306,7 @@ impl From<Services> for AppState {
     fn from(s: Services) -> Self {
         Self {
             config: s.config,
+            config_path: s.config_path,
             db: s.db,
             event_bus: s.event_bus,
             memory: s.memory,
@@ -240,6 +319,12 @@ impl From<Services> for AppState {
             agent: s.agent,
             #[cfg(feature = "ai")]
             provider_registry: s.provider_registry,
+            #[cfg(feature = "ai")]
+            boot_context: s.boot_context,
+            #[cfg(feature = "ai")]
+            last_used_model: s.last_used_model,
+            context_injection_enabled: s.context_injection_enabled,
+            self_evolution_enabled: s.self_evolution_enabled,
             soul_loader: s.soul_loader,
             skill_registry: s.skill_registry,
             user_learner: s.user_learner,
@@ -304,7 +389,7 @@ mod tests {
         let dir = tempfile::TempDir::new().unwrap();
         let config = test_config(&dir);
         let services = init_services(config).await.unwrap();
-        assert_eq!(services.tools.len(), 9);
+        assert_eq!(services.tools.len(), 11);
     }
 
     // WS.12 — WebSearchTool registered with credential store access

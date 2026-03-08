@@ -341,6 +341,24 @@ gantt
 - Config: `channels_enabled`, Telegram-specific settings (polling timeout, DM policy, retry, group mention)
 - `WebSearchTool` refactored to use `websearch` crate with Tavily → Brave → DuckDuckGo provider cascade
 
+**Step 15.3b: Context-Aware Agent & Self-Evolving Framework — `[COMPLETE]`**
+- `ContextEngine` -- 3-tier adaptive context injection (Full / Minimal / Summary) with hash-based cache invalidation
+- `BootContext` -- system info computed once at startup (OS, arch, hostname, locale, region)
+- Dynamic runtime context per-request (date, time, timezone, model, session)
+- Context summaries cached in DB (`context_summaries` table) with hash-based change detection
+- Adaptive frequency: configurable gap minutes + message count thresholds for full re-injection
+- `LearnTool` -- agent tool for silently recording user observations (gated by `self_evolution_enabled`)
+- `SkillProposalTool` -- agent tool for proposing skill create/update/delete with human-in-the-loop approval
+- `UserLearner` consolidation -- merge duplicates, archive low-confidence old entries, enforce max observation cap
+- Model persistence -- `last_used_model` in AppState (`RwLock<Option<String>>`) for session-consistent model selection
+- Session summaries -- `sessions.summary` column for conversation context on resume
+- 4 new skill proposal gateway routes (list/approve/reject/delete)
+- DB migration v5: `context_summaries` + `skill_proposals` tables + `sessions.summary` column
+- Context wired into both REST chat handler and WebSocket chat handler
+- Boot-time summary generation via `store_all_summaries()`
+- Runtime toggles: `context_injection_enabled` and `self_evolution_enabled` (AtomicBool, mutable via PUT /config)
+- Config: `context_reinject_gap_minutes`, `context_reinject_message_count`, `context_summary_model_id`, `context_summary_provider_id`, `skill_max_content_size`, `skill_proposal_expiry_days`
+
 **Step 16: Scheduler — `[NOT STARTED]`**
 - Cron/interval job system with SQLite persistence (`cron` crate 0.15)
 - `TokioScheduler` -- 1s tick, DashMap job registry, error backoff, stuck detection
@@ -350,8 +368,8 @@ gantt
 
 **New dependencies (15.1)**: keyring 3, websearch (workspace)
 **New dependencies (15.2)**: teloxide 0.13+ (channels-telegram), serenity 0.12+ (channels-discord)
-- **Tests**: 80 new tests across steps 15.1 + 15.2 (434 total Rust), all passing. Zero clippy warnings.
-- **Plans**: [plans/phase8_credentials.md](../plans/phase8_credentials.md), [plans/phase8_channels.md](../plans/phase8_channels.md), [plans/phase8_scheduler.md](../plans/phase8_scheduler.md)
+- **Tests**: 134 new tests across steps 15.1 + 15.2 + 15.3b (488 total Rust), all passing. Zero clippy warnings.
+- **Plans**: [plans/phase8_credentials.md](../plans/phase8_credentials.md), [plans/phase8_channels.md](../plans/phase8_channels.md), [plans/phase8_context_agent.md](../plans/phase8_context_agent.md), [plans/phase8_scheduler.md](../plans/phase8_scheduler.md)
 
 ---
 

@@ -17,6 +17,8 @@
 - [User Profile + Progressive Learning](#user-profile--progressive-learning)
 - [Gateway Routes](#gateway-routes)
 - [Desktop App Architecture](#desktop-app-architecture)
+- [Context-Aware Agent System](#context-aware-agent-system)
+- [Self-Evolving Framework](#self-evolving-framework)
 - [Concurrency Rules](#concurrency-rules)
 - [Lessons Learned from v1](#lessons-learned-from-v1)
 
@@ -25,7 +27,7 @@
 ## System Architecture
 
 ```mermaid
-graph LR
+graph TD
     subgraph Clients["Clients"]
         Desktop[Desktop] & Mobile[Mobile] & CLI[CLI] & TUI[TUI] & Daemon[Daemon]
         Web["Frontend<br>Svelte 5"]
@@ -37,6 +39,7 @@ graph LR
         subgraph App["Application Layer"]
             Gateway["Gateway<br>axum :18981"]
             AI["AI Engine<br>rig-core"]
+            Context["Context Engine<br>3-tier injection"]
             DB["Database<br>rusqlite + sqlite-vec"]
         end
 
@@ -61,10 +64,16 @@ graph LR
     Web -->|HTTP/WS| Gateway
 
     BootEntry --> Gateway & DB & EventBus
-    Gateway --> AI & DB
+    Gateway --> AI & DB & Context
     Gateway --> Identity & Skills & UserL & Channels
     AI --> Tools & Security & DB
     AI --> Identity & Skills
+    Context --> DB & Identity & UserL & Skills
+
+    style Clients fill:#2196F3,color:#fff
+    style App fill:#4CAF50,color:#fff
+    style Domain fill:#FF9800,color:#fff
+    style Support fill:#9E9E9E,color:#fff
 ```
 
 ## Data Flow
@@ -75,8 +84,8 @@ graph TB
         D[Desktop] & M[Mobile] & C[CLI] & T[TUI] & F[Frontend]
     end
 
-    subgraph "Gateway :18981"
-        REST["REST<br>55 routes + 6 feature-gated"]
+    subgraph GW["Gateway :18981"]
+        REST["REST<br>59 routes + 6 feature-gated"]
         WS["WebSocket<br>/ws/chat"]
     end
 
@@ -90,6 +99,10 @@ graph TB
     REST & WS --> AIL
     REST --> DBL & IDL & SKL & USL
     AIL --> DBL & IDL & SKL
+
+    style Clients fill:#2196F3,color:#fff
+    style GW fill:#4CAF50,color:#fff
+    style Backend fill:#FF9800,color:#fff
 ```
 
 ## Crate Dependency Graph
@@ -161,9 +174,9 @@ mesoclaw/
 │   │   │   ├── memory/     # Memory trait + SqliteMemoryStore (FTS5 + vectors) + InMemoryStore
 │   │   │   ├── credential/ # CredentialStore trait + KeyringStore + InMemoryCredentialStore
 │   │   │   ├── security/   # SecurityPolicy + AutonomyLevel + rate limiter + audit log
-│   │   │   ├── tools/      # Tool trait + ToolRegistry (DashMap) + 9 tools (shell, file ops, web search, sysinfo, patch, process)
-│   │   │   ├── ai/         # AI agent (rig-core), providers, session manager, tool adapter
-│   │   │   ├── gateway/    # axum HTTP+WS gateway (55+6 routes, auth middleware, error mapping, MESO_VALIDATION)
+│   │   │   ├── tools/      # Tool trait + ToolRegistry (DashMap) + 11 tools (shell, file ops, web search, sysinfo, patch, process, learn, skill_proposal)
+│   │   │   ├── ai/         # AI agent (rig-core), providers, session manager, tool adapter, context engine
+│   │   │   ├── gateway/    # axum HTTP+WS gateway (59+6 routes, auth middleware, error mapping, MESO_VALIDATION)
 │   │   │   ├── identity/   # SoulLoader + PromptComposer + defaults (SOUL/IDENTITY/USER.md)
 │   │   │   ├── skills/     # SkillRegistry + bundled/user skills (markdown + YAML frontmatter)
 │   │   │   ├── user/       # UserLearner + SQLite observations + privacy controls
@@ -275,7 +288,7 @@ All major subsystems are abstracted behind traits, allowing swappable implementa
 
 ```mermaid
 graph TB
-    subgraph "Trait Abstractions - mesoclaw-core"
+    subgraph TraitAbstractions["Trait Abstractions - mesoclaw-core"]
         Memory["dyn Memory<br>SQLite now<br>PostgreSQL + pgvector later"]
         CredStore["dyn CredentialStore<br>Keyring now<br>Vault / cloud KMS later"]
         Channel["dyn Channel<br>openclaw-channels"]
@@ -283,7 +296,7 @@ graph TB
         CompModel["Rig CompletionModel<br>built-in providers now<br>custom providers later"]
     end
 
-    subgraph "Current Implementations"
+    subgraph CurrentImpl["Current Implementations"]
         SQLite["SqliteMemory"]
         Keyring["KeyringStore"]
         TGCh["TelegramChannel"]
@@ -293,7 +306,7 @@ graph TB
         RigProviders["OpenAI / Anthropic / etc."]
     end
 
-    subgraph "Future Implementations"
+    subgraph FutureImpl["Future Implementations"]
         PgVec["PostgreSQL + pgvector"]
         Vault["HashiCorp Vault / KMS"]
         NatsCh["NATS Channel"]
@@ -313,6 +326,10 @@ graph TB
     EvBus -.-> RedisBus
     CompModel --> RigProviders
     CompModel -.-> CustomProv
+
+    style TraitAbstractions fill:#FF9800,color:#fff
+    style CurrentImpl fill:#4CAF50,color:#fff
+    style FutureImpl fill:#9E9E9E,color:#fff
 ```
 
 All binary crates receive these traits via `AppState` (Clone + Arc\<T\>), never concrete types.
@@ -321,13 +338,13 @@ All binary crates receive these traits via `AppState` (Clone + Arc\<T\>), never 
 
 ```mermaid
 graph TB
-    subgraph "Credential Module"
+    subgraph CredModule["Credential Module"]
         Mod["mod.rs<br>CredentialStore trait<br>get / set / delete / list"]
         KR["keyring.rs<br>KeyringStore #40;production#41;<br>OS keychain integration"]
         Mem["memory.rs<br>InMemoryStore #40;tests/CI#41;<br>DashMap-backed"]
     end
 
-    subgraph "Binary Access"
+    subgraph BinaryAccess["Binary Access"]
         Desktop["Desktop: direct keyring"]
         CLI["CLI: direct keyring"]
         TUI["TUI: via gateway HTTP"]
@@ -343,6 +360,9 @@ graph TB
     Mobile --> KR
     TUI -->|HTTP API| GW["Gateway"]
     GW --> KR
+
+    style CredModule fill:#FF9800,color:#fff
+    style BinaryAccess fill:#2196F3,color:#fff
 ```
 
 ### Per-Binary Keyring Access
@@ -363,7 +383,7 @@ The `ProviderRegistry` manages AI provider configurations (OpenAI, Anthropic, Ge
 
 ```mermaid
 graph TB
-    subgraph "ProviderRegistry - DB-backed"
+    subgraph ProvReg["ProviderRegistry - DB-backed"]
         Seed["Seed 6 built-in providers<br>on first boot"]
         CRUD["CRUD operations<br>add, update, delete, list"]
         Models["Model management<br>add/remove models per provider"]
@@ -371,17 +391,17 @@ graph TB
         Test["Connection testing<br>with latency measurement"]
     end
 
-    subgraph "Built-in Providers"
+    subgraph BuiltInProv["Built-in Providers"]
         OAI["OpenAI"] & ANT["Anthropic"] & GEM["Gemini"]
         OR["OpenRouter"] & VAI["Vercel AI"] & OLL["Ollama"]
     end
 
-    subgraph "Storage"
+    subgraph ProvStorage["Storage"]
         DBP["ai_providers table"]
         DBM["ai_models table"]
     end
 
-    subgraph "Consumers"
+    subgraph ProvConsumers["Consumers"]
         Agent["MesoAgent<br>multi-provider dispatch"]
         GW["Gateway<br>11 provider routes"]
         Settings["Desktop Settings UI<br>provider cards + key management"]
@@ -397,6 +417,11 @@ graph TB
     CRUD --> GW
     Models --> GW
     GW --> Settings
+
+    style ProvReg fill:#4CAF50,color:#fff
+    style BuiltInProv fill:#2196F3,color:#fff
+    style ProvStorage fill:#9E9E9E,color:#fff
+    style ProvConsumers fill:#FF9800,color:#fff
 ```
 
 ### Credential Key Naming Convention
@@ -412,32 +437,32 @@ The channels module provides trait-based messaging integration with external pla
 
 ```mermaid
 graph TB
-    subgraph "Channel Traits"
+    subgraph ChTraits["Channel Traits"]
         ChTrait["Channel<br>id, name, platform"]
         LC["ChannelLifecycle<br>connect, disconnect, health"]
         CS["ChannelSender<br>send_text, send_reply"]
     end
 
-    subgraph "Registry"
+    subgraph ChRegistry["Registry"]
         CR["ChannelRegistry<br>DashMap-backed<br>register, get, list, health_check"]
     end
 
-    subgraph "Implementations - feature-gated"
+    subgraph ChImpl["Implementations - feature-gated"]
         TG["TelegramChannel<br>channels-telegram<br>DmPolicy, MarkdownV2, BotCommand"]
         SL["SlackChannel<br>channels-slack<br>DM detection, mrkdwn formatting"]
         DC["DiscordChannel<br>channels-discord<br>guild/channel allowlists"]
     end
 
-    subgraph "Wire Protocol"
+    subgraph WireProto["Wire Protocol"]
         CF["ConnectorFrame<br>JSON wire protocol<br>for external connectors"]
         HS["ConnectorHandshake<br>auth + capabilities"]
     end
 
-    subgraph "Gateway"
+    subgraph ChGateway["Gateway"]
         Routes["6 feature-gated routes<br>+ 1 always-available test route"]
     end
 
-    subgraph "Frontend"
+    subgraph ChFrontend["Frontend"]
         UI["Settings / Channels page<br>credential management<br>connection testing<br>latency display"]
     end
 
@@ -448,6 +473,13 @@ graph TB
     CR --> Routes
     Routes --> UI
     CF --> HS
+
+    style ChTraits fill:#FF9800,color:#fff
+    style ChRegistry fill:#4CAF50,color:#fff
+    style ChImpl fill:#2196F3,color:#fff
+    style WireProto fill:#9E9E9E,color:#fff
+    style ChGateway fill:#4CAF50,color:#fff
+    style ChFrontend fill:#2196F3,color:#fff
 ```
 
 ### Feature Flags
@@ -482,6 +514,10 @@ graph TB
     Reload --> Loader
     Loader --> Compose
     Compose --> Agent["Rig Agent"]
+
+    style Files fill:#2196F3,color:#fff
+    style SoulLoaderSG fill:#4CAF50,color:#fff
+    style ComposerSG fill:#FF9800,color:#fff
 ```
 
 ### Identity File Format (IDENTITY.md)
@@ -507,12 +543,12 @@ Skills are instructional markdown documents loaded into the agent's context. The
 
 ```mermaid
 graph TB
-    subgraph "Skill Sources"
+    subgraph SkillSources["Skill Sources"]
         BuiltIn["Bundled skills<br>include_str! at compile time<br>system-prompt, summarize"]
         UserDir["User skills directory<br>data_dir/skills/*.md"]
     end
 
-    subgraph "SkillRegistry"
+    subgraph SkillReg["SkillRegistry"]
         Load["load_all#40;#41;<br>bundled first, then user"]
         Parse["parse frontmatter<br>serde_yaml metadata"]
         Store["RwLock HashMap<br>in-memory registry"]
@@ -523,6 +559,9 @@ graph TB
     Load --> Parse
     Parse --> Store
     Store --> Compose["PromptComposer<br>enabled skills → agent context"]
+
+    style SkillSources fill:#2196F3,color:#fff
+    style SkillReg fill:#4CAF50,color:#fff
 ```
 
 ### Skill File Format (Claude Code model)
@@ -551,18 +590,18 @@ MesoClaw learns user preferences over time via explicit observation API. Observa
 
 ```mermaid
 graph TB
-    subgraph "User Context"
+    subgraph UserCtx["User Context"]
         UserMd["USER.md<br>static user context template"]
     end
 
-    subgraph "UserLearner - SQLite backed"
+    subgraph UserLearnerSG["UserLearner - SQLite backed"]
         Observe["observe#40;#41;<br>add/update observation"]
         Query["get_observations#40;#41;<br>filter by category"]
         Build["build_context#40;#41;<br>format for prompt"]
         Prune["prune_expired#40;#41;<br>TTL-based cleanup"]
     end
 
-    subgraph "Privacy Controls"
+    subgraph PrivacyCtrl["Privacy Controls"]
         Toggle["learning_enabled = true/false"]
         Denied["learning_denied_categories"]
         MinConf["learning_min_confidence = 0.5"]
@@ -577,6 +616,10 @@ graph TB
     Denied --> Observe
     MinConf --> Build
     TTL --> Prune
+
+    style UserCtx fill:#2196F3,color:#fff
+    style UserLearnerSG fill:#4CAF50,color:#fff
+    style PrivacyCtrl fill:#9E9E9E,color:#fff
 ```
 
 - **USER.md**: static user context template (part of identity system)
@@ -585,9 +628,111 @@ graph TB
 - **Privacy**: learning toggled via config, denied categories block specific observation types, TTL auto-expires old observations
 - **API**: `GET /user/observations`, `POST /user/observations`, `GET /user/observations/{key}`, `DELETE /user/observations/{key}`, `DELETE /user/observations`, `GET /user/profile`
 
+## Context-Aware Agent System
+
+The context engine provides 3-tier adaptive context injection that reduces token usage while keeping the agent contextually grounded.
+
+```mermaid
+graph TB
+    subgraph CtxEngine["Context Engine - ai/context.rs"]
+        Boot["BootContext<br>OS, arch, hostname, locale, region<br>computed once at startup"]
+        Dynamic["Dynamic Runtime<br>date, time, timezone, model, session<br>computed per-request"]
+        Summaries["Context Summaries<br>identity, user, capabilities, overall<br>cached in DB, hash-based invalidation"]
+        Compose["compose#40;level#41;<br>assembles preamble from tiers"]
+    end
+
+    subgraph CtxLevels["Context Levels"]
+        Full["Full<br>all tiers + summaries<br>new session or gap exceeded"]
+        Minimal["Minimal<br>one-liner: name + time + OS + model<br>continuing conversation"]
+        Summary["Summary<br>full + prior conversation summary<br>resumed session"]
+    end
+
+    subgraph FreqCtrl["Frequency Control"]
+        Gap["context_reinject_gap_minutes<br>default: 30"]
+        Count["context_reinject_message_count<br>default: 20"]
+        Toggle["context_injection_enabled<br>runtime toggle via PUT /config"]
+    end
+
+    Boot --> Compose
+    Dynamic --> Compose
+    Summaries --> Compose
+    Compose --> Full & Minimal & Summary
+    Gap --> Full
+    Count --> Full
+    Toggle --> Compose
+
+    style CtxEngine fill:#FF9800,color:#fff
+    style CtxLevels fill:#4CAF50,color:#fff
+    style FreqCtrl fill:#9E9E9E,color:#fff
+```
+
+### Context Level Determination
+
+| Condition | Level | Content |
+|---|---|---|
+| New session (0 messages) | Full | Boot + runtime + identity + user + capabilities |
+| Continuing (recent messages, within gap) | Minimal | One-liner: "MesoClaw — AI assistant \| date \| OS \| model" |
+| Gap exceeded (> N minutes since last msg) | Full | Same as new session |
+| Message count threshold exceeded | Full | Same as new session |
+| Resumed session with prior messages | Summary | Full + prior conversation summary |
+| Toggle disabled | Fallback | Config `agent_system_prompt` or default preamble |
+
+### DB Schema (migration v5)
+
+- `context_summaries` — cached AI-generated summaries with hash-based change detection
+- `skill_proposals` — human-in-the-loop skill change approval workflow
+- `sessions.summary` — conversation summary column for session resume
+
+## Self-Evolving Framework
+
+The agent can learn user preferences and propose skill changes, all subject to human approval.
+
+```mermaid
+graph TB
+    subgraph AgentTools["Agent Tools"]
+        Learn["LearnTool<br>silently record user observations<br>category + key + value + confidence"]
+        Propose["SkillProposalTool<br>propose create/update/delete skills<br>requires rationale"]
+    end
+
+    subgraph HITL["Human-in-the-Loop"]
+        Pending["Pending proposals<br>GET /skills/proposals"]
+        Approve["POST /skills/proposals/id/approve<br>executes the action"]
+        Reject["POST /skills/proposals/id/reject<br>marks as rejected"]
+    end
+
+    subgraph EvoStorage["Storage"]
+        Obs["user_observations table<br>category, key, value, confidence"]
+        Props["skill_proposals table<br>action, skill_name, content, rationale, status"]
+    end
+
+    subgraph Consolidation["Consolidation"]
+        Merge["Merge duplicate observations"]
+        Archive["Archive low-confidence old entries"]
+        Cap["Enforce max observation cap"]
+    end
+
+    Learn --> Obs
+    Propose --> Props
+    Props --> Pending
+    Pending --> Approve & Reject
+    Obs --> Merge & Archive & Cap
+
+    subgraph RuntimeToggles["Runtime Toggles"]
+        EvoToggle["self_evolution_enabled<br>gates LearnTool + SkillProposalTool"]
+    end
+
+    EvoToggle --> Learn & Propose
+
+    style AgentTools fill:#2196F3,color:#fff
+    style HITL fill:#4CAF50,color:#fff
+    style EvoStorage fill:#9E9E9E,color:#fff
+    style Consolidation fill:#FF9800,color:#fff
+    style RuntimeToggles fill:#9E9E9E,color:#fff
+```
+
 ## Gateway Routes
 
-All clients communicate via the HTTP+WebSocket gateway at `127.0.0.1:18981`. Routes are grouped by subsystem (55 base + 6 feature-gated = 61 total through Phase 8).
+All clients communicate via the HTTP+WebSocket gateway at `127.0.0.1:18981`. Routes are grouped by subsystem (59 base + 6 feature-gated = 65 total through Phase 8 Step 15.3b).
 
 ### Health (1 route, no auth)
 
@@ -696,6 +841,15 @@ All clients communicate via the HTTP+WebSocket gateway at `127.0.0.1:18981`. Rou
 | PUT | `/skills/{id}` | Update skill content |
 | DELETE | `/skills/{id}` | Delete user skill (bundled cannot be deleted) |
 | POST | `/skills/reload` | Force reload all skills |
+
+### Skill Proposals (4 routes)
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/skills/proposals` | List pending skill proposals |
+| POST | `/skills/proposals/{id}/approve` | Approve and execute a proposal |
+| POST | `/skills/proposals/{id}/reject` | Reject a proposal |
+| DELETE | `/skills/proposals/{id}` | Delete a proposal |
 
 ### User Profile + Learning (6 routes)
 

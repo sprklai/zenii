@@ -6,6 +6,7 @@ use axum::response::IntoResponse;
 use serde::{Deserialize, Serialize};
 
 use crate::Result;
+use crate::ai::context::ContextEngine;
 use crate::ai::resolve_agent;
 use crate::gateway::state::AppState;
 
@@ -26,7 +27,37 @@ pub async fn chat(
     State(state): State<Arc<AppState>>,
     Json(req): Json<ChatRequest>,
 ) -> Result<impl IntoResponse> {
-    let agent = resolve_agent(req.model.as_deref(), &state, None).await?;
+    // Compose context preamble
+    let ctx_enabled = state
+        .context_injection_enabled
+        .load(std::sync::atomic::Ordering::Relaxed);
+    let context_engine = ContextEngine::new(state.db.clone(), state.config.clone(), ctx_enabled);
+    let (message_count, last_message_at, summary) = if let Some(ref sid) = req.session_id {
+        state
+            .session_manager
+            .get_context_info(sid)
+            .await
+            .unwrap_or((0, None, None))
+    } else {
+        (0, None, None)
+    };
+    let level = context_engine.determine_context_level(
+        message_count,
+        last_message_at.as_ref(),
+        summary.is_some(),
+        false,
+    );
+    let model_display = req.model.as_deref().unwrap_or("default");
+    let preamble = context_engine
+        .compose(
+            &level,
+            &state.boot_context,
+            model_display,
+            req.session_id.as_deref(),
+            summary.as_deref(),
+        )
+        .await?;
+    let agent = resolve_agent(req.model.as_deref(), &state, None, Some(preamble.as_str())).await?;
 
     // If session_id provided, store the user message
     if let Some(ref sid) = req.session_id {

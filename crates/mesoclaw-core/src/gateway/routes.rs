@@ -135,6 +135,23 @@ pub fn build_router(state: Arc<AppState>) -> Router {
                 .put(handlers::skills::update_skill)
                 .delete(handlers::skills::delete_skill),
         )
+        // Skill Proposals (Phase 8)
+        .route(
+            "/skills/proposals",
+            get(handlers::skill_proposals::list_proposals),
+        )
+        .route(
+            "/skills/proposals/{id}/approve",
+            post(handlers::skill_proposals::approve_proposal),
+        )
+        .route(
+            "/skills/proposals/{id}/reject",
+            post(handlers::skill_proposals::reject_proposal),
+        )
+        .route(
+            "/skills/proposals/{id}",
+            delete(handlers::skill_proposals::delete_proposal),
+        )
         // User (Phase 4)
         .route(
             "/user/observations",

@@ -77,6 +77,19 @@ pub struct AppConfig {
     pub learning_max_observations: usize,
     pub learning_observation_ttl_days: u32,
     pub learning_min_confidence: f32,
+
+    // Phase 8: Context Injection
+    pub context_injection_enabled: bool,
+    pub context_summary_model_id: String,
+    pub context_summary_provider_id: String,
+    pub context_reinject_gap_minutes: u32,
+    pub context_reinject_message_count: u32,
+
+    // Phase 8: Self-Evolution
+    pub self_evolution_enabled: bool,
+    pub learning_archive_threshold: f64,
+    pub learning_archive_after_days: u32,
+    pub skill_proposal_expiry_days: u32,
 }
 
 impl Default for AppConfig {
@@ -154,6 +167,72 @@ impl Default for AppConfig {
             learning_max_observations: 10_000,
             learning_observation_ttl_days: 365,
             learning_min_confidence: 0.5,
+
+            // Context Injection
+            context_injection_enabled: true,
+            context_summary_model_id: "gpt-4o-mini".into(),
+            context_summary_provider_id: "openai".into(),
+            context_reinject_gap_minutes: 30,
+            context_reinject_message_count: 20,
+
+            // Self-Evolution
+            self_evolution_enabled: true,
+            learning_archive_threshold: 0.3,
+            learning_archive_after_days: 30,
+            skill_proposal_expiry_days: 7,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // 15.3.40 — config context defaults
+    #[test]
+    fn config_context_defaults() {
+        let config = AppConfig::default();
+        assert!(config.context_injection_enabled);
+        assert_eq!(config.context_summary_model_id, "gpt-4o-mini");
+        assert_eq!(config.context_summary_provider_id, "openai");
+        assert_eq!(config.context_reinject_gap_minutes, 30);
+        assert_eq!(config.context_reinject_message_count, 20);
+    }
+
+    // 15.3.41 — config evolution defaults
+    #[test]
+    fn config_evolution_defaults() {
+        let config = AppConfig::default();
+        assert!(config.self_evolution_enabled);
+        assert!((config.learning_archive_threshold - 0.3).abs() < f64::EPSILON);
+        assert_eq!(config.learning_archive_after_days, 30);
+        assert_eq!(config.skill_proposal_expiry_days, 7);
+    }
+
+    // 15.3.42 — config deserializes with new fields
+    #[test]
+    fn config_deserialize_with_new_fields() {
+        let toml_str = r#"
+            context_injection_enabled = false
+            context_summary_model_id = "claude-haiku"
+            context_summary_provider_id = "anthropic"
+            context_reinject_gap_minutes = 60
+            context_reinject_message_count = 50
+            self_evolution_enabled = false
+            learning_archive_threshold = 0.5
+            learning_archive_after_days = 14
+            skill_proposal_expiry_days = 3
+        "#;
+
+        let config: AppConfig = toml::from_str(toml_str).unwrap();
+        assert!(!config.context_injection_enabled);
+        assert_eq!(config.context_summary_model_id, "claude-haiku");
+        assert_eq!(config.context_summary_provider_id, "anthropic");
+        assert_eq!(config.context_reinject_gap_minutes, 60);
+        assert_eq!(config.context_reinject_message_count, 50);
+        assert!(!config.self_evolution_enabled);
+        assert!((config.learning_archive_threshold - 0.5).abs() < f64::EPSILON);
+        assert_eq!(config.learning_archive_after_days, 14);
+        assert_eq!(config.skill_proposal_expiry_days, 3);
     }
 }

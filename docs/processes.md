@@ -16,6 +16,8 @@
 - [Desktop Boot Flow](#desktop-boot-flow)
 - [Credential Flow](#credential-flow)
 - [Provider Management Flow](#provider-management-flow)
+- [Context Injection Flow](#context-injection-flow)
+- [Skill Proposal Flow](#skill-proposal-flow)
 
 ---
 
@@ -25,21 +27,29 @@
 sequenceDiagram
     participant U as User (any interface)
     participant G as Gateway (axum)
+    participant CE as ContextEngine
+    participant SM as SessionManager
     participant AI as AI Engine (rig-core)
-    participant M as Memory (sqlite-vec)
     participant LLM as LLM Provider
     participant T as Tools
 
     U->>G: Send message (REST/WS)
-    G->>M: Query relevant context (FTS5 + vectors)
-    M-->>G: Context results
-    G->>AI: Dispatch with context + tools
-    AI->>LLM: Stream prompt
+
+    Note over G,CE: Context-aware preamble
+    G->>SM: get_context_info(session_id)
+    SM-->>G: message_count, last_message_at, summary
+    G->>CE: determine_context_level()
+    CE-->>G: Full / Minimal / Summary
+    G->>CE: compose(level, boot_context, model)
+    CE-->>G: Context preamble string
+
+    G->>AI: resolve_agent(model, preamble)
+    AI->>LLM: Send prompt with context preamble
 
     loop Tool calling loop
         LLM-->>AI: Response (may contain tool calls)
         alt Tool call detected
-            AI->>T: Execute tool (websearch, sysinfo, etc.)
+            AI->>T: Execute tool (websearch, sysinfo, learn, etc.)
             T-->>AI: Tool result
             AI->>LLM: Feed result back
         end
@@ -48,7 +58,7 @@ sequenceDiagram
     LLM-->>AI: Final response tokens
     AI-->>G: Stream tokens
     G-->>U: Stream to client via WS
-    G->>M: Store conversation
+    G->>SM: Store user + assistant messages
 ```
 
 ## Startup Sequence
@@ -72,6 +82,7 @@ sequenceDiagram
     App->>App: Load identity (SoulLoader from data_dir/identity/)
     App->>App: Load skills (SkillRegistry from data_dir/skills/)
     App->>App: Init user learner (UserLearner from DB pool)
+    App->>App: Init ContextEngine + store_all_summaries()
     opt channels feature enabled
         App->>App: Init ChannelRegistry (DashMap)
         App->>App: Register configured channels (Telegram/Slack/Discord)
@@ -434,4 +445,72 @@ sequenceDiagram
     UI->>GW: PUT /providers/default { provider_id: "openai", model_id: "gpt-4o" }
     GW->>PR: set_default_model()
     PR->>DB: Upsert _default_model row
+```
+
+## Context Injection Flow
+
+```mermaid
+flowchart TD
+    Req([Chat request arrives]) --> Enabled{"context_injection_enabled?"}
+    Enabled -->|No| Fallback["Use fallback preamble<br>agent_system_prompt or default"]
+    Enabled -->|Yes| GetInfo["Get session context info<br>message_count, last_at, summary"]
+
+    GetInfo --> NewSession{"message_count == 0?"}
+    NewSession -->|Yes| Full["ContextLevel::Full"]
+    NewSession -->|No| Resumed{"is_resumed?"}
+    Resumed -->|Yes| SummaryLevel["ContextLevel::Summary"]
+    Resumed -->|No| GapCheck{"Time gap >= threshold?"}
+    GapCheck -->|Yes| Full
+    GapCheck -->|No| CountCheck{"message_count >= threshold?"}
+    CountCheck -->|Yes| Full
+    CountCheck -->|No| Minimal["ContextLevel::Minimal"]
+
+    Full --> ComposeFull["Compose: overall summary +<br>boot context + runtime +<br>identity + user + capabilities +<br>config override"]
+    Minimal --> ComposeMin["Compose: one-liner<br>name + date + OS + model"]
+    SummaryLevel --> ComposeSum["Compose: full context +<br>prior conversation summary"]
+    Fallback --> Agent["Build MesoAgent with preamble"]
+    ComposeFull --> Agent
+    ComposeMin --> Agent
+    ComposeSum --> Agent
+
+    style Full fill:#4CAF50,color:#fff
+    style Minimal fill:#2196F3,color:#fff
+    style SummaryLevel fill:#FF9800,color:#fff
+    style Fallback fill:#9E9E9E,color:#fff
+```
+
+## Skill Proposal Flow
+
+```mermaid
+sequenceDiagram
+    participant AG as Agent (during chat)
+    participant SPT as SkillProposalTool
+    participant DB as SQLite (skill_proposals)
+    participant User as User
+    participant GW as Gateway
+    participant SR as SkillRegistry
+
+    Note over AG,SPT: Agent proposes a skill change
+    AG->>SPT: execute({ action: "create", skill_name: "...", content: "...", rationale: "..." })
+    SPT->>SPT: Check self_evolution_enabled
+    SPT->>DB: INSERT proposal (status: pending)
+    SPT-->>AG: "Proposal created, awaiting user approval"
+
+    Note over User,SR: User reviews proposals
+    User->>GW: GET /skills/proposals
+    GW->>DB: Query WHERE status = 'pending'
+    DB-->>GW: Pending proposals
+    GW-->>User: List of proposals
+
+    alt Approve
+        User->>GW: POST /skills/proposals/id/approve
+        GW->>DB: Get proposal details
+        GW->>SR: Execute action (create/update/delete skill)
+        GW->>DB: UPDATE status = 'approved'
+        GW-->>User: { status: "approved" }
+    else Reject
+        User->>GW: POST /skills/proposals/id/reject
+        GW->>DB: UPDATE status = 'rejected'
+        GW-->>User: { status: "rejected" }
+    end
 ```

@@ -20,7 +20,9 @@ graph TB
 ## Features
 
 - **18 AI providers** via rig-core (OpenAI, Anthropic, Google, Ollama, and more)
-- **Tool calling** with 9 built-in tools (websearch, sysinfo, shell, file read/write/list/search, patch, process) via DashMap-backed ToolRegistry
+- **Tool calling** with 11 built-in tools (websearch, sysinfo, shell, file read/write/list/search, patch, process, learn, skill_proposal) via DashMap-backed ToolRegistry
+- **Context-aware agent** -- 3-tier adaptive context injection (Full/Minimal/Summary) with hash-based cache invalidation
+- **Self-evolving framework** -- agent learns user preferences and proposes skill changes with human-in-the-loop approval
 - **Streaming responses** via WebSocket
 - **Semantic memory** with SQLite FTS5 + vector embeddings (sqlite-vec)
 - **Soul / Persona system** -- 3 identity files (SOUL/IDENTITY/USER.md) with dynamic prompt composition
@@ -57,7 +59,7 @@ graph TB
 
 ```mermaid
 graph TB
-    subgraph "User Interfaces"
+    subgraph UI["User Interfaces"]
         Desktop["Desktop<br>#40;Tauri 2#41;"]
         Mobile["Mobile<br>#40;Tauri 2#41;"]
         CLI["CLI<br>#40;clap#41;"]
@@ -65,18 +67,18 @@ graph TB
         Web["Web Frontend<br>#40;Svelte 5#41;"]
     end
 
-    subgraph "mesoclaw-core"
-        subgraph "Application Layer"
+    subgraph CoreLib["mesoclaw-core"]
+        subgraph AppLayer["Application Layer"]
             Gateway["Gateway<br>axum REST + WS<br>:18981"]
             AI["AI Engine<br>rig-core<br>18 providers"]
             Storage["Storage<br>rusqlite + sqlite-vec<br>FTS5 + vectors"]
         end
-        subgraph "Domain Layer"
+        subgraph DomainLayer["Domain Layer"]
             Identity["Identity / Soul<br>SoulLoader + PromptComposer"]
             Skills["Skills<br>SkillRegistry + markdown"]
             UserProfile["User Profile<br>UserLearner + SQLite"]
         end
-        subgraph "Support Layer"
+        subgraph SupportLayer["Support Layer"]
             Agent["Agent System<br>tool registry"]
             Creds["Credentials<br>keyring + zeroize"]
             Config["Config<br>TOML + env"]
@@ -97,6 +99,12 @@ graph TB
     AI --> Agent
     AI --> Creds
     AI --> Storage
+
+    style UI fill:#2196F3,color:#fff
+    style CoreLib fill:none
+    style AppLayer fill:#4CAF50,color:#fff
+    style DomainLayer fill:#FF9800,color:#fff
+    style SupportLayer fill:#9E9E9E,color:#fff
 ```
 
 ### Crate Dependency Graph
@@ -411,7 +419,7 @@ mesoclaw provider default <provider> <model>  # Set default model
 
 Global options: `--host`, `--port`, `--token` (or `MESOCLAW_TOKEN` env var)
 
-## Gateway Routes (55 base + 6 feature-gated = 61 total)
+## Gateway Routes (59 base + 6 feature-gated = 65 total)
 
 | Group | Routes | Description |
 |-------|--------|-------------|
@@ -425,6 +433,7 @@ Global options: `--host`, `--port`, `--token` (or `MESOCLAW_TOKEN` env var)
 | System | `GET /system/info` | System information |
 | Identity | `GET /identity`, `GET/PUT /identity/{name}`, `POST /identity/reload` | Persona management |
 | Skills | `GET /skills`, `GET/PUT/DELETE /skills/{id}`, `POST /skills`, `POST /skills/reload` | Skill CRUD |
+| Skill Proposals | `GET /skills/proposals`, `POST /skills/proposals/{id}/approve`, `POST /skills/proposals/{id}/reject`, `DELETE /skills/proposals/{id}` | Self-evolving skill management |
 | User | `GET/POST/DELETE /user/observations`, `GET/DELETE /user/observations/{key}`, `GET /user/profile` | User learning + privacy |
 | Channels | `POST /channels/{name}/test` (always), `GET /channels`, `GET /channels/{name}/status`, `POST /channels/{name}/send`, `POST /channels/{name}/connect/disconnect`, `GET /channels/{name}/health` (feature-gated) | Messaging channels |
 | WebSocket | `GET /ws/chat` | Streaming chat |
@@ -459,6 +468,7 @@ Detailed documentation lives in the `docs/` and `plans/` directories:
 | Phase 6: Frontend | 13 | Complete | 347 Rust + 26 JS passing |
 | Phase 7: Desktop App | 14 | Complete | 354/354 Rust + 26 JS passing |
 | Phase 8: Credentials & Channels | 15.1-15.2 | Complete | 434/434 Rust + 26 JS passing |
+| Phase 8: Context-Aware Agent | 15.3b | Complete | 488/488 Rust + 26 JS passing |
 | Phase 8: Scheduler | 16 | Not started | -- |
 | Phase 9: TUI & Cross-Compilation | 17-18 | Not started | -- |
 | Phase 10: CI/CD & Quality | 19-20 | Not started | -- |

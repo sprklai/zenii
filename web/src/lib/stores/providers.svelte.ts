@@ -31,10 +31,16 @@ export interface DefaultModel {
   model_id: string;
 }
 
+const SELECTED_MODEL_KEY = "mesoclaw:selectedModel";
+
 function createProvidersStore() {
   let providers = $state<ProviderWithKeyStatus[]>([]);
   let loading = $state(false);
-  let selectedModel = $state("");
+  let selectedModel = $state(
+    typeof localStorage !== "undefined"
+      ? (localStorage.getItem(SELECTED_MODEL_KEY) ?? "")
+      : "",
+  );
   let defaultModel = $state<DefaultModel | null>(null);
 
   return {
@@ -49,6 +55,13 @@ function createProvidersStore() {
     },
     set selectedModel(value: string) {
       selectedModel = value;
+      if (typeof localStorage !== "undefined") {
+        if (value) {
+          localStorage.setItem(SELECTED_MODEL_KEY, value);
+        } else {
+          localStorage.removeItem(SELECTED_MODEL_KEY);
+        }
+      }
     },
     get defaultModel() {
       return defaultModel;
@@ -70,11 +83,10 @@ function createProvidersStore() {
         providers = await apiGet<ProviderWithKeyStatus[]>(
           "/providers/with-key-status",
         );
-        if (!selectedModel) {
-          const models = this.configuredModels;
-          if (models.length > 0) {
-            selectedModel = models[0].value;
-          }
+        const models = this.configuredModels;
+        // Validate persisted model still exists, fall back to first available
+        if (!selectedModel || !models.some((m) => m.value === selectedModel)) {
+          this.selectedModel = models.length > 0 ? models[0].value : "";
         }
       } finally {
         loading = false;

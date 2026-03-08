@@ -351,6 +351,82 @@ impl SessionManager {
         .await
     }
 
+    /// Get the conversation summary for a session.
+    pub async fn get_summary(&self, session_id: &str) -> Result<Option<String>> {
+        let session_id = session_id.to_string();
+        db::with_db(&self.db, move |conn| {
+            let summary: Option<String> = conn
+                .query_row(
+                    "SELECT summary FROM sessions WHERE id = ?1",
+                    rusqlite::params![session_id],
+                    |row| row.get(0),
+                )
+                .map_err(|e| match e {
+                    rusqlite::Error::QueryReturnedNoRows => {
+                        MesoError::NotFound(format!("session not found: {session_id}"))
+                    }
+                    other => MesoError::Sqlite(other),
+                })?;
+            Ok(summary)
+        })
+        .await
+    }
+
+    /// Set the conversation summary for a session.
+    pub async fn set_summary(&self, session_id: &str, summary: &str) -> Result<()> {
+        let session_id = session_id.to_string();
+        let summary = summary.to_string();
+        db::with_db(&self.db, move |conn| {
+            let rows = conn
+                .execute(
+                    "UPDATE sessions SET summary = ?1 WHERE id = ?2",
+                    rusqlite::params![summary, session_id],
+                )
+                .map_err(MesoError::from)?;
+            if rows == 0 {
+                return Err(MesoError::NotFound(format!(
+                    "session not found: {session_id}"
+                )));
+            }
+            Ok(())
+        })
+        .await
+    }
+
+    /// Get context-relevant info for a session: message count, last message time, summary.
+    pub async fn get_context_info(
+        &self,
+        session_id: &str,
+    ) -> Result<(usize, Option<chrono::DateTime<chrono::Utc>>, Option<String>)> {
+        let session_id = session_id.to_string();
+        db::with_db(&self.db, move |conn| {
+            let (count, last_at): (i64, Option<String>) = conn
+                .query_row(
+                    "SELECT COUNT(*), MAX(created_at) FROM messages WHERE session_id = ?1",
+                    rusqlite::params![session_id],
+                    |row| Ok((row.get(0)?, row.get(1)?)),
+                )
+                .map_err(MesoError::from)?;
+
+            let summary: Option<String> = conn
+                .query_row(
+                    "SELECT summary FROM sessions WHERE id = ?1",
+                    rusqlite::params![session_id],
+                    |row| row.get(0),
+                )
+                .unwrap_or(None);
+
+            let last_message_at = last_at.and_then(|s| {
+                chrono::DateTime::parse_from_rfc3339(&s)
+                    .ok()
+                    .map(|dt| dt.with_timezone(&chrono::Utc))
+            });
+
+            Ok((count as usize, last_message_at, summary))
+        })
+        .await
+    }
+
     pub async fn get_messages(&self, session_id: &str) -> Result<Vec<Message>> {
         let session_id = session_id.to_string();
 
@@ -694,5 +770,35 @@ mod tests {
 
         let records = mgr.get_tool_calls(&msg.id).await.unwrap();
         assert!(records.is_empty());
+    }
+
+    // 15.3b — set and get session summary
+    #[tokio::test]
+    async fn session_set_and_get_summary() {
+        let (_dir, mgr) = setup().await;
+        let session = mgr.create_session("Chat").await.unwrap();
+
+        mgr.set_summary(
+            &session.id,
+            "Discussed Rust async patterns and error handling",
+        )
+        .await
+        .unwrap();
+
+        let summary = mgr.get_summary(&session.id).await.unwrap();
+        assert_eq!(
+            summary.as_deref(),
+            Some("Discussed Rust async patterns and error handling")
+        );
+    }
+
+    // 15.3b — summary is None when not set
+    #[tokio::test]
+    async fn session_summary_null_when_not_set() {
+        let (_dir, mgr) = setup().await;
+        let session = mgr.create_session("Chat").await.unwrap();
+
+        let summary = mgr.get_summary(&session.id).await.unwrap();
+        assert!(summary.is_none());
     }
 }

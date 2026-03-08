@@ -8,6 +8,7 @@ use tokio::sync::broadcast;
 use tracing::warn;
 
 use crate::ai::adapter::{ToolCallEvent, ToolCallPhase};
+use crate::ai::context::ContextEngine;
 use crate::ai::resolve_agent;
 use crate::gateway::state::AppState;
 
@@ -78,10 +79,62 @@ async fn handle_ws(mut socket: WebSocket, state: Arc<AppState>) {
             }
         };
 
+        // Compose context preamble
+        let ctx_enabled = state
+            .context_injection_enabled
+            .load(std::sync::atomic::Ordering::Relaxed);
+        let context_engine =
+            ContextEngine::new(state.db.clone(), state.config.clone(), ctx_enabled);
+        let (message_count, last_message_at, summary) = if let Some(ref sid) = request.session_id {
+            state
+                .session_manager
+                .get_context_info(sid)
+                .await
+                .unwrap_or((0, None, None))
+        } else {
+            (0, None, None)
+        };
+        let level = context_engine.determine_context_level(
+            message_count,
+            last_message_at.as_ref(),
+            summary.is_some(),
+            false,
+        );
+        let model_display = request.model.as_deref().unwrap_or("default");
+        let preamble = match context_engine
+            .compose(
+                &level,
+                &state.boot_context,
+                model_display,
+                request.session_id.as_deref(),
+                summary.as_deref(),
+            )
+            .await
+        {
+            Ok(p) => p,
+            Err(e) => {
+                send_outbound(
+                    &mut socket,
+                    &WsOutbound::Error {
+                        error: format!("context compose failed: {e}"),
+                    },
+                )
+                .await;
+                continue;
+            }
+        };
+
         // Create per-request broadcast channel for tool events
         let (tool_tx, mut tool_rx) = broadcast::channel::<ToolCallEvent>(32);
 
-        let agent = match resolve_agent(request.model.as_deref(), &state, Some(tool_tx)).await {
+        let agent = match resolve_agent(
+            request.model.as_deref(),
+            &state,
+            Some(tool_tx),
+            Some(preamble.as_str()),
+        )
+        .await
+        {
             Ok(a) => a,
             Err(e) => {
                 send_outbound(

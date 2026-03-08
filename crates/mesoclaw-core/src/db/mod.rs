@@ -157,6 +157,46 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
         )?;
     }
 
+    if version < 5 {
+        conn.execute_batch(
+            "CREATE TABLE IF NOT EXISTS context_summaries (
+                key TEXT PRIMARY KEY,
+                summary TEXT NOT NULL,
+                source_hash TEXT NOT NULL,
+                generated_at TEXT NOT NULL DEFAULT (datetime('now')),
+                model_id TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS skill_proposals (
+                id TEXT PRIMARY KEY,
+                action TEXT NOT NULL CHECK(action IN ('create', 'update', 'delete')),
+                skill_name TEXT NOT NULL,
+                content TEXT,
+                rationale TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'approved', 'rejected', 'expired')),
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                resolved_at TEXT
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_skill_proposals_status
+                ON skill_proposals(status);
+
+            PRAGMA user_version = 5;",
+        )?;
+
+        // Add summary column to sessions table (ALTER TABLE is separate from batch)
+        // Check if column exists first to be idempotent
+        let has_summary: bool = conn
+            .prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='sessions'")
+            .and_then(|mut stmt| stmt.query_row([], |row| row.get::<_, String>(0)))
+            .map(|sql| sql.contains("summary"))
+            .unwrap_or(false);
+
+        if !has_summary {
+            conn.execute_batch("ALTER TABLE sessions ADD COLUMN summary TEXT;")?;
+        }
+    }
+
     Ok(())
 }
 
@@ -206,7 +246,7 @@ mod tests {
         let version: u32 = conn
             .pragma_query_value(None, "user_version", |r| r.get(0))
             .unwrap();
-        assert_eq!(version, 4);
+        assert_eq!(version, 5);
     }
 
     #[test]
@@ -299,11 +339,72 @@ mod tests {
             .collect();
 
         assert!(tables.contains(&"tool_calls".to_string()));
+    }
+
+    // 15.3.38 — Migration v5 creates context_summaries table
+    #[test]
+    fn migration_v5_creates_context_summaries() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("test.db");
+        let conn = Connection::open(&path).unwrap();
+        run_migrations(&conn).unwrap();
+
+        let tables: Vec<String> = conn
+            .prepare("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
+            .unwrap()
+            .query_map([], |r| r.get(0))
+            .unwrap()
+            .filter_map(|r| r.ok())
+            .collect();
+
+        assert!(tables.contains(&"context_summaries".to_string()));
+    }
+
+    // 15.3.39 — Migration v5 creates skill_proposals table
+    #[test]
+    fn migration_v5_creates_skill_proposals() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("test.db");
+        let conn = Connection::open(&path).unwrap();
+        run_migrations(&conn).unwrap();
+
+        let tables: Vec<String> = conn
+            .prepare("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
+            .unwrap()
+            .query_map([], |r| r.get(0))
+            .unwrap()
+            .filter_map(|r| r.ok())
+            .collect();
+
+        assert!(tables.contains(&"skill_proposals".to_string()));
 
         let version: u32 = conn
             .pragma_query_value(None, "user_version", |r| r.get(0))
             .unwrap();
-        assert_eq!(version, 4);
+        assert_eq!(version, 5);
+    }
+
+    // 15.3.39b — Migration v5 adds summary column to sessions
+    #[test]
+    fn migration_v5_adds_session_summary_column() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("test.db");
+        let conn = Connection::open(&path).unwrap();
+        run_migrations(&conn).unwrap();
+
+        // Verify we can insert and read a session summary
+        conn.execute(
+            "INSERT INTO sessions (id, title, summary) VALUES ('s1', 'Test', 'A summary')",
+            [],
+        )
+        .unwrap();
+
+        let summary: Option<String> = conn
+            .query_row("SELECT summary FROM sessions WHERE id = 's1'", [], |r| {
+                r.get(0)
+            })
+            .unwrap();
+        assert_eq!(summary, Some("A summary".to_string()));
     }
 
     #[tokio::test]

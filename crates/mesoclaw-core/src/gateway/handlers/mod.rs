@@ -11,6 +11,7 @@ pub mod messages;
 pub mod models;
 pub mod providers;
 pub mod sessions;
+pub mod skill_proposals;
 pub mod skills;
 pub mod system;
 pub mod tools;
@@ -20,6 +21,8 @@ pub mod ws;
 #[cfg(test)]
 pub(crate) mod tests {
     use std::sync::Arc;
+
+    use tokio::sync::RwLock;
 
     use crate::config::AppConfig;
     use crate::credential::InMemoryCredentialStore;
@@ -61,6 +64,7 @@ pub(crate) mod tests {
 
         let state = Arc::new(AppState {
             config: Arc::new(config),
+            config_path: dir.path().join("config.toml"),
             db: pool.clone(),
             event_bus: Arc::new(crate::event_bus::TokioBroadcastBus::new(16)),
             memory: Arc::new(InMemoryStore::new()),
@@ -70,6 +74,10 @@ pub(crate) mod tests {
             session_manager: Arc::new(crate::ai::session::SessionManager::new(pool)),
             agent: None,
             provider_registry,
+            boot_context: crate::ai::context::BootContext::from_system(),
+            last_used_model: Arc::new(RwLock::new(None)),
+            context_injection_enabled: Arc::new(std::sync::atomic::AtomicBool::new(true)),
+            self_evolution_enabled: Arc::new(std::sync::atomic::AtomicBool::new(true)),
             soul_loader,
             skill_registry,
             user_learner,

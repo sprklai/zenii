@@ -99,6 +99,9 @@ impl MesoAgent {
     ///
     /// Provider type is inferred at runtime: `provider_id == "anthropic"` uses the native
     /// Anthropic client, everything else uses the OpenAI-compatible client with `base_url`.
+    ///
+    /// If `preamble_override` is provided, it replaces the default system prompt.
+    #[allow(clippy::too_many_arguments)]
     pub async fn from_provider(
         provider_id: &str,
         base_url: &str,
@@ -107,16 +110,19 @@ impl MesoAgent {
         credentials: &dyn CredentialStore,
         tools: &[Arc<dyn Tool>],
         config: &AppConfig,
+        preamble_override: Option<&str>,
     ) -> Result<Self> {
         let api_key =
             providers::resolve_api_key_for_provider(provider_id, requires_api_key, credentials)
                 .await?;
         let rig_tools = RigToolAdapter::from_tools(tools);
 
-        let preamble = config
-            .agent_system_prompt
-            .as_deref()
-            .unwrap_or("You are MesoClaw, a helpful AI assistant.");
+        let preamble = preamble_override.unwrap_or_else(|| {
+            config
+                .agent_system_prompt
+                .as_deref()
+                .unwrap_or("You are MesoClaw, a helpful AI assistant.")
+        });
 
         let inner = if provider_id == "anthropic" {
             let client = providers::build_anthropic_client(&api_key)?;
@@ -144,6 +150,8 @@ impl MesoAgent {
     }
 
     /// Build a new MesoAgent from provider details with tool event broadcasting.
+    ///
+    /// If `preamble_override` is provided, it replaces the default system prompt.
     #[allow(clippy::too_many_arguments)]
     pub async fn from_provider_with_events(
         provider_id: &str,
@@ -154,16 +162,19 @@ impl MesoAgent {
         tools: &[Arc<dyn Tool>],
         config: &AppConfig,
         tool_event_tx: broadcast::Sender<ToolCallEvent>,
+        preamble_override: Option<&str>,
     ) -> Result<Self> {
         let api_key =
             providers::resolve_api_key_for_provider(provider_id, requires_api_key, credentials)
                 .await?;
         let rig_tools = RigToolAdapter::from_tools_with_events(tools, tool_event_tx);
 
-        let preamble = config
-            .agent_system_prompt
-            .as_deref()
-            .unwrap_or("You are MesoClaw, a helpful AI assistant.");
+        let preamble = preamble_override.unwrap_or_else(|| {
+            config
+                .agent_system_prompt
+                .as_deref()
+                .unwrap_or("You are MesoClaw, a helpful AI assistant.")
+        });
 
         let inner = if provider_id == "anthropic" {
             let client = providers::build_anthropic_client(&api_key)?;
@@ -223,25 +234,39 @@ impl MesoAgent {
 ///
 /// Resolution chain:
 /// 1. If `requested_model` is Some ("provider_id:model_id") → build agent from provider registry
-/// 2. If None → check default model in provider registry → build agent
-/// 3. If no default → use `state.agent` boot-time fallback
-/// 4. If no fallback → error
+/// 2. `last_used_model` (session-persistent) from AppState
+/// 3. Default model from `ProviderRegistry`
+/// 4. Boot-time fallback agent
 ///
 /// When `tool_event_tx` is provided, a fresh agent is always built with event-emitting adapters
 /// so tool calls are visible to the caller.
+///
+/// If `preamble_override` is provided, it replaces the default system prompt.
 #[cfg(feature = "ai")]
 pub async fn resolve_agent(
     requested_model: Option<&str>,
     state: &AppState,
     tool_event_tx: Option<broadcast::Sender<ToolCallEvent>>,
+    preamble_override: Option<&str>,
 ) -> Result<Arc<MesoAgent>> {
-    // Try requested model first, then default model
+    // Try requested model first, then last_used, then default model
     let model_spec = if let Some(spec) = requested_model {
+        // Explicit model — also update last_used_model
+        {
+            let mut last = state.last_used_model.write().await;
+            *last = Some(spec.to_string());
+        }
         Some(spec.to_string())
-    } else if let Some((pid, mid)) = state.provider_registry.get_default_model().await? {
-        Some(format!("{pid}:{mid}"))
     } else {
-        None
+        // Check last_used_model
+        let last = state.last_used_model.read().await;
+        if let Some(ref last_model) = *last {
+            Some(last_model.clone())
+        } else if let Some((pid, mid)) = state.provider_registry.get_default_model().await? {
+            Some(format!("{pid}:{mid}"))
+        } else {
+            None
+        }
     };
 
     if let Some(spec) = model_spec {
@@ -264,6 +289,7 @@ pub async fn resolve_agent(
                 &tools,
                 &state.config,
                 tx,
+                preamble_override,
             )
             .await?
         } else {
@@ -275,6 +301,7 @@ pub async fn resolve_agent(
                 state.credentials.as_ref(),
                 &tools,
                 &state.config,
+                preamble_override,
             )
             .await?
         };
@@ -371,6 +398,7 @@ mod tests {
             &creds,
             &tools,
             &config,
+            None,
         )
         .await;
         assert!(agent.is_ok());
@@ -392,6 +420,7 @@ mod tests {
             &creds,
             &tools,
             &config,
+            None,
         )
         .await;
         assert!(agent.is_ok());
@@ -413,6 +442,7 @@ mod tests {
             &creds,
             &tools,
             &config,
+            None,
         )
         .await;
         assert!(agent.is_ok());
@@ -433,6 +463,7 @@ mod tests {
             &creds,
             &tools,
             &config,
+            None,
         )
         .await;
         assert!(agent.is_ok());
@@ -453,6 +484,7 @@ mod tests {
             &creds,
             &tools,
             &config,
+            None,
         )
         .await;
         assert!(result.is_err());

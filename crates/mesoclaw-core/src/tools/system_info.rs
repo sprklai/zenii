@@ -25,7 +25,7 @@ impl Tool for SystemInfoTool {
     }
 
     fn description(&self) -> &str {
-        "Get system information"
+        "Get system information. Date/time, OS, hostname, and architecture are already in your context — only use this for cpu_count, memory, or env queries."
     }
 
     fn parameters_schema(&self) -> serde_json::Value {

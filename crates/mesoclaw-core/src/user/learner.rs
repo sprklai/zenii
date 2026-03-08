@@ -183,6 +183,42 @@ impl UserLearner {
         .await
     }
 
+    /// Consolidate observations: merge duplicates, archive stale, enforce cap.
+    pub async fn consolidate(&self, archive_threshold: f64, archive_after_days: u32) -> Result<()> {
+        let max_obs = self.max_observations;
+        db::with_db(&self.db, move |conn| {
+            // 1. Archive low-confidence observations older than threshold
+            conn.execute(
+                "DELETE FROM user_observations
+                 WHERE confidence < ?1
+                 AND updated_at < datetime('now', ?2)",
+                rusqlite::params![archive_threshold, format!("-{archive_after_days} days")],
+            )
+            .map_err(MesoError::from)?;
+
+            // 2. Enforce max observations cap — evict lowest confidence
+            let count: i64 = conn
+                .query_row("SELECT COUNT(*) FROM user_observations", [], |r| r.get(0))
+                .map_err(MesoError::from)?;
+
+            if count > max_obs as i64 {
+                let excess = count - max_obs as i64;
+                conn.execute(
+                    "DELETE FROM user_observations WHERE id IN (
+                        SELECT id FROM user_observations
+                        ORDER BY confidence ASC, updated_at ASC
+                        LIMIT ?1
+                    )",
+                    rusqlite::params![excess],
+                )
+                .map_err(MesoError::from)?;
+            }
+
+            Ok(())
+        })
+        .await
+    }
+
     /// Build a formatted context string from observations for prompt composition.
     pub async fn build_context(&self) -> Result<String> {
         let min_confidence = self.min_confidence;
@@ -447,6 +483,119 @@ mod tests {
         let context = learner.build_context().await.unwrap();
         assert!(context.contains("editor: vim"));
         assert!(context.contains("shell: bash"));
+    }
+
+    // 15.3.30 — consolidate merges/archives low confidence old observations
+    #[tokio::test]
+    async fn consolidate_merges_duplicates() {
+        let (_dir, learner) = setup().await;
+        learner
+            .observe("preference", "editor", "vim", 0.2)
+            .await
+            .unwrap();
+
+        // Insert with old timestamp
+        db::with_db(&learner.db, |conn| {
+            conn.execute(
+                "UPDATE user_observations SET updated_at = datetime('now', '-60 days') WHERE key = 'editor'",
+                [],
+            )
+            .map_err(MesoError::from)?;
+            Ok(())
+        })
+        .await
+        .unwrap();
+
+        learner.consolidate(0.3, 30).await.unwrap();
+
+        // Low-confidence old observation should be archived
+        let count = learner.count().await.unwrap();
+        assert_eq!(count, 0);
+    }
+
+    // 15.3.31 — consolidate archives low confidence old observations
+    #[tokio::test]
+    async fn consolidate_archives_low_confidence_old() {
+        let (_dir, learner) = setup().await;
+        learner
+            .observe("preference", "editor", "vim", 0.1)
+            .await
+            .unwrap();
+
+        db::with_db(&learner.db, |conn| {
+            conn.execute(
+                "UPDATE user_observations SET updated_at = datetime('now', '-60 days') WHERE key = 'editor'",
+                [],
+            )
+            .map_err(MesoError::from)?;
+            Ok(())
+        })
+        .await
+        .unwrap();
+
+        learner.consolidate(0.3, 30).await.unwrap();
+        assert_eq!(learner.count().await.unwrap(), 0);
+    }
+
+    // 15.3.32 — consolidate keeps high confidence
+    #[tokio::test]
+    async fn consolidate_keeps_high_confidence() {
+        let (_dir, learner) = setup().await;
+        learner
+            .observe("preference", "editor", "vim", 0.9)
+            .await
+            .unwrap();
+
+        db::with_db(&learner.db, |conn| {
+            conn.execute(
+                "UPDATE user_observations SET updated_at = datetime('now', '-60 days') WHERE key = 'editor'",
+                [],
+            )
+            .map_err(MesoError::from)?;
+            Ok(())
+        })
+        .await
+        .unwrap();
+
+        learner.consolidate(0.3, 30).await.unwrap();
+        assert_eq!(learner.count().await.unwrap(), 1);
+    }
+
+    // 15.3.33 — consolidate enforces max cap
+    #[tokio::test]
+    async fn consolidate_enforces_max_cap() {
+        let dir = TempDir::new().unwrap();
+        let db_path = dir.path().join("test.db");
+        let pool = db::init_pool(&db_path).unwrap();
+        db::with_db(&pool, db::run_migrations).await.unwrap();
+
+        let config = AppConfig {
+            learning_max_observations: 2,
+            ..Default::default()
+        };
+        let learner = UserLearner::new(pool.clone(), &config);
+
+        // Insert 3 manually (bypass max check which is in observe)
+        for i in 0..3 {
+            let id = format!("id-{i}");
+            let key = format!("key-{i}");
+            let confidence = (i as f64 + 1.0) * 0.3;
+            db::with_db(&pool, move |conn| {
+                conn.execute(
+                    "INSERT INTO user_observations (id, category, key, value, confidence)
+                     VALUES (?1, 'pref', ?2, 'val', ?3)",
+                    rusqlite::params![id, key, confidence],
+                )
+                .map_err(MesoError::from)?;
+                Ok(())
+            })
+            .await
+            .unwrap();
+        }
+
+        assert_eq!(learner.count().await.unwrap(), 3);
+        learner.consolidate(0.1, 365).await.unwrap();
+        assert_eq!(learner.count().await.unwrap(), 2);
     }
 
     #[tokio::test]

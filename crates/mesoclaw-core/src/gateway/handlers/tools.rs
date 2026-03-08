@@ -84,6 +84,7 @@ mod tests {
         }
         let state = Arc::new(AppState {
             config: base_state.config.clone(),
+            config_path: base_state.config_path.clone(),
             db: base_state.db.clone(),
             event_bus: base_state.event_bus.clone(),
             memory: base_state.memory.clone(),
@@ -93,6 +94,10 @@ mod tests {
             session_manager: base_state.session_manager.clone(),
             agent: None,
             provider_registry: base_state.provider_registry.clone(),
+            boot_context: base_state.boot_context.clone(),
+            last_used_model: base_state.last_used_model.clone(),
+            context_injection_enabled: base_state.context_injection_enabled.clone(),
+            self_evolution_enabled: base_state.self_evolution_enabled.clone(),
             soul_loader: base_state.soul_loader.clone(),
             skill_registry: base_state.skill_registry.clone(),
             user_learner: base_state.user_learner.clone(),

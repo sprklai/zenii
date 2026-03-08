@@ -64,19 +64,82 @@ pub async fn get_config(State(state): State<Arc<AppState>>) -> crate::Result<imp
             );
         }
     }
+    // Override with runtime values (may differ from config file)
+    if let Some(obj) = config_value.as_object_mut() {
+        obj.insert(
+            "context_injection_enabled".to_string(),
+            serde_json::Value::Bool(
+                state
+                    .context_injection_enabled
+                    .load(std::sync::atomic::Ordering::Relaxed),
+            ),
+        );
+        obj.insert(
+            "self_evolution_enabled".to_string(),
+            serde_json::Value::Bool(
+                state
+                    .self_evolution_enabled
+                    .load(std::sync::atomic::Ordering::Relaxed),
+            ),
+        );
+    }
+
     Ok(Json(config_value))
 }
 
-/// PUT /config — accept partial JSON config update. For Phase 3 this acknowledges the update
-/// without persisting (full config persistence is deferred to a later phase).
+/// PUT /config — accept partial JSON config update, persist to TOML, update runtime state.
 pub async fn update_config(
-    State(_state): State<Arc<AppState>>,
+    State(state): State<Arc<AppState>>,
     Json(body): Json<serde_json::Value>,
 ) -> crate::Result<impl IntoResponse> {
+    // Load current config from disk, merge partial update, save back
+    let mut config = crate::config::load_config(&state.config_path)?;
+
+    if let Some(obj) = body.as_object() {
+        // Apply known fields
+        if let Some(v) = obj
+            .get("context_injection_enabled")
+            .and_then(|v| v.as_bool())
+        {
+            config.context_injection_enabled = v;
+            state
+                .context_injection_enabled
+                .store(v, std::sync::atomic::Ordering::Relaxed);
+        }
+        if let Some(v) = obj.get("self_evolution_enabled").and_then(|v| v.as_bool()) {
+            config.self_evolution_enabled = v;
+            state
+                .self_evolution_enabled
+                .store(v, std::sync::atomic::Ordering::Relaxed);
+        }
+        if let Some(v) = obj
+            .get("context_reinject_gap_minutes")
+            .and_then(|v| v.as_u64())
+        {
+            config.context_reinject_gap_minutes = v as u32;
+        }
+        if let Some(v) = obj
+            .get("context_reinject_message_count")
+            .and_then(|v| v.as_u64())
+        {
+            config.context_reinject_message_count = v as u32;
+        }
+        if let Some(v) = obj.get("learning_enabled").and_then(|v| v.as_bool()) {
+            config.learning_enabled = v;
+        }
+        if let Some(v) = obj.get("agent_system_prompt") {
+            config.agent_system_prompt = v.as_str().map(|s| s.to_string());
+        }
+    }
+
+    crate::config::save_config(&state.config_path, &config)?;
+
+    tracing::info!("Config updated and persisted to {:?}", state.config_path);
+
     Ok((
         StatusCode::OK,
         Json(serde_json::json!({
-            "status": "acknowledged",
+            "status": "persisted",
             "fields": body
         })),
     ))
@@ -104,6 +167,7 @@ mod tests {
         config.gateway_auth_token = Some("super_secret_token".into());
         let state = Arc::new(AppState {
             config: Arc::new(config),
+            config_path: base_state.config_path.clone(),
             db: base_state.db.clone(),
             event_bus: base_state.event_bus.clone(),
             memory: base_state.memory.clone(),
@@ -113,6 +177,10 @@ mod tests {
             session_manager: base_state.session_manager.clone(),
             agent: None,
             provider_registry: base_state.provider_registry.clone(),
+            boot_context: base_state.boot_context.clone(),
+            last_used_model: base_state.last_used_model.clone(),
+            context_injection_enabled: base_state.context_injection_enabled.clone(),
+            self_evolution_enabled: base_state.self_evolution_enabled.clone(),
             soul_loader: base_state.soul_loader.clone(),
             skill_registry: base_state.skill_registry.clone(),
             user_learner: base_state.user_learner.clone(),
@@ -190,7 +258,7 @@ mod tests {
 
         let body = axum::body::to_bytes(resp.into_body(), 4096).await.unwrap();
         let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
-        assert_eq!(json["status"], "acknowledged");
+        assert_eq!(json["status"], "persisted");
         assert_eq!(json["fields"]["log_level"], "debug");
     }
 }

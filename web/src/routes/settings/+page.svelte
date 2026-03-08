@@ -3,6 +3,7 @@
 	import { Input } from '$lib/components/ui/input';
 	import * as Card from '$lib/components/ui/card';
 	import { Skeleton } from '$lib/components/ui/skeleton';
+	import { Switch } from '$lib/components/ui/switch';
 	import { configStore } from '$lib/stores/config.svelte';
 	import { getBaseUrl, setBaseUrl, getToken, setToken } from '$lib/api/client';
 	import { onMount } from 'svelte';
@@ -18,6 +19,20 @@
 	function handleSaveConnection() {
 		setBaseUrl(baseUrl);
 		setToken(token);
+	}
+
+	async function toggleConfig(key: string, value: boolean) {
+		console.log(`[Settings] toggleConfig called: ${key} = ${value}`);
+		try {
+			const result = await configStore.update({ [key]: value });
+			console.log(`[Settings] Config ${key} persisted:`, result);
+			// Re-fetch from server to confirm round-trip
+			await configStore.load();
+			console.log(`[Settings] After reload: ${key} =`, configStore.config[key]);
+		} catch (e) {
+			console.error(`[Settings] Failed to update ${key}:`, e);
+			await configStore.load();
+		}
 	}
 </script>
 
@@ -41,6 +56,37 @@
 			<Button onclick={handleSaveConnection}>Save Connection</Button>
 		</Card.Content>
 	</Card.Root>
+
+	{#if !configStore.loading && Object.keys(configStore.config).length > 0}
+		<Card.Root>
+			<Card.Header>
+				<Card.Title>Agent Features</Card.Title>
+				<Card.Description>Toggle context injection and self-evolution at runtime</Card.Description>
+			</Card.Header>
+			<Card.Content class="space-y-4">
+				<div class="flex items-center justify-between">
+					<div>
+						<p class="text-sm font-medium">Context Injection</p>
+						<p class="text-xs text-muted-foreground">Rich environment and identity context in agent preamble</p>
+					</div>
+					<Switch
+						checked={configStore.config.context_injection_enabled === true}
+						onCheckedChange={(v) => toggleConfig('context_injection_enabled', v)}
+					/>
+				</div>
+				<div class="flex items-center justify-between">
+					<div>
+						<p class="text-sm font-medium">Self-Evolution</p>
+						<p class="text-xs text-muted-foreground">Agent can learn preferences and propose skill changes</p>
+					</div>
+					<Switch
+						checked={configStore.config.self_evolution_enabled === true}
+						onCheckedChange={(v) => toggleConfig('self_evolution_enabled', v)}
+					/>
+				</div>
+			</Card.Content>
+		</Card.Root>
+	{/if}
 
 	<div class="flex gap-2">
 		<Button variant="outline" onclick={() => goto('/settings/providers')}>
