@@ -56,6 +56,8 @@ async fn main() {
 
     // Convert services into gateway AppState
     let state = Arc::new(mesoclaw_core::gateway::state::AppState::from(services));
+    #[cfg(feature = "scheduler")]
+    state.wire_scheduler();
     let gateway = GatewayServer::new(state);
 
     // Graceful shutdown on SIGTERM/SIGINT

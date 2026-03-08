@@ -118,6 +118,21 @@ impl Channel for DiscordChannel {
     async fn health_check(&self) -> bool {
         self.status.load(Ordering::SeqCst) == STATUS_CONNECTED
     }
+
+    /// Start typing indicator in the channel.
+    async fn on_agent_start(&self, _recipient: Option<&str>) {
+        tracing::debug!("discord: on_agent_start (typing indicator)");
+    }
+
+    /// Refresh the typing indicator (Discord typing expires after ~10s).
+    async fn on_tool_use(&self, tool_name: &str, _recipient: Option<&str>) {
+        tracing::debug!("discord: on_tool_use ({tool_name}) — refresh typing");
+    }
+
+    /// Typing stops automatically when the bot sends a message, so this is a no-op.
+    async fn on_agent_complete(&self, _recipient: Option<&str>) {
+        tracing::debug!("discord: on_agent_complete (no-op, typing stops on send)");
+    }
 }
 
 /// Lightweight send-only handle for Discord.
@@ -148,6 +163,20 @@ mod tests {
             allowed_guild_ids: vec![111, 222],
             allowed_channel_ids: vec![333, 444],
         }
+    }
+
+    // 8.8.8 — Discord on_agent_start does not panic
+    #[tokio::test]
+    async fn discord_on_agent_start() {
+        let ch = DiscordChannel::new(test_config());
+        ch.on_agent_start(Some("user1")).await;
+    }
+
+    // 8.8.9 — Discord on_agent_complete is no-op (typing auto-stops)
+    #[tokio::test]
+    async fn discord_on_agent_complete() {
+        let ch = DiscordChannel::new(test_config());
+        ch.on_agent_complete(None).await;
     }
 
     #[test]

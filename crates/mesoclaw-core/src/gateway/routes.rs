@@ -175,6 +175,7 @@ pub fn build_router(state: Arc<AppState>) -> Router {
         .merge(scheduler_routes())
         // WebSocket
         .route("/ws/chat", get(handlers::ws::ws_chat))
+        .route("/ws/notifications", get(handlers::ws::ws_notifications))
         // Auth middleware
         .layer(middleware::from_fn_with_state(
             state.config.gateway_auth_token.clone(),
@@ -212,6 +213,10 @@ fn channel_routes() -> Router<Arc<AppState>> {
             .route(
                 "/channels/{name}/health",
                 get(handlers::channels::health_check),
+            )
+            .route(
+                "/channels/{name}/message",
+                post(handlers::channels::webhook_message),
             )
     }
     #[cfg(not(feature = "channels"))]

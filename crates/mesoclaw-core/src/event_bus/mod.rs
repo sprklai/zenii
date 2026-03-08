@@ -24,6 +24,17 @@ pub enum AppEvent {
     HeartbeatAlert { message: String },
     SchedulerStarted,
     SchedulerStopped,
+    SchedulerNotification {
+        job_id: String,
+        job_name: String,
+        message: String,
+    },
+    SchedulerJobCompleted {
+        job_id: String,
+        job_name: String,
+        status: String,
+        error: Option<String>,
+    },
     Shutdown,
 }
 
@@ -130,6 +141,80 @@ mod tests {
         let event = rx.recv().await.unwrap();
         assert!(
             matches!(event, AppEvent::CronFired { job_id, name } if job_id == "j2" && name == "daily_check")
+        );
+    }
+
+    // 8.6.1.1 — SchedulerNotification event serde round-trip
+    #[tokio::test]
+    async fn scheduler_notification_event() {
+        let bus = TokioBroadcastBus::new(16);
+        let mut rx = bus.subscribe();
+
+        bus.publish(AppEvent::SchedulerNotification {
+            job_id: "j1".into(),
+            job_name: "daily_check".into(),
+            message: "All systems go".into(),
+        })
+        .unwrap();
+
+        let event = rx.recv().await.unwrap();
+        assert!(
+            matches!(event, AppEvent::SchedulerNotification { job_id, job_name, message }
+                if job_id == "j1" && job_name == "daily_check" && message == "All systems go")
+        );
+    }
+
+    // 8.6.1.1b — SchedulerNotification JSON serde round-trip
+    #[test]
+    fn scheduler_notification_event_serde() {
+        let event = AppEvent::SchedulerNotification {
+            job_id: "j1".into(),
+            job_name: "daily_check".into(),
+            message: "All systems go".into(),
+        };
+        let json = serde_json::to_string(&event).unwrap();
+        let back: AppEvent = serde_json::from_str(&json).unwrap();
+        assert!(
+            matches!(back, AppEvent::SchedulerNotification { job_id, job_name, message }
+                if job_id == "j1" && job_name == "daily_check" && message == "All systems go")
+        );
+    }
+
+    // 8.6.1.2 — SchedulerJobCompleted event serde round-trip
+    #[tokio::test]
+    async fn scheduler_job_completed_event() {
+        let bus = TokioBroadcastBus::new(16);
+        let mut rx = bus.subscribe();
+
+        bus.publish(AppEvent::SchedulerJobCompleted {
+            job_id: "j2".into(),
+            job_name: "heartbeat".into(),
+            status: "success".into(),
+            error: None,
+        })
+        .unwrap();
+
+        let event = rx.recv().await.unwrap();
+        assert!(
+            matches!(event, AppEvent::SchedulerJobCompleted { job_id, job_name, status, error }
+                if job_id == "j2" && job_name == "heartbeat" && status == "success" && error.is_none())
+        );
+    }
+
+    // 8.6.1.2b — SchedulerJobCompleted JSON serde round-trip
+    #[test]
+    fn scheduler_job_completed_event_serde() {
+        let event = AppEvent::SchedulerJobCompleted {
+            job_id: "j2".into(),
+            job_name: "heartbeat".into(),
+            status: "success".into(),
+            error: Some("timeout".into()),
+        };
+        let json = serde_json::to_string(&event).unwrap();
+        let back: AppEvent = serde_json::from_str(&json).unwrap();
+        assert!(
+            matches!(back, AppEvent::SchedulerJobCompleted { job_id, job_name, status, error }
+                if job_id == "j2" && job_name == "heartbeat" && status == "success" && error == Some("timeout".into()))
         );
     }
 

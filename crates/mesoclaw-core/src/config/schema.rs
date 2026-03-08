@@ -101,6 +101,9 @@ pub struct AppConfig {
     pub scheduler_stuck_threshold_secs: u64,
     pub scheduler_error_backoff_secs: Vec<u64>,
     pub scheduler_max_history_per_job: usize,
+    pub scheduler_notification_via_ws: bool,
+    pub scheduler_agent_turn_timeout_secs: u64,
+    pub scheduler_heartbeat_file: Option<String>,
 
     // Phase 8: Self-Evolution
     pub self_evolution_enabled: bool,
@@ -209,6 +212,9 @@ impl Default for AppConfig {
             scheduler_stuck_threshold_secs: 120,
             scheduler_error_backoff_secs: vec![30, 60, 300, 900, 3600],
             scheduler_max_history_per_job: 100,
+            scheduler_notification_via_ws: true,
+            scheduler_agent_turn_timeout_secs: 120,
+            scheduler_heartbeat_file: None,
 
             // Self-Evolution
             self_evolution_enabled: true,
@@ -268,6 +274,32 @@ mod tests {
             vec![30, 60, 300, 900, 3600]
         );
         assert_eq!(config.scheduler_max_history_per_job, 100);
+    }
+
+    // 8.6.1.3 — scheduler notification config defaults
+    #[test]
+    fn scheduler_notification_config_defaults() {
+        let config = AppConfig::default();
+        assert!(config.scheduler_notification_via_ws);
+        assert_eq!(config.scheduler_agent_turn_timeout_secs, 120);
+        assert!(config.scheduler_heartbeat_file.is_none());
+    }
+
+    // 8.6.1.4 — scheduler notification config from TOML
+    #[test]
+    fn scheduler_notification_config_from_toml() {
+        let toml_str = r#"
+            scheduler_notification_via_ws = false
+            scheduler_agent_turn_timeout_secs = 60
+            scheduler_heartbeat_file = "/tmp/heartbeat.md"
+        "#;
+        let config: AppConfig = toml::from_str(toml_str).unwrap();
+        assert!(!config.scheduler_notification_via_ws);
+        assert_eq!(config.scheduler_agent_turn_timeout_secs, 60);
+        assert_eq!(
+            config.scheduler_heartbeat_file.as_deref(),
+            Some("/tmp/heartbeat.md")
+        );
     }
 
     // 15.3.40 — config context defaults

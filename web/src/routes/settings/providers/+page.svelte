@@ -4,6 +4,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { Skeleton } from '$lib/components/ui/skeleton';
+	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import { providersStore, type ProviderWithKeyStatus } from '$lib/stores/providers.svelte';
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
@@ -20,6 +21,8 @@
 	let newProvider = $state({ id: '', name: '', baseUrl: '', requiresApiKey: true });
 	let addingProvider = $state(false);
 	let deletingProvider = $state<Record<string, boolean>>({});
+	let confirmOpen = $state(false);
+	let deleteAction = $state<{ type: 'key' | 'provider' | 'model'; id: string; extra?: string } | null>(null);
 
 	onMount(() => {
 		providersStore.load();
@@ -53,12 +56,17 @@
 		}
 	}
 
-	async function removeKey(provider: ProviderWithKeyStatus) {
-		saving[provider.id] = true;
+	function removeKey(provider: ProviderWithKeyStatus) {
+		deleteAction = { type: 'key', id: provider.id };
+		confirmOpen = true;
+	}
+
+	async function confirmRemoveKey(providerId: string) {
+		saving[providerId] = true;
 		try {
-			await providersStore.removeApiKey(provider.id);
+			await providersStore.removeApiKey(providerId);
 		} finally {
-			saving[provider.id] = false;
+			saving[providerId] = false;
 		}
 	}
 
@@ -74,7 +82,12 @@
 		}
 	}
 
-	async function deleteModel(providerId: string, modelId: string) {
+	function deleteModel(providerId: string, modelId: string) {
+		deleteAction = { type: 'model', id: providerId, extra: modelId };
+		confirmOpen = true;
+	}
+
+	async function confirmDeleteModel(providerId: string, modelId: string) {
 		addingModel[providerId] = true;
 		try {
 			await providersStore.deleteModel(providerId, modelId);
@@ -100,7 +113,12 @@
 		}
 	}
 
-	async function deleteProvider(id: string) {
+	function deleteProvider(id: string) {
+		deleteAction = { type: 'provider', id };
+		confirmOpen = true;
+	}
+
+	async function confirmDeleteProvider(id: string) {
 		deletingProvider[id] = true;
 		try {
 			await providersStore.deleteProvider(id);
@@ -108,6 +126,28 @@
 		} finally {
 			deletingProvider[id] = false;
 		}
+	}
+
+	async function confirmDelete() {
+		if (!deleteAction) return;
+		const action = deleteAction;
+		if (action.type === 'key') await confirmRemoveKey(action.id);
+		else if (action.type === 'provider') await confirmDeleteProvider(action.id);
+		else if (action.type === 'model' && action.extra) await confirmDeleteModel(action.id, action.extra);
+	}
+
+	function confirmTitle(): string {
+		if (!deleteAction) return '';
+		if (deleteAction.type === 'key') return 'Remove API key?';
+		if (deleteAction.type === 'provider') return 'Delete provider?';
+		return 'Delete model?';
+	}
+
+	function confirmDescription(): string {
+		if (!deleteAction) return '';
+		if (deleteAction.type === 'key') return 'This will remove the stored API key for this provider.';
+		if (deleteAction.type === 'provider') return 'This will permanently delete this provider and all its models.';
+		return 'This will remove this custom model from the provider.';
 	}
 
 	function statusBadge(provider: ProviderWithKeyStatus): { label: string; variant: 'default' | 'secondary' | 'outline' | 'destructive' } {
@@ -321,3 +361,11 @@
 		</div>
 	{/if}
 </div>
+
+<ConfirmDialog
+	bind:open={confirmOpen}
+	title={confirmTitle()}
+	description={confirmDescription()}
+	confirmLabel="Remove"
+	onConfirm={confirmDelete}
+/>

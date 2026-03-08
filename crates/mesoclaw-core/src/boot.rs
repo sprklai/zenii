@@ -63,6 +63,8 @@ pub struct Services {
     pub user_learner: Arc<UserLearner>,
     #[cfg(feature = "channels")]
     pub channel_registry: Arc<ChannelRegistry>,
+    #[cfg(feature = "channels")]
+    pub channel_router: Option<Arc<crate::channels::router::ChannelRouter>>,
     #[cfg(feature = "scheduler")]
     pub scheduler: Option<Arc<TokioScheduler>>,
 }
@@ -284,9 +286,22 @@ pub async fn init_services(config: AppConfig) -> Result<Services> {
         }
     };
 
-    // 13. Channel registry
+    // 13. Channel registry and router
     #[cfg(feature = "channels")]
     let channel_registry = Arc::new(ChannelRegistry::new());
+    #[cfg(feature = "channels")]
+    let channel_router = {
+        #[cfg(feature = "gateway")]
+        {
+            let router = Arc::new(crate::channels::router::ChannelRouter::new(256));
+            info!("Channel router initialized");
+            Some(router)
+        }
+        #[cfg(not(feature = "gateway"))]
+        {
+            None::<Arc<crate::channels::router::ChannelRouter>>
+        }
+    };
     #[cfg(feature = "channels")]
     info!("Channel registry initialized");
 
@@ -332,12 +347,15 @@ pub async fn init_services(config: AppConfig) -> Result<Services> {
         user_learner,
         #[cfg(feature = "channels")]
         channel_registry,
+        #[cfg(feature = "channels")]
+        channel_router,
         #[cfg(feature = "scheduler")]
         scheduler,
     })
 }
 
 /// Convert Services into gateway AppState.
+/// After wrapping in Arc, call `state.wire_scheduler()` to enable payload execution.
 #[cfg(feature = "gateway")]
 impl From<Services> for AppState {
     fn from(s: Services) -> Self {
@@ -369,6 +387,8 @@ impl From<Services> for AppState {
             user_learner: s.user_learner,
             #[cfg(feature = "channels")]
             channel_registry: s.channel_registry,
+            #[cfg(feature = "channels")]
+            channel_router: s.channel_router,
             #[cfg(feature = "scheduler")]
             scheduler: s.scheduler,
         }
@@ -493,6 +513,49 @@ mod tests {
         let services = init_services(config).await.unwrap();
         let count = services.user_learner.count().await.unwrap();
         assert_eq!(count, 0);
+    }
+
+    // 8.6.1.22 — After init_services with scheduler feature, scheduler is present
+    #[cfg(feature = "scheduler")]
+    #[tokio::test]
+    async fn boot_wires_scheduler_to_appstate() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let config = test_config(&dir);
+        let services = init_services(config).await.unwrap();
+        assert!(
+            services.scheduler.is_some(),
+            "Scheduler should be wired in Services after init_services"
+        );
+    }
+
+    // 8.7.11 — With channels feature, boot creates a channel_router
+    #[cfg(all(feature = "channels", feature = "gateway"))]
+    #[tokio::test]
+    async fn boot_creates_channel_router() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let config = test_config(&dir);
+        let services = init_services(config).await.unwrap();
+        assert!(
+            services.channel_router.is_some(),
+            "Channel router should be created when both channels and gateway features are enabled"
+        );
+    }
+
+    // 8.7.12 — Channel router exists but no channels are started when none configured
+    #[cfg(all(feature = "channels", feature = "gateway"))]
+    #[tokio::test]
+    async fn boot_router_not_started_when_empty() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let mut config = test_config(&dir);
+        config.channels_enabled = vec![]; // no channels configured
+        let services = init_services(config).await.unwrap();
+        // Router exists
+        assert!(services.channel_router.is_some());
+        // Channel registry is empty (no channels registered)
+        assert!(
+            services.channel_registry.list().is_empty(),
+            "No channels should be registered when channels_enabled is empty"
+        );
     }
 
     #[cfg(feature = "gateway")]

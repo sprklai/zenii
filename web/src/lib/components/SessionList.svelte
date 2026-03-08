@@ -1,6 +1,7 @@
 <script lang="ts">
 	import * as Sidebar from '$lib/components/ui/sidebar';
 	import { Button } from '$lib/components/ui/button';
+	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import MessageSquarePlus from '@lucide/svelte/icons/message-square-plus';
 	import MessageSquare from '@lucide/svelte/icons/message-square';
 	import Trash2 from '@lucide/svelte/icons/trash-2';
@@ -11,14 +12,23 @@
 
 	let editingId = $state<string | null>(null);
 	let editTitle = $state('');
+	let confirmOpen = $state(false);
+	let deleteTarget = $state<string | null>(null);
 
 	async function handleNew() {
 		const session = await sessionsStore.create('New Chat');
 		goto(`/chat/${session.id}`);
 	}
 
-	async function handleDelete(e: Event, id: string) {
+	function handleDelete(e: Event, id: string) {
 		e.stopPropagation();
+		deleteTarget = id;
+		confirmOpen = true;
+	}
+
+	async function confirmDelete() {
+		if (!deleteTarget) return;
+		const id = deleteTarget;
 		await sessionsStore.remove(id);
 		if (page.params.id === id) {
 			goto('/');
@@ -108,3 +118,10 @@
 		</Sidebar.Menu>
 	</Sidebar.GroupContent>
 </Sidebar.Group>
+
+<ConfirmDialog
+	bind:open={confirmOpen}
+	title="Delete chat?"
+	description="This will permanently delete this chat and all its messages."
+	onConfirm={confirmDelete}
+/>

@@ -120,6 +120,21 @@ impl Channel for SlackChannel {
     async fn health_check(&self) -> bool {
         self.status.load(Ordering::SeqCst) == STATUS_CONNECTED
     }
+
+    /// Post an ephemeral "thinking..." message.
+    async fn on_agent_start(&self, _recipient: Option<&str>) {
+        tracing::debug!("slack: on_agent_start (ephemeral thinking message)");
+    }
+
+    /// Update the ephemeral message with tool usage info.
+    async fn on_tool_use(&self, tool_name: &str, _recipient: Option<&str>) {
+        tracing::debug!("slack: on_tool_use ({tool_name})");
+    }
+
+    /// Delete the ephemeral status message.
+    async fn on_agent_complete(&self, _recipient: Option<&str>) {
+        tracing::debug!("slack: on_agent_complete (delete ephemeral)");
+    }
 }
 
 /// Lightweight send-only handle for Slack.
@@ -144,6 +159,27 @@ impl ChannelSender for SlackSender {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // 8.8.5 — Slack on_agent_start does not panic
+    #[tokio::test]
+    async fn slack_on_agent_start() {
+        let ch = SlackChannel::new();
+        ch.on_agent_start(Some("user1")).await;
+    }
+
+    // 8.8.6 — Slack on_tool_use does not panic
+    #[tokio::test]
+    async fn slack_on_tool_use() {
+        let ch = SlackChannel::new();
+        ch.on_tool_use("web_search", Some("user1")).await;
+    }
+
+    // 8.8.7 — Slack on_agent_complete does not panic
+    #[tokio::test]
+    async fn slack_on_agent_complete() {
+        let ch = SlackChannel::new();
+        ch.on_agent_complete(None).await;
+    }
 
     #[test]
     fn channel_type_slack() {

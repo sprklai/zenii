@@ -5,12 +5,14 @@ export interface Session {
   title: string;
   created_at: number;
   updated_at: number;
+  source?: string;
 }
 
 export interface SessionSummary {
   id: string;
   title: string;
   created_at: number;
+  source?: string;
 }
 
 function createSessionsStore() {

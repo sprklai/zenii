@@ -4,11 +4,14 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { Skeleton } from '$lib/components/ui/skeleton';
+	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import { channelsStore, type ChannelWithStatus } from '$lib/stores/channels.svelte';
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 
 	let expandedId = $state<string | null>(null);
+	let confirmOpen = $state(false);
+	let deleteTarget = $state<{ channelId: string; field: string } | null>(null);
 	let credInputs = $state<Record<string, string>>({});
 	let showField = $state<Record<string, boolean>>({});
 	let revealedValues = $state<Record<string, string>>({});
@@ -82,7 +85,14 @@
 		}
 	}
 
-	async function removeCredential(channelId: string, field: string) {
+	function removeCredential(channelId: string, field: string) {
+		deleteTarget = { channelId, field };
+		confirmOpen = true;
+	}
+
+	async function confirmRemoveCredential() {
+		if (!deleteTarget) return;
+		const { channelId, field } = deleteTarget;
 		const k = inputKey(channelId, field);
 		saving[k] = true;
 		try {
@@ -299,3 +309,11 @@
 		</div>
 	{/if}
 </div>
+
+<ConfirmDialog
+	bind:open={confirmOpen}
+	title="Remove credential?"
+	description="This will remove the stored credential for this channel."
+	confirmLabel="Remove"
+	onConfirm={confirmRemoveCredential}
+/>

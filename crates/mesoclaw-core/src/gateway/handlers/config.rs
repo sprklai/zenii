@@ -200,6 +200,8 @@ mod tests {
             user_learner: base_state.user_learner.clone(),
             #[cfg(feature = "channels")]
             channel_registry: base_state.channel_registry.clone(),
+            #[cfg(feature = "channels")]
+            channel_router: base_state.channel_router.clone(),
             #[cfg(feature = "scheduler")]
             scheduler: base_state.scheduler.clone(),
         });

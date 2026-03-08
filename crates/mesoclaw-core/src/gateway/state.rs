@@ -59,8 +59,22 @@ pub struct AppState {
     pub user_learner: Arc<UserLearner>,
     #[cfg(feature = "channels")]
     pub channel_registry: Arc<ChannelRegistry>,
+    #[cfg(feature = "channels")]
+    pub channel_router: Option<Arc<crate::channels::router::ChannelRouter>>,
     #[cfg(feature = "scheduler")]
     pub scheduler: Option<Arc<TokioScheduler>>,
+}
+
+impl AppState {
+    /// Wire the scheduler with this AppState for payload execution.
+    /// Call this after constructing Arc<AppState>.
+    #[cfg(feature = "scheduler")]
+    pub fn wire_scheduler(self: &Arc<Self>) {
+        if let Some(ref scheduler) = self.scheduler {
+            scheduler.wire(Arc::clone(self));
+            tracing::info!("Scheduler wired with AppState");
+        }
+    }
 }
 
 #[cfg(test)]

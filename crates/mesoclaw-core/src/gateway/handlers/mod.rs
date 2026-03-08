@@ -98,6 +98,8 @@ pub(crate) mod tests {
             user_learner,
             #[cfg(feature = "channels")]
             channel_registry,
+            #[cfg(feature = "channels")]
+            channel_router: None,
             #[cfg(feature = "scheduler")]
             scheduler: {
                 let sched = crate::scheduler::TokioScheduler::new(

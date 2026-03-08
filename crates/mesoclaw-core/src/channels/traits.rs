@@ -137,6 +137,25 @@ mod tests {
         }
     }
 
+    // 8.8.10 — Lifecycle hooks called in sequence don't panic
+    #[tokio::test]
+    async fn lifecycle_hooks_sequence() {
+        let ch = MockLifecycleChannel;
+        ch.on_agent_start(Some("user1")).await;
+        ch.on_tool_use("web_search", Some("user1")).await;
+        ch.on_tool_use("shell", Some("user1")).await;
+        ch.on_agent_complete(Some("user1")).await;
+    }
+
+    // 8.8.11 — Lifecycle hooks with None recipient
+    #[tokio::test]
+    async fn lifecycle_hooks_none_recipient() {
+        let ch = MockLifecycleChannel;
+        ch.on_agent_start(None).await;
+        ch.on_tool_use("test_tool", None).await;
+        ch.on_agent_complete(None).await;
+    }
+
     // CR.21 — Default on_agent_start is no-op (does not panic)
     #[tokio::test]
     async fn default_lifecycle_noop() {

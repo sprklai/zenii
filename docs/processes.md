@@ -89,18 +89,29 @@ sequenceDiagram
         App->>App: Init ChannelRegistry (DashMap)
         App->>App: Register configured channels (Telegram/Slack/Discord)
     end
+    opt scheduler feature enabled
+        App->>App: Init TokioScheduler (OnceCell)
+    end
     App->>App: Bundle into Services struct
     App->>GW: Start axum server (127.0.0.1:18981)
+    opt scheduler feature enabled
+        App->>App: scheduler.wire(app_state) — OnceCell post-construction
+        App->>App: PayloadExecutor wired with agent + channel access
+    end
+    opt channels feature enabled
+        App->>App: ChannelRouter::new() + router.start()
+        Note over App: mpsc loop + watch stop signal
+    end
 
     alt Desktop
         App->>App: Setup tray + resolve gateway mode
         App->>App: Boot embedded gateway or connect to external
         App->>App: Open Tauri window
-    else Mobile
+    else Mobile (future release)
         App->>App: Open Tauri mobile view (in-process gateway)
     else CLI
         App->>App: Connect to daemon via HTTP/WS (MesoClient)
-    else TUI
+    else TUI (future release)
         App->>App: Render ratatui UI
     else Daemon
         App->>App: Wait for connections
@@ -519,7 +530,7 @@ sequenceDiagram
 
 ## Scheduler Notification Flow
 
-The scheduler tick loop executes payloads via `PayloadExecutor` and delivers notifications through multiple channels.
+The scheduler tick loop executes payloads via `PayloadExecutor` (`scheduler/payload_executor.rs`) and delivers notifications through multiple channels. The `TokioScheduler` ↔ `AppState` circular dependency is resolved via `OnceCell` post-construction wiring.
 
 ```mermaid
 sequenceDiagram
@@ -565,7 +576,7 @@ sequenceDiagram
 
 ## Channel Router Message Pipeline
 
-The ChannelRouter orchestrates the full message processing flow from inbound channel message to outbound response.
+The `ChannelRouter` orchestrates the full message processing flow from inbound channel message to outbound response. It runs as a background task spawned during `init_services()`, consuming messages from an `mpsc` channel and using a `watch` signal for graceful shutdown. Lifecycle hooks (Stage 8.8) are best-effort — failures are logged but do not block the pipeline.
 
 ```mermaid
 sequenceDiagram
@@ -592,7 +603,7 @@ sequenceDiagram
     CR->>CR: channel_system_context(channel)
     Note over CR: Platform-specific preamble
 
-    opt Lifecycle hooks (Stage 8.8)
+    opt Lifecycle hooks
         CR->>Ch: on_agent_start(msg)
         Note over Ch: Typing indicator / status msg
     end
@@ -607,7 +618,7 @@ sequenceDiagram
 
     AI-->>CR: final response text
 
-    opt Lifecycle hooks (Stage 8.8)
+    opt Lifecycle hooks
         CR->>Ch: on_agent_complete(msg)
         Note over Ch: Clear status / typing
     end

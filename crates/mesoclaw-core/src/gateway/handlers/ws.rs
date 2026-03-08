@@ -39,10 +39,83 @@ pub(crate) enum WsOutbound {
         success: bool,
         duration_ms: u64,
     },
+    #[serde(rename = "notification")]
+    Notification {
+        event_type: String,
+        job_id: String,
+        job_name: String,
+        message: Option<String>,
+        status: Option<String>,
+        error: Option<String>,
+    },
     #[serde(rename = "done")]
     Done,
     #[serde(rename = "error")]
     Error { error: String },
+}
+
+pub async fn ws_notifications(
+    State(state): State<Arc<AppState>>,
+    ws: WebSocketUpgrade,
+) -> impl IntoResponse {
+    ws.on_upgrade(move |socket| handle_notifications(socket, state))
+}
+
+async fn handle_notifications(mut socket: WebSocket, state: Arc<AppState>) {
+    let mut rx = state.event_bus.subscribe();
+
+    loop {
+        tokio::select! {
+            event = rx.recv() => {
+                match event {
+                    Ok(crate::event_bus::AppEvent::SchedulerNotification { job_id, job_name, message }) => {
+                        let outbound = WsOutbound::Notification {
+                            event_type: "scheduler_notification".into(),
+                            job_id,
+                            job_name,
+                            message: Some(message),
+                            status: None,
+                            error: None,
+                        };
+                        let json = serde_json::to_string(&outbound).unwrap();
+                        if socket.send(Message::Text(json.into())).await.is_err() {
+                            break;
+                        }
+                    }
+                    Ok(crate::event_bus::AppEvent::SchedulerJobCompleted { job_id, job_name, status, error }) => {
+                        let outbound = WsOutbound::Notification {
+                            event_type: "scheduler_job_completed".into(),
+                            job_id,
+                            job_name,
+                            message: None,
+                            status: Some(status),
+                            error,
+                        };
+                        let json = serde_json::to_string(&outbound).unwrap();
+                        if socket.send(Message::Text(json.into())).await.is_err() {
+                            break;
+                        }
+                    }
+                    Ok(crate::event_bus::AppEvent::Shutdown) => {
+                        break;
+                    }
+                    Ok(_) => {
+                        // Ignore other events on this endpoint
+                    }
+                    Err(broadcast::error::RecvError::Closed) => break,
+                    Err(broadcast::error::RecvError::Lagged(n)) => {
+                        warn!("notification WS lagged by {n} messages");
+                    }
+                }
+            }
+            msg = socket.recv() => {
+                match msg {
+                    Some(Ok(Message::Close(_))) | None => break,
+                    _ => {}
+                }
+            }
+        }
+    }
 }
 
 pub async fn ws_chat(
@@ -334,6 +407,73 @@ mod tests {
             axum::serve(listener, router).await.unwrap();
         });
         port
+    }
+
+    // 8.6.1.15 — WsOutbound::Notification serializes correctly
+    #[test]
+    fn ws_outbound_notification_serializes() {
+        let msg = WsOutbound::Notification {
+            event_type: "scheduler_notification".into(),
+            job_id: "j1".into(),
+            job_name: "test".into(),
+            message: Some("hello".into()),
+            status: None,
+            error: None,
+        };
+        let json = serde_json::to_value(&msg).unwrap();
+        assert_eq!(json["type"], "notification");
+        assert_eq!(json["event_type"], "scheduler_notification");
+        assert_eq!(json["job_id"], "j1");
+        assert_eq!(json["message"], "hello");
+    }
+
+    // 8.6.1.16 — WS notifications endpoint upgrade succeeds
+    #[tokio::test]
+    async fn ws_notifications_upgrade_succeeds() {
+        let (_dir, state) = test_state().await;
+        let port = spawn_server(state).await;
+
+        let url = format!("ws://127.0.0.1:{port}/ws/notifications");
+        let result = tokio_tungstenite::connect_async(&url).await;
+        assert!(result.is_ok(), "Notification WS upgrade should succeed");
+    }
+
+    // 8.6.1.17 — WS notifications forwards scheduler events
+    #[tokio::test]
+    async fn ws_notifications_forwards_events() {
+        let (_dir, state) = test_state().await;
+        let bus = state.event_bus.clone();
+        let port = spawn_server(state).await;
+
+        let url = format!("ws://127.0.0.1:{port}/ws/notifications");
+        let (mut ws, _) = tokio_tungstenite::connect_async(&url).await.unwrap();
+
+        // Give the WS handler time to subscribe
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+
+        // Publish a scheduler notification event
+        bus.publish(crate::event_bus::AppEvent::SchedulerNotification {
+            job_id: "j1".into(),
+            job_name: "test_job".into(),
+            message: "hello from scheduler".into(),
+        })
+        .unwrap();
+
+        // Read the forwarded message
+        let resp = tokio::time::timeout(
+            std::time::Duration::from_secs(2),
+            ws.next(),
+        )
+        .await;
+
+        assert!(resp.is_ok(), "Should receive notification within timeout");
+        let msg = resp.unwrap().unwrap().unwrap();
+        let text = msg.into_text().unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&text).unwrap();
+        assert_eq!(parsed["type"], "notification");
+        assert_eq!(parsed["event_type"], "scheduler_notification");
+        assert_eq!(parsed["job_id"], "j1");
+        assert_eq!(parsed["message"], "hello from scheduler");
     }
 
     // TV.11 — WsOutbound::Text serializes to {"type":"text","content":"..."}

@@ -10,12 +10,15 @@
 	import Plus from '@lucide/svelte/icons/plus';
 	import Pencil from '@lucide/svelte/icons/pencil';
 	import Trash2 from '@lucide/svelte/icons/trash-2';
+	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import { memoryStore } from '$lib/stores/memory.svelte';
 	import { onMount } from 'svelte';
 
 	let query = $state('');
 	let addOpen = $state(false);
 	let editEntry = $state<{ key: string; content: string; category: string } | null>(null);
+	let confirmOpen = $state(false);
+	let deleteTarget = $state<string | null>(null);
 	let newKey = $state('');
 	let newContent = $state('');
 	let newCategory = $state('Core');
@@ -47,8 +50,14 @@
 		editEntry = null;
 	}
 
-	async function handleDelete(key: string) {
-		await memoryStore.remove(key);
+	function handleDelete(key: string) {
+		deleteTarget = key;
+		confirmOpen = true;
+	}
+
+	async function confirmDelete() {
+		if (!deleteTarget) return;
+		await memoryStore.remove(deleteTarget);
 	}
 </script>
 
@@ -182,3 +191,10 @@
 		{/if}
 	</Dialog.Content>
 </Dialog.Root>
+
+<ConfirmDialog
+	bind:open={confirmOpen}
+	title="Delete memory?"
+	description="This will permanently remove this memory entry."
+	onConfirm={confirmDelete}
+/>

@@ -14,10 +14,16 @@
   - [Phase 6: Frontend](#phase-6-frontend--complete)
   - [Phase 7: Desktop App](#phase-7-desktop-app--complete)
   - [Phase 8: Credentials, Channels & Scheduler](#phase-8-credentials-channels--scheduler--in-progress)
-  - [Phase 9: TUI & Cross-Compilation](#phase-9-tui--cross-compilation--not-started)
-  - [Phase 10: CI/CD & Quality](#phase-10-cicd--quality--not-started)
-  - [Phase 11: Documentation & Community](#phase-11-documentation--community--not-started)
-  - [Phase 12: Mobile App](#phase-12-mobile-app--not-started)
+  - [Stage 9: Cross-Compilation & Build Hardening](#stage-9-cross-compilation--build-hardening--not-started)
+  - [Stage 10: CI/CD Pipeline](#stage-10-cicd-pipeline--not-started)
+  - [Stage 11: Quality Gates & Automation](#stage-11-quality-gates--automation--not-started)
+  - [Stage 12: CLI Reference Documentation](#stage-12-cli-reference-documentation--not-started)
+  - [Stage 13: API & Configuration Reference](#stage-13-api--configuration-reference--not-started)
+  - [Stage 14: Architecture & Deployment Docs](#stage-14-architecture--deployment-docs--not-started)
+  - [Stage 15: Community & Open Source Readiness](#stage-15-community--open-source-readiness--not-started)
+- [Future Release](#future-release)
+  - [Stage FR-1: TUI Binary](#stage-fr-1-tui-binary--future-release)
+  - [Stage FR-2: Mobile App](#stage-fr-2-mobile-app--future-release)
 
 ---
 
@@ -55,13 +61,13 @@ flowchart TD
 
 1. **Research** — Search the internet for candidate crates and libraries. Compare alternatives on binary size impact, compile time, maintenance activity, dependency tree depth, and feature completeness. Use Explore agents to scan the v1 codebase for portable patterns relevant to the phase.
 
-2. **Create Plan** — Write a detailed plan to `plans/phaseN_*.md` covering scope, API signatures, data models, dependencies, and tech selection rationale. Document all assumptions and flag any that need user confirmation.
+2. **Create Plan** — Write a detailed plan to `plans/stageN_*.md` covering scope, API signatures, data models, dependencies, and tech selection rationale. Document all assumptions and flag any that need user confirmation.
 
 3. **Gate 1: User Reviews Plan** — Present the plan to the user. If changes are requested, revise and re-present. No code is written until the user explicitly approves the plan.
 
 4. **Gather User Inputs** — Collect design decisions, preferences, and constraints from the user. Document these in the plan file. Never assume — wrong assumptions cost more than a question.
 
-5. **Write Tests (TDD)** — Write unit tests first in `tests/phaseN_*.md` and corresponding test code. Cover success paths, failure paths, and edge cases. Tests exist before any implementation code.
+5. **Write Tests (TDD)** — Write unit tests first in `tests/stageN_*.md` and corresponding test code. Cover success paths, failure paths, and edge cases. Tests exist before any implementation code.
 
 6. **Gate 2: User Reviews Tests** — Present the test design to the user. If changes are requested, revise and re-present. No implementation begins until the user approves the test design.
 
@@ -86,7 +92,7 @@ Each phase has **3 user gates** (plan, tests, completion). All must pass before 
 - [ ] **Tech selection rationale documented** -- for each dependency: why chosen, what was rejected, binary size impact, maintenance status
 - [ ] **Assumptions logged** -- all assumptions listed with rationale, flagged for user confirmation
 - [ ] **Lightweight check** -- verified dependency trees are minimal, no unnecessary bloat
-- [ ] **Detailed plan created** -- `plans/phaseN_*.md` with scope, API signatures, data models, dependencies, rationale
+- [ ] **Detailed plan created** -- `plans/stageN_*.md` with scope, API signatures, data models, dependencies, rationale
 - [ ] **User inputs gathered** -- design decisions, preferences, constraints documented in plan
 - [ ] **User approved plan** -- explicit approval before any code is written
 
@@ -107,7 +113,7 @@ Each phase has **3 user gates** (plan, tests, completion). All must pass before 
 
 ```mermaid
 gantt
-    title MesoClaw Implementation Phases (23 Steps / 12 Phases)
+    title MesoClaw Implementation Stages
     dateFormat X
     axisFormat %s
 
@@ -126,16 +132,41 @@ gantt
     section Desktop
     Phase 7 - Desktop App               :done, p7, after p6, 1
     section Credentials/Channels
-    Phase 8 - Credentials, Channels & Scheduler :active, p8, after p7, 1
-    section TUI/Cross
-    Phase 9 - TUI & Cross-Compilation   :p9, after p8, 1
+    Phase 8 - Credentials, Channels & Scheduler :done, p8, after p7, 1
+    section Cross-Compile
+    Stage 9 - Cross-Compilation         :s9, after p8, 1
     section CI/CD
-    Phase 10 - CI/CD & Quality          :p10, after p9, 1
-    section Docs
-    Phase 11 - Documentation & Community :p11, after p10, 1
-    section Mobile
-    Phase 12 - Mobile App               :p12, after p11, 1
+    Stage 10 - CI/CD Pipeline           :s10, after s9, 1
+    section Quality + Docs
+    Stage 11 - Quality Gates            :s11, after s10, 1
+    Stage 12 - CLI Reference            :s12, after p8, 1
+    Stage 13 - API/Config Reference     :s13, after s12, 1
+    section Deploy + Community
+    Stage 14 - Architecture/Deployment  :s14, after s13, 1
+    Stage 15 - Community                :s15, after s13, 1
+    section Future
+    FR-1 - TUI Binary                   :milestone, fr1, after s15, 0
+    FR-2 - Mobile App                   :milestone, fr2, after s15, 0
 ```
+
+### Parallel Execution Map
+
+```
+Phase 8 (done) ─────┐
+                    ├──> [Group A] Stage 9 (Cross-Compile) ──> Stage 10 (CI/CD)
+                    │                                              │
+                    │                                              ├──> [Group B] Stage 11 (Quality Gates)
+                    │                                              │
+                    └──> [Group A] Stage 12 (CLI Docs) ──────> [Group B] Stage 13 (API/Config Docs)
+                                                                   │
+                                                                   ├──> [Group C] Stage 14 (Arch/Deploy)
+                                                                   └──> [Group C] Stage 15 (Community)
+```
+
+- **Group A**: Stage 9 + Stage 12 run in parallel (independent concerns)
+- **Group B**: Stage 11 + Stage 13 run in parallel (after Stage 10/12)
+- **Group C**: Stage 14 + Stage 15 run in parallel (after Stage 13)
+- Stage 10 depends on Stage 9 (CI needs cross-compilation targets)
 
 ## Phase Details
 
@@ -303,7 +334,7 @@ gantt
 - Single-instance enforcement (second launch focuses existing window)
 - Frontend integration: `@tauri-apps/api` 2.10.1, `web/src/lib/tauri.ts` wrapper with `isTauri` detection
 - Linux WebKit DMA-BUF renderer fix in `main.rs`
-- Mobile deferred to Phase 12
+- Mobile deferred to Future Release
 
 **New dependencies**: tauri 2.10.3, tauri-build 2.5.6, tauri-plugin-window-state 2.4.1, tauri-plugin-single-instance 2.4.0, tauri-plugin-opener 2.5.3, tauri-plugin-devtools 2.0.1, url 2, opener 0.8, @tauri-apps/api 2.10.1, @tauri-apps/cli 2.10.1
 - **Tests**: 7 unit tests (gateway mode resolution, data dir, tray menu), 354 total Rust workspace tests. Zero clippy warnings.
@@ -312,7 +343,7 @@ gantt
 
 ---
 
-### Phase 8: Credentials, Channels & Scheduler — `[IN PROGRESS]`
+### Phase 8: Credentials, Channels & Scheduler — `[COMPLETE]`
 
 **Step 15.1: Credential & Provider Management — `[COMPLETE]`**
 - `KeyringStore` -- OS-native credential storage (keyring crate v3) with async probe fallback to InMemoryCredentialStore
@@ -341,10 +372,10 @@ gantt
 - Config: `channels_enabled`, Telegram-specific settings (polling timeout, DM policy, retry, group mention)
 - `WebSearchTool` refactored to use `websearch` crate with Tavily → Brave → DuckDuckGo provider cascade
 
-**Step 15.3: Context Management — `[IN PROGRESS]`**
-- Plan covers multi-turn context continuity, cross-session memory recall, and adaptive context strategies
-- 52 core context unit tests planned (ContextEngine lifecycle, BootContext, tier injection, cache invalidation, summary generation)
-- Sub-steps 15.3.1 (Tool Visibility) and 15.3.2 (Web Search refactor) are complete; core context tests remain unimplemented
+**Step 15.3: Context Management — `[COMPLETE]`**
+- Multi-turn context continuity, cross-session memory recall, and adaptive context strategies
+- Core context tests implemented as part of Stage 8.9 test debt
+- Sub-steps 15.3.1 (Tool Visibility) and 15.3.2 (Web Search refactor) complete
 - Plan: [plans/phase8.3_context.md](../plans/phase8.3_context.md), Test plan: [tests/phase8.3_context.md](../tests/phase8.3_context.md)
 
 **Step 15.3.1: Tool Visibility — `[COMPLETE]`**
@@ -394,117 +425,182 @@ gantt
 - 52 core tests + 6 CLI tests passing
 - Plan: [plans/phase8.6_scheduler.md](../plans/phase8.6_scheduler.md), Test plan: [tests/phase8.6_scheduler.md](../tests/phase8.6_scheduler.md)
 
-**Stage 8.6.1: Scheduler Notification & Payload Execution — `[NOT STARTED]`**
-- Wire real execution for all 4 scheduler payloads (Notify, AgentTurn, Heartbeat, SendViaChannel)
-- PayloadExecutor module with event bus integration
-- OnceCell pattern for TokioScheduler ↔ AppState circular dependency
-- WebSocket `/ws/notifications` push endpoint
-- Frontend toast notifications (`svelte-sonner`)
-- Desktop OS notifications (`tauri-plugin-notification`)
+**Stage 8.6.1: Scheduler Notification & Payload Execution — `[COMPLETE]`**
+- `PayloadExecutor` -- real execution for all 4 scheduler payloads (Notify, AgentTurn, Heartbeat, SendViaChannel)
+- OnceCell pattern for TokioScheduler <-> AppState circular dependency
+- WebSocket `/ws/notifications` push endpoint for real-time notification delivery
+- Frontend toast notifications via `svelte-sonner` with notification store
+- Desktop OS notifications via `tauri-plugin-notification` (permission request + send)
+- Event bus integration for notification propagation
 - Plan: [plans/phase8.6.1_scheduler_notification.md](../plans/phase8.6.1_scheduler_notification.md), Test plan: [tests/phase8.6.1_scheduler_notification.md](../tests/phase8.6.1_scheduler_notification.md)
 
-**Stage 8.7: Channel Router Orchestrator — `[NOT STARTED]`**
-- End-to-end message pipeline: channel → session → tools → context → agent → format → send
-- ChannelRouter struct with start/stop/handle_message lifecycle
-- Boot integration and AppState wiring
-- Channel message webhook endpoint
-- Frontend channel badges in session sidebar
+**Stage 8.7: Channel Router Orchestrator — `[COMPLETE]`**
+- `ChannelRouter` -- end-to-end message pipeline: channel -> session -> tools -> context -> agent -> format -> send
+- `handle_message()` orchestrates full request lifecycle with tool policy filtering and platform formatting
+- Boot integration and AppState wiring via OnceCell
+- Channel message webhook endpoint (`POST /channels/{name}/webhook`)
+- Frontend channel badges in session sidebar showing message source
 - Plan: [plans/phase8.7_channel_router.md](../plans/phase8.7_channel_router.md), Test plan: [tests/phase8.7_channel_router.md](../tests/phase8.7_channel_router.md)
 
-**Stage 8.8: Channel Lifecycle Hooks — `[NOT STARTED]`**
-- Telegram: status messages + typing refresh loop
-- Slack: ephemeral messages
-- Discord: typing indicator
-- Hooks wired into ChannelRouter pipeline
-- 8 manual tests requiring live bot tokens
+**Stage 8.8: Channel Lifecycle Hooks — `[COMPLETE]`**
+- Telegram: `on_agent_start` status messages, `on_tool_use` tool notifications, `on_agent_complete` typing refresh loop
+- Slack: ephemeral messages for processing status
+- Discord: typing indicator during agent processing
+- `ChannelLifecycle` trait hooks wired into ChannelRouter pipeline
+- 8 manual tests requiring live bot tokens (documented in test plan)
 - Plan: [plans/phase8.8_channel_lifecycle.md](../plans/phase8.8_channel_lifecycle.md), Test plan: [tests/phase8.8_channel_lifecycle.md](../tests/phase8.8_channel_lifecycle.md)
 
-**Stage 8.9: Test Debt & Hardening — `[NOT STARTED]`**
-- ProcessTool kill action (sysinfo-based, Full autonomy gate)
-- 52 core context unit tests (ContextEngine, BootContext, tiers, cache, summaries)
+**Stage 8.9: Test Debt & Hardening — `[COMPLETE]`**
+- ProcessTool kill action implemented (sysinfo-based, Full autonomy gate)
+- Core context unit tests implemented (ContextEngine, BootContext, tiers, cache, summaries)
 - Agent tool loop integration tests 4.8-4.12 (mock LLM)
-- Manual tests requiring API keys (CLI, web search, tool error recovery)
+- Hardening across scheduler, channels, and context modules
 - Plan: [plans/phase8.9_test_debt.md](../plans/phase8.9_test_debt.md), Test plan: [tests/phase8.9_test_debt.md](../tests/phase8.9_test_debt.md)
-
-**Execution Strategy**:
-- Track A: 8.6.1 → 8.7 → 8.8 (sequential, each depends on prior)
-- Track B: 8.9 (independent, runs in parallel with Track A)
 
 **New dependencies (15.1)**: keyring 3, websearch (workspace)
 **New dependencies (15.2)**: teloxide 0.13+ (channels-telegram), serenity 0.12+ (channels-discord)
 **New dependencies (8.6.1)**: svelte-sonner (web), tauri-plugin-notification v2 (desktop)
-- **Tests**: 182 new tests across completed steps (616 total Rust + 26 JS), all passing. Zero clippy warnings.
-- **Remaining**: 128 tests across stages 8.6.1-8.9 (109 Rust + 4 JS + 15 manual)
+- **Tests**: ~340 new tests across all steps (827 total Rust + 33 JS), 5 ignored, 0 failures. Zero clippy warnings.
 - **Plans**: [plans/phase8.1_credentials.md](../plans/phase8.1_credentials.md), [plans/phase8.2_channels.md](../plans/phase8.2_channels.md), [plans/phase8.3_context.md](../plans/phase8.3_context.md), [plans/phase8.4_context_agent.md](../plans/phase8.4_context_agent.md), [plans/phase8.5_channel_router.md](../plans/phase8.5_channel_router.md), [plans/phase8.6_scheduler.md](../plans/phase8.6_scheduler.md), [plans/phase8.6.1_scheduler_notification.md](../plans/phase8.6.1_scheduler_notification.md), [plans/phase8.7_channel_router.md](../plans/phase8.7_channel_router.md), [plans/phase8.8_channel_lifecycle.md](../plans/phase8.8_channel_lifecycle.md), [plans/phase8.9_test_debt.md](../plans/phase8.9_test_debt.md)
 - **Test plans**: [tests/phase8.1_credentials.md](../tests/phase8.1_credentials.md), [tests/phase8.2_channels.md](../tests/phase8.2_channels.md), [tests/phase8.3_context.md](../tests/phase8.3_context.md), [tests/phase8.3.1_tool_visibility.md](../tests/phase8.3.1_tool_visibility.md), [tests/phase8.3.2_web_search.md](../tests/phase8.3.2_web_search.md), [tests/phase8.4_context_agent.md](../tests/phase8.4_context_agent.md), [tests/phase8.5_channel_router.md](../tests/phase8.5_channel_router.md), [tests/phase8.6_scheduler.md](../tests/phase8.6_scheduler.md), [tests/phase8.6.1_scheduler_notification.md](../tests/phase8.6.1_scheduler_notification.md), [tests/phase8.7_channel_router.md](../tests/phase8.7_channel_router.md), [tests/phase8.8_channel_lifecycle.md](../tests/phase8.8_channel_lifecycle.md), [tests/phase8.9_test_debt.md](../tests/phase8.9_test_debt.md)
 
 ---
 
-### Phase 9: Mobile App — `[NOT STARTED]`
+### Stage 9: Cross-Compilation & Build Hardening — `[NOT STARTED]`
 
-**Step 23: Mobile Binary**
-- Tauri 2 iOS + Android targets
-- In-process gateway (no separate daemon needed)
-- Responsive layout adapting to mobile screens
+**Scope**: Docker-based cross-compilation, ARM64 Linux (Raspberry Pi), macOS universal binaries, binary size optimization, smoke testing.
 
-- **Tests**: mobile build, responsive layout, in-process gateway
-- **Plan**: [plans/phase12_mobile.md](../plans/phase12_mobile.md)
+- Enhance `scripts/build.sh` with Docker-based cross-compilation (port v1 patterns)
+- ARM64 Linux (Raspberry Pi 4/5) -- daemon + CLI binaries
+- Additional Linux boards: armv7 (Raspberry Pi 3, Orange Pi), aarch64-musl (Alpine/embedded)
+- Windows via mingw-w64 (daemon + CLI)
+- macOS universal binary via `lipo` (merge aarch64 + x86_64)
+- Cargo workspace profiles: release (lto=true, opt-level="z"), ci-release (lto="thin"), release-fast (debug=true)
+- Smoke test script for built binaries
+- `Dockerfile.cross-compile` (multi-stage, port v1 pattern)
+- CLI installable standalone; desktop bundles are self-contained
+
+- **Plan**: [plans/stage9_cross_compilation.md](../plans/stage9_cross_compilation.md)
+- **Test plan**: [tests/stage9_cross_compilation.md](../tests/stage9_cross_compilation.md)
 
 ---
 
-### Phase 10: TUI & Cross-Compilation — `[NOT STARTED]`
+### Stage 10: CI/CD Pipeline — `[NOT STARTED]`
 
-**Step 17: TUI Binary**
-- ratatui + crossterm
+**Scope**: GitHub Actions CI/CD, PR checks, release workflow, multi-platform artifact generation.
+
+- PR check workflow (`.github/workflows/ci.yml`): cargo check/test/clippy/fmt, bun build/test, cargo-audit, cross-check
+- Release workflow (`.github/workflows/release.yml`): tag-triggered, multi-platform build matrix
+- Build targets: Linux x86_64 + ARM64 + armv7, macOS universal, Windows x86_64
+- Desktop bundles via tauri-action: deb, AppImage, rpm, msi, nsis, dmg
+- Apple code signing with secrets
+- `.github/dependabot.yml`, `.github/labeler.yml`, `.github/stale.yml`
+- `scripts/release.sh`: version sync across Cargo.toml, package.json, tauri.conf.json
+
+- **Plan**: [plans/stage10_cicd_pipeline.md](../plans/stage10_cicd_pipeline.md)
+- **Test plan**: [tests/stage10_cicd_pipeline.md](../tests/stage10_cicd_pipeline.md)
+
+---
+
+### Stage 11: Quality Gates & Automation — `[NOT STARTED]`
+
+**Scope**: Automated quality enforcement, security scanning, code coverage, binary size tracking.
+
+- `cargo-audit` vulnerability scanning with CVE allowlist
+- Banned pattern checks: `std::sync::Mutex` in async, `block_on()`, `println!()` in lib, `Result<T, String>`
+- Code coverage (cargo-llvm-cov + codecov.io)
+- Binary size tracking with regression warnings
+- Workspace lints: `unsafe_code = "deny"`, `unwrap_used = "warn"`
+- `scripts/quality-check.sh` for local validation
+
+- **Plan**: [plans/stage11_quality_gates.md](../plans/stage11_quality_gates.md)
+- **Test plan**: [tests/stage11_quality_gates.md](../tests/stage11_quality_gates.md)
+
+---
+
+### Stage 12: CLI Reference Documentation — `[NOT STARTED]`
+
+**Scope**: Comprehensive CLI command reference, installation guide, recipes, shell completions.
+
+- `docs/cli-reference.md` with all command groups and subcommands
+- Installation: binary download, `cargo install mesoclaw-cli`, package managers (future)
+- Quick start guide, global options, environment variables, exit codes
+- Shell completions via `clap_complete` (`--generate-completions <SHELL>`)
+- Recipes: setup from scratch, switch provider, schedule reports, connect Telegram, backup/restore
+
+- **Plan**: [plans/stage12_cli_reference.md](../plans/stage12_cli_reference.md)
+- **Test plan**: [tests/stage12_cli_reference.md](../tests/stage12_cli_reference.md)
+
+---
+
+### Stage 13: API & Configuration Reference — `[NOT STARTED]`
+
+**Scope**: Full REST/WS API reference, configuration reference, error codes.
+
+- `docs/api-reference.md`: all 72+ gateway routes with request/response JSON schemas
+- Authentication, error codes (all MESO_*), WebSocket protocol
+- `docs/configuration.md`: all 55+ AppConfig fields from `schema.rs`
+- Grouped by subsystem, environment variable overrides, feature flag impact
+
+- **Plan**: [plans/stage13_api_config_reference.md](../plans/stage13_api_config_reference.md)
+- **Test plan**: [tests/stage13_api_config_reference.md](../tests/stage13_api_config_reference.md)
+
+---
+
+### Stage 14: Architecture & Deployment Docs — `[NOT STARTED]`
+
+**Scope**: Deployment guide, development guide, Docker support, architecture finalization.
+
+- Update `docs/architecture.md` with Phase 8 completions
+- `docs/deployment.md`: native, Docker, systemd, Raspberry Pi, reverse proxy, SSL, backup, monitoring
+- `docs/development.md`: prerequisites, building, testing, contributing workflows, debugging tips
+- `Dockerfile` (multi-stage), `docker-compose.yml`
+
+- **Plan**: [plans/stage14_architecture_deployment.md](../plans/stage14_architecture_deployment.md)
+- **Test plan**: [tests/stage14_architecture_deployment.md](../tests/stage14_architecture_deployment.md)
+
+---
+
+### Stage 15: Community & Open Source Readiness — `[NOT STARTED]`
+
+**Scope**: Community files, templates, changelog, README polish, badges.
+
+- `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SECURITY.md`
+- `.github/ISSUE_TEMPLATE/bug_report.md`, `.github/ISSUE_TEMPLATE/feature_request.md`
+- `.github/PULL_REQUEST_TEMPLATE.md`
+- `CHANGELOG.md` (keep-a-changelog format)
+- README badges: CI status, license, crate version, coverage
+- Final README.md polish with all doc links
+
+- **Plan**: [plans/stage15_community.md](../plans/stage15_community.md)
+- **Test plan**: [tests/stage15_community.md](../tests/stage15_community.md)
+
+---
+
+## Future Release
+
+The following stages are planned for a future release cycle and are not part of the current implementation roadmap.
+
+### Stage FR-1: TUI Binary — `[FUTURE RELEASE]`
+
+**Scope**: ratatui + crossterm terminal interface
+
 - Four-pane layout: sessions list, chat, input, status bar
 - Vim-style keybindings
+- WebSocket streaming integration
+- Connects to daemon via HTTP/WS (same as CLI)
 
-**Step 18: Cross-Compilation**
-- ARM daemon build for Raspberry Pi
-- Cross-compilation toolchain setup
-- Minimal binary size for embedded targets
-
-- **Tests**: TUI rendering, keybinding dispatch, cross-compilation smoke test
-- **Plan**: [plans/phase9_tui_cross.md](../plans/phase9_tui_cross.md)
+This stage was originally Phase 9 Step 17. It has been deferred because the CLI provides adequate terminal interaction, and development priority is on cross-compilation, CI/CD, documentation, and community readiness.
 
 ---
 
-### Phase 11: CI/CD & Quality — `[NOT STARTED]`
+### Stage FR-2: Mobile App — `[FUTURE RELEASE]`
 
-**Step 19: GitHub Actions CI/CD**
-- PR checks: cargo test, clippy, fmt, frontend lint
-- Release workflow: build all binaries per platform
-- `tauri-action` for desktop installer packaging
-- Mobile build pipeline (iOS + Android)
+**Scope**: Tauri 2 iOS + Android targets
 
-**Step 20: CI Quality Gates**
-- `cargo-audit` for dependency vulnerability scanning
-- `grep` checks for banned patterns (std::sync::Mutex in async, block_on, println!)
-- Frontend lint + type checking
+- In-process gateway (no separate daemon needed)
+- Responsive layout adapting to mobile screens
+- Platform-specific mobile adaptations
+- App Store / Play Store distribution
 
-- **Tests**: CI config validation, quality gate script execution
-- **Plan**: [plans/phase10_cicd_quality.md](../plans/phase10_cicd_quality.md)
-
----
-
-### Phase 12: Documentation & Community — `[NOT STARTED]`
-
-**Step 21: Documentation**
-- README with badges, screenshots, quick-start
-- Architecture docs with Mermaid diagrams
-- Gateway API reference
-- Configuration reference
-- Channels integration guide
-- Deployment guide (native, Docker, Raspberry Pi)
-- Development guide (contributing setup, testing, building)
-
-**Step 22: Community**
-- CONTRIBUTING.md
-- CODE_OF_CONDUCT.md
-- Issue templates (bug report, feature request)
-- PR template
-- SECURITY.md (vulnerability disclosure)
-
-- **Tests**: link validation, markdown lint
-- **Plan**: [plans/phase11_docs_community.md](../plans/phase11_docs_community.md)
-
+This stage was originally Phase 12. It has been deferred because mobile deployment requires mature CI/CD and cross-compilation infrastructure (Stages 9-10), and the desktop app serves the primary user interface needs.

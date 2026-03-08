@@ -93,13 +93,37 @@ impl Tool for ProcessTool {
                 if self.policy.autonomy_level != AutonomyLevel::Full {
                     return Ok(ToolResult::err("Kill requires Full autonomy mode"));
                 }
-                let _pid = args
+                let pid = args
                     .get("pid")
                     .and_then(|v| v.as_u64())
                     .ok_or_else(|| MesoError::Tool("missing 'pid' argument for kill".into()))?;
 
-                // STUB: actual kill implementation deferred
-                Ok(ToolResult::err("Process kill not yet implemented"))
+                let pid_u32 = pid as u32;
+                let result = tokio::task::spawn_blocking(move || {
+                    let sys = sysinfo::System::new_with_specifics(
+                        sysinfo::RefreshKind::nothing()
+                            .with_processes(sysinfo::ProcessRefreshKind::nothing()),
+                    );
+                    let sysinfo_pid = sysinfo::Pid::from_u32(pid_u32);
+                    match sys.process(sysinfo_pid) {
+                        Some(process) => {
+                            if process.kill() {
+                                format!("Process {pid_u32} killed successfully")
+                            } else {
+                                format!("Failed to kill process {pid_u32}")
+                            }
+                        }
+                        None => format!("Process {pid_u32} not found"),
+                    }
+                })
+                .await
+                .map_err(|e| MesoError::Tool(format!("spawn error: {e}")))?;
+
+                if result.contains("not found") || result.contains("Failed") {
+                    Ok(ToolResult::err(result))
+                } else {
+                    Ok(ToolResult::ok(result))
+                }
             }
             unknown => Ok(ToolResult::err(format!("Unknown action: {unknown}"))),
         }
@@ -163,6 +187,40 @@ mod tests {
             .await
             .unwrap();
         assert!(!result.success);
+    }
+
+    // 8.9.1 — kill with non-Full autonomy returns error
+    #[tokio::test]
+    async fn kill_non_full_autonomy_errors() {
+        let tool = ProcessTool::new(policy(AutonomyLevel::ReadOnly), 200);
+        let result = tool
+            .execute(serde_json::json!({"action": "kill", "pid": 1}))
+            .await
+            .unwrap();
+        assert!(!result.success);
+        assert!(result.output.contains("Full autonomy"));
+    }
+
+    // 8.9.2 — kill without pid arg returns MesoError::Tool
+    #[tokio::test]
+    async fn kill_without_pid_returns_error() {
+        let tool = ProcessTool::new(policy(AutonomyLevel::Full), 200);
+        let result = tool.execute(serde_json::json!({"action": "kill"})).await;
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(matches!(err, crate::MesoError::Tool(_)));
+    }
+
+    // 8.9.3 — kill with nonexistent PID returns "not found"
+    #[tokio::test]
+    async fn kill_nonexistent_pid_not_found() {
+        let tool = ProcessTool::new(policy(AutonomyLevel::Full), 200);
+        let result = tool
+            .execute(serde_json::json!({"action": "kill", "pid": 999999999}))
+            .await
+            .unwrap();
+        assert!(!result.success);
+        assert!(result.output.contains("not found"));
     }
 
     #[test]

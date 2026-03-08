@@ -82,6 +82,8 @@ pub fn boot_gateway(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Erro
         match mesoclaw_core::boot::init_services(config).await {
             Ok(services) => {
                 let state = Arc::new(mesoclaw_core::gateway::state::AppState::from(services));
+                #[cfg(feature = "scheduler")]
+                state.wire_scheduler();
                 let gateway = mesoclaw_core::gateway::GatewayServer::new(state);
 
                 info!("Starting embedded gateway on {host}:{port}");
@@ -124,6 +126,21 @@ pub fn show_window(window: tauri::WebviewWindow) -> Result<(), String> {
 #[tauri::command]
 pub fn get_app_version(app: tauri::AppHandle) -> String {
     app.package_info().version.to_string()
+}
+
+#[tauri::command]
+pub fn show_notification(
+    app: tauri::AppHandle,
+    title: String,
+    body: String,
+) -> Result<(), String> {
+    use tauri_plugin_notification::NotificationExt;
+    app.notification()
+        .builder()
+        .title(&title)
+        .body(&body)
+        .show()
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]

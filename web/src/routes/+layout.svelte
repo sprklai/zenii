@@ -6,7 +6,7 @@
 	import AuthGate from '$lib/components/AuthGate.svelte';
 	import SessionList from '$lib/components/SessionList.svelte';
 	import ThemeToggle from '$lib/components/ThemeToggle.svelte';
-	import Brain from '@lucide/svelte/icons/brain';
+	import { Toaster } from 'svelte-sonner';
 	import Home from '@lucide/svelte/icons/home';
 	import Database from '@lucide/svelte/icons/database';
 	import Settings from '@lucide/svelte/icons/settings';
@@ -14,28 +14,34 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { sessionsStore } from '$lib/stores/sessions.svelte';
-	import { onMount } from 'svelte';
+	import { notificationStore } from '$lib/stores/notifications.svelte';
+	import { onMount, onDestroy } from 'svelte';
 
 	let { children } = $props();
 
 	onMount(() => {
 		sessionsStore.load();
+		notificationStore.connect('http://127.0.0.1:18981');
+	});
+
+	onDestroy(() => {
+		notificationStore.disconnect();
 	});
 
 	const navItems = [
 		{ href: '/', icon: Home, label: 'Home' },
 		{ href: '/memory', icon: Database, label: 'Memory' },
-		{ href: '/settings', icon: Settings, label: 'Settings' },
 		{ href: '/schedule', icon: Calendar, label: 'Schedule' }
 	];
 </script>
 
+<Toaster richColors />
 <AuthGate>
 	<Sidebar.Provider>
 		<Sidebar.Root>
-			<Sidebar.Header>
+			<Sidebar.Header class="sticky top-0 z-10 bg-sidebar-accent/50 border-b border-sidebar-border">
 				<div class="flex items-center gap-2 px-2 py-1">
-					<Brain class="h-6 w-6 text-primary" />
+					<img src="/logo.png" alt="MesoClaw" class="h-6 w-6" />
 					<span class="font-semibold text-lg">MesoClaw</span>
 				</div>
 			</Sidebar.Header>
@@ -64,15 +70,26 @@
 				<SessionList />
 			</Sidebar.Content>
 
-			<Sidebar.Footer>
+			<Sidebar.Footer class="sticky bottom-0 z-10 bg-sidebar-accent/50 border-t border-sidebar-border">
+				<Sidebar.Menu>
+					<Sidebar.MenuItem>
+						<Sidebar.MenuButton
+							isActive={page.url.pathname.startsWith('/settings')}
+							onclick={() => goto('/settings')}
+						>
+							<Settings class="h-4 w-4" />
+							<span>Settings</span>
+						</Sidebar.MenuButton>
+					</Sidebar.MenuItem>
+				</Sidebar.Menu>
 				<ThemeToggle />
 			</Sidebar.Footer>
 		</Sidebar.Root>
 
 		<main class="flex-1 overflow-hidden">
 			<div class="flex h-full items-start">
-				<Sidebar.Trigger class="m-2" />
-				<div class="flex-1 h-full overflow-auto p-4">
+				<Sidebar.Trigger class="m-2 shrink-0" />
+				<div class="flex-1 h-full overflow-auto p-2 sm:p-4 md:p-6">
 					{@render children()}
 				</div>
 			</div>

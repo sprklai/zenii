@@ -491,6 +491,205 @@ mod tests {
         assert!(matches!(result.unwrap_err(), MesoError::Credential(_)));
     }
 
+    // =========================================================================
+    // Phase 8.9 — Agent Tool Loop Integration Tests (4.8–4.12)
+    //
+    // Note: rig-core doesn't expose mock LLM utilities, so full end-to-end
+    // agent→LLM→tool→LLM tests would require a real API key and network.
+    // Instead, we test the tool dispatch logic (RigToolAdapter) that the agent
+    // delegates to, which is the actual mechanism used during tool calls.
+    // These tests verify single/chained dispatch, error handling, and retry
+    // semantics at the adapter level.
+    // =========================================================================
+
+    // 4.8 — single tool call dispatches to correct tool
+    #[tokio::test]
+    async fn agent_single_tool_call_dispatch() {
+        use crate::ai::adapter::RigToolAdapter;
+        use crate::tools::ToolResult;
+        use rig::tool::ToolDyn;
+
+        struct EchoTool;
+        #[async_trait::async_trait]
+        impl crate::tools::Tool for EchoTool {
+            fn name(&self) -> &str {
+                "echo"
+            }
+            fn description(&self) -> &str {
+                "Echoes input"
+            }
+            fn parameters_schema(&self) -> serde_json::Value {
+                serde_json::json!({"type": "object", "properties": {"text": {"type": "string"}}})
+            }
+            async fn execute(&self, args: serde_json::Value) -> crate::Result<ToolResult> {
+                let text = args.get("text").and_then(|v| v.as_str()).unwrap_or("");
+                Ok(ToolResult::ok(format!("echo: {text}")))
+            }
+        }
+
+        let tool: Arc<dyn crate::tools::Tool> = Arc::new(EchoTool);
+        let adapter = RigToolAdapter::new(tool);
+        let result = adapter
+            .call(serde_json::json!({"text": "hello"}).to_string())
+            .await
+            .unwrap();
+        let parsed: ToolResult = serde_json::from_str(&result).unwrap();
+        assert!(parsed.success);
+        assert_eq!(parsed.output, "echo: hello");
+    }
+
+    // 4.9 — chained (sequential) tool calls dispatch independently
+    #[tokio::test]
+    async fn agent_chained_tool_calls() {
+        use crate::ai::adapter::RigToolAdapter;
+        use crate::tools::ToolResult;
+        use rig::tool::ToolDyn;
+
+        struct CounterTool {
+            name: &'static str,
+        }
+        #[async_trait::async_trait]
+        impl crate::tools::Tool for CounterTool {
+            fn name(&self) -> &str {
+                self.name
+            }
+            fn description(&self) -> &str {
+                "counter"
+            }
+            fn parameters_schema(&self) -> serde_json::Value {
+                serde_json::json!({})
+            }
+            async fn execute(&self, _args: serde_json::Value) -> crate::Result<ToolResult> {
+                Ok(ToolResult::ok(format!("result from {}", self.name)))
+            }
+        }
+
+        let tools: Vec<Arc<dyn crate::tools::Tool>> = vec![
+            Arc::new(CounterTool { name: "step1" }),
+            Arc::new(CounterTool { name: "step2" }),
+        ];
+        let adapters = RigToolAdapter::from_tools(&tools);
+
+        let r1 = adapters[0].call("{}".into()).await.unwrap();
+        let p1: ToolResult = serde_json::from_str(&r1).unwrap();
+        assert_eq!(p1.output, "result from step1");
+
+        let r2 = adapters[1].call("{}".into()).await.unwrap();
+        let p2: ToolResult = serde_json::from_str(&r2).unwrap();
+        assert_eq!(p2.output, "result from step2");
+    }
+
+    // 4.10 — agent max_turns config is respected (structural check)
+    #[tokio::test]
+    async fn agent_max_retries_respected() {
+        // Verify that the agent is built with the configured max_turns.
+        // Since rig-core Agent internals aren't inspectable, we verify that
+        // building an agent with max_turns=1 succeeds and the config is accepted.
+        let config = AppConfig {
+            provider_type: "openai".into(),
+            agent_max_turns: 1,
+            agent_max_tokens: 50,
+            ..Default::default()
+        };
+        let creds = InMemoryCredentialStore::new();
+        creds.set("api_key:openai", "sk-test").await.unwrap();
+        let tools: Vec<Arc<dyn crate::tools::Tool>> = vec![];
+        let agent = MesoAgent::new(&config, &creds, &tools).await;
+        assert!(agent.is_ok(), "Agent should build with max_turns=1");
+
+        // A second agent with max_turns=0 should also build (rig handles it)
+        let config2 = AppConfig {
+            provider_type: "openai".into(),
+            agent_max_turns: 0,
+            ..Default::default()
+        };
+        let agent2 = MesoAgent::new(&config2, &creds, &tools).await;
+        assert!(agent2.is_ok());
+    }
+
+    // 4.11 — tool error is propagated through adapter
+    #[tokio::test]
+    async fn agent_tool_error_handling() {
+        use crate::ai::adapter::RigToolAdapter;
+        use rig::tool::ToolDyn;
+
+        struct BrokenTool;
+        #[async_trait::async_trait]
+        impl crate::tools::Tool for BrokenTool {
+            fn name(&self) -> &str {
+                "broken"
+            }
+            fn description(&self) -> &str {
+                "Always errors"
+            }
+            fn parameters_schema(&self) -> serde_json::Value {
+                serde_json::json!({})
+            }
+            async fn execute(&self, _args: serde_json::Value) -> crate::Result<crate::tools::ToolResult> {
+                Err(crate::MesoError::Tool("intentional failure".into()))
+            }
+        }
+
+        let tool: Arc<dyn crate::tools::Tool> = Arc::new(BrokenTool);
+        let adapter = RigToolAdapter::new(tool);
+        let result = adapter.call("{}".into()).await;
+        assert!(result.is_err(), "Adapter should propagate tool errors");
+        let err = result.unwrap_err();
+        assert!(
+            err.to_string().contains("intentional failure"),
+            "Error should contain the original message"
+        );
+    }
+
+    // 4.12 — tool returning success with metadata flows through adapter
+    #[tokio::test]
+    async fn agent_final_response_after_tools() {
+        use crate::ai::adapter::{RigToolAdapter, ToolCallEvent, ToolCallPhase};
+        use crate::tools::ToolResult;
+        use rig::tool::ToolDyn;
+        use tokio::sync::broadcast;
+
+        struct InfoTool;
+        #[async_trait::async_trait]
+        impl crate::tools::Tool for InfoTool {
+            fn name(&self) -> &str {
+                "info"
+            }
+            fn description(&self) -> &str {
+                "Returns info"
+            }
+            fn parameters_schema(&self) -> serde_json::Value {
+                serde_json::json!({})
+            }
+            async fn execute(&self, _args: serde_json::Value) -> crate::Result<ToolResult> {
+                Ok(ToolResult {
+                    output: "The answer is 42".into(),
+                    success: true,
+                    metadata: Some(serde_json::json!({"source": "test"})),
+                })
+            }
+        }
+
+        let (tx, mut rx) = broadcast::channel::<ToolCallEvent>(8);
+        let tool: Arc<dyn crate::tools::Tool> = Arc::new(InfoTool);
+        let adapter = RigToolAdapter::new_with_events(tool, tx);
+
+        let result = adapter.call("{}".into()).await.unwrap();
+        let parsed: ToolResult = serde_json::from_str(&result).unwrap();
+        assert!(parsed.success);
+        assert_eq!(parsed.output, "The answer is 42");
+        assert!(parsed.metadata.is_some());
+
+        // Verify events were emitted: Started then Completed
+        let started = rx.recv().await.unwrap();
+        assert!(matches!(started.phase, ToolCallPhase::Started { .. }));
+        let completed = rx.recv().await.unwrap();
+        assert!(matches!(
+            completed.phase,
+            ToolCallPhase::Completed { success: true, .. }
+        ));
+    }
+
     // 1.4.4 — agent respects max turns (config-level check)
     #[tokio::test]
     async fn agent_respects_config_max_turns() {

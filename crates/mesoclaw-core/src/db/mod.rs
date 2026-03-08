@@ -236,6 +236,23 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
         conn.execute_batch("PRAGMA user_version = 7;")?;
     }
 
+    if version < 8 {
+        // Add supports_tools column to ai_models table
+        let has_supports_tools: bool = conn
+            .prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='ai_models'")
+            .and_then(|mut stmt| stmt.query_row([], |row| row.get::<_, String>(0)))
+            .map(|sql| sql.contains("supports_tools"))
+            .unwrap_or(false);
+
+        if !has_supports_tools {
+            conn.execute_batch(
+                "ALTER TABLE ai_models ADD COLUMN supports_tools INTEGER NOT NULL DEFAULT 1;",
+            )?;
+        }
+
+        conn.execute_batch("PRAGMA user_version = 8;")?;
+    }
+
     Ok(())
 }
 
@@ -285,7 +302,7 @@ mod tests {
         let version: u32 = conn
             .pragma_query_value(None, "user_version", |r| r.get(0))
             .unwrap();
-        assert_eq!(version, 7);
+        assert_eq!(version, 8);
     }
 
     #[test]
@@ -469,7 +486,7 @@ mod tests {
         let version: u32 = conn
             .pragma_query_value(None, "user_version", |r| r.get(0))
             .unwrap();
-        assert_eq!(version, 7);
+        assert_eq!(version, 8);
     }
 
     #[tokio::test]

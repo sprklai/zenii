@@ -42,6 +42,11 @@ impl ChannelRegistry {
         self.channels.remove(name).is_some()
     }
 
+    /// Get the full channel object by name.
+    pub fn get_channel(&self, name: &str) -> Option<Arc<dyn Channel>> {
+        self.channels.get(name).map(|r| Arc::clone(r.value()))
+    }
+
     /// Get a lightweight send-only handle for a channel.
     pub fn get_sender(&self, name: &str) -> Option<Arc<dyn ChannelSender>> {
         self.senders.get(name).map(|r| Arc::clone(r.value()))

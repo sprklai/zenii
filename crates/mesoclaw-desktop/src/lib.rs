@@ -29,6 +29,7 @@ pub fn run() {
             }
         }))
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_notification::init())
         .setup(|app| {
             tray::setup_tray(app)?;
             commands::boot_gateway(app)?;
@@ -39,6 +40,7 @@ pub fn run() {
             commands::show_window,
             commands::get_app_version,
             commands::open_data_dir,
+            commands::show_notification,
         ])
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {

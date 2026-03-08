@@ -11,6 +11,7 @@
 	import Pause from '@lucide/svelte/icons/pause';
 	import History from '@lucide/svelte/icons/history';
 	import X from '@lucide/svelte/icons/x';
+	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import {
 		schedulerStore,
 		type ScheduledJob,
@@ -20,6 +21,8 @@
 	let showForm = $state(false);
 	let showHistory = $state<string | null>(null);
 	let historyEntries = $state<JobExecution[]>([]);
+	let confirmOpen = $state(false);
+	let deleteTarget = $state<string | null>(null);
 
 	// Form state
 	let jobName = $state('');
@@ -107,8 +110,14 @@
 		await schedulerStore.toggleJob(id);
 	}
 
-	async function handleDelete(id: string) {
-		await schedulerStore.deleteJob(id);
+	function handleDelete(id: string) {
+		deleteTarget = id;
+		confirmOpen = true;
+	}
+
+	async function confirmDelete() {
+		if (!deleteTarget) return;
+		await schedulerStore.deleteJob(deleteTarget);
 	}
 
 	async function handleShowHistory(id: string) {
@@ -439,3 +448,10 @@
 		</Card.Root>
 	{/if}
 </div>
+
+<ConfirmDialog
+	bind:open={confirmOpen}
+	title="Delete job?"
+	description="This will permanently remove this scheduled job."
+	onConfirm={confirmDelete}
+/>

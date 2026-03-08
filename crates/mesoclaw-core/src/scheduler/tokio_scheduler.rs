@@ -13,6 +13,8 @@ use uuid::Uuid;
 use crate::config::AppConfig;
 use crate::db::{self, DbPool};
 use crate::event_bus::{AppEvent, EventBus};
+#[cfg(feature = "gateway")]
+use crate::gateway::state::AppState;
 use crate::{MesoError, Result};
 
 use super::heartbeat::backoff_secs;
@@ -44,6 +46,8 @@ pub struct TokioScheduler {
     stuck_threshold_secs: u64,
     max_history_per_job: usize,
     error_backoff_secs: Vec<u64>,
+    #[cfg(feature = "gateway")]
+    app_state: Arc<tokio::sync::OnceCell<Arc<AppState>>>,
 }
 
 impl TokioScheduler {
@@ -60,7 +64,22 @@ impl TokioScheduler {
             stuck_threshold_secs: config.scheduler_stuck_threshold_secs,
             max_history_per_job: config.scheduler_max_history_per_job,
             error_backoff_secs: config.scheduler_error_backoff_secs.clone(),
+            #[cfg(feature = "gateway")]
+            app_state: Arc::new(tokio::sync::OnceCell::new()),
         })
+    }
+
+    /// Wire the scheduler with AppState for payload execution.
+    /// Idempotent — subsequent calls are no-ops.
+    #[cfg(feature = "gateway")]
+    pub fn wire(&self, state: Arc<AppState>) {
+        let _ = self.app_state.set(state);
+    }
+
+    /// Get the wired AppState, if any.
+    #[cfg(feature = "gateway")]
+    pub fn get_app_state(&self) -> Option<&Arc<AppState>> {
+        self.app_state.get()
     }
 
     /// Load persisted jobs from SQLite into the in-memory registry.
@@ -273,6 +292,8 @@ impl Scheduler for TokioScheduler {
         let tick_secs = self.tick_interval_secs;
         let stuck_threshold = self.stuck_threshold_secs;
         let max_history = self.max_history_per_job;
+        #[cfg(feature = "gateway")]
+        let app_state_cell = self.app_state.clone();
 
         let _ = bus.publish(AppEvent::SchedulerStarted);
 
@@ -319,17 +340,33 @@ impl Scheduler for TokioScheduler {
 
                             // Execute with stuck detection timeout
                             let timeout = Duration::from_secs(stuck_threshold);
-                            let status = tokio::time::timeout(timeout, async {
-                                // Payload execution stub — actual agent integration deferred
-                                match &job.payload {
-                                    JobPayload::Notify { message } => {
-                                        info!("Scheduler notify: {message}");
-                                        JobStatus::Success
-                                    }
-                                    _ => {
-                                        // Heartbeat, AgentTurn, SendViaChannel
-                                        // require agent wiring — mark as success for now
-                                        JobStatus::Success
+                            let bus_ref = bus.clone();
+                            let job_ref = job.clone();
+                            #[cfg(feature = "gateway")]
+                            let app_state_ref = app_state_cell.clone();
+                            let status = tokio::time::timeout(timeout, async move {
+                                #[cfg(feature = "gateway")]
+                                {
+                                    super::payload_executor::execute(
+                                        &job_ref,
+                                        &bus_ref,
+                                        app_state_ref.get(),
+                                    )
+                                    .await
+                                }
+                                #[cfg(not(feature = "gateway"))]
+                                {
+                                    match &job_ref.payload {
+                                        JobPayload::Notify { message } => {
+                                            info!("Scheduler notify: {message}");
+                                            let _ = bus_ref.publish(AppEvent::SchedulerNotification {
+                                                job_id: job_ref.id.clone(),
+                                                job_name: job_ref.name.clone(),
+                                                message: message.clone(),
+                                            });
+                                            JobStatus::Success
+                                        }
+                                        _ => JobStatus::Success,
                                     }
                                 }
                             })
@@ -502,6 +539,33 @@ mod tests {
             active_hours: None,
             delete_after_run: false,
         }
+    }
+
+    // 8.6.1.5 — OnceCell wire sets app_state
+    #[cfg(feature = "gateway")]
+    #[tokio::test]
+    async fn oncecell_wire_sets_state() {
+        let (_dir, sched) = test_scheduler();
+        assert!(sched.get_app_state().is_none());
+
+        let (_dir2, state) = crate::gateway::handlers::tests::test_state().await;
+        sched.wire(state);
+        assert!(sched.get_app_state().is_some());
+    }
+
+    // 8.6.1.6 — OnceCell wire is idempotent
+    #[cfg(feature = "gateway")]
+    #[tokio::test]
+    async fn oncecell_wire_idempotent() {
+        let (_dir, sched) = test_scheduler();
+        let (_dir2, state1) = crate::gateway::handlers::tests::test_state().await;
+        let (_dir3, state2) = crate::gateway::handlers::tests::test_state().await;
+
+        sched.wire(state1.clone());
+        sched.wire(state2); // second wire is no-op
+
+        // Should still have the first state
+        assert!(sched.get_app_state().is_some());
     }
 
     // 16.9 — Add job to scheduler

@@ -25,6 +25,7 @@ pub struct ModelInfo {
     pub model_id: String,
     pub display_name: String,
     pub context_limit: Option<i64>,
+    pub supports_tools: bool,
     pub is_custom: bool,
     pub is_active: bool,
 }
@@ -72,6 +73,12 @@ struct BuiltinModel {
     model_id: String,
     display_name: String,
     context_limit: Option<i64>,
+    #[serde(default = "default_supports_tools")]
+    supports_tools: bool,
+}
+
+fn default_supports_tools() -> bool {
+    true
 }
 
 /// Multi-provider AI management backed by SQLite.
@@ -101,9 +108,9 @@ impl ProviderRegistry {
                 for m in &p.models {
                     let composite_id = format!("{}:{}", p.id, m.model_id);
                     conn.execute(
-                        "INSERT OR IGNORE INTO ai_models (id, provider_id, model_id, display_name, context_limit, is_custom)
-                         VALUES (?1, ?2, ?3, ?4, ?5, 0)",
-                        rusqlite::params![composite_id, p.id, m.model_id, m.display_name, m.context_limit],
+                        "INSERT OR IGNORE INTO ai_models (id, provider_id, model_id, display_name, context_limit, supports_tools, is_custom)
+                         VALUES (?1, ?2, ?3, ?4, ?5, ?6, 0)",
+                        rusqlite::params![composite_id, p.id, m.model_id, m.display_name, m.context_limit, m.supports_tools as i32],
                     )?;
                 }
             }
@@ -244,8 +251,8 @@ impl ProviderRegistry {
             for (model_id, display_name) in &models {
                 let composite_id = format!("{id}:{model_id}");
                 conn.execute(
-                    "INSERT INTO ai_models (id, provider_id, model_id, display_name, is_custom)
-                     VALUES (?1, ?2, ?3, ?4, 1)",
+                    "INSERT INTO ai_models (id, provider_id, model_id, display_name, supports_tools, is_custom)
+                     VALUES (?1, ?2, ?3, ?4, 1, 1)",
                     rusqlite::params![composite_id, id, model_id, display_name],
                 )?;
             }
@@ -334,8 +341,8 @@ impl ProviderRegistry {
 
             let composite_id = format!("{provider_id}:{model_id}");
             conn.execute(
-                "INSERT INTO ai_models (id, provider_id, model_id, display_name, is_custom)
-                 VALUES (?1, ?2, ?3, ?4, 1)",
+                "INSERT INTO ai_models (id, provider_id, model_id, display_name, supports_tools, is_custom)
+                 VALUES (?1, ?2, ?3, ?4, 1, 1)",
                 rusqlite::params![composite_id, provider_id, model_id, display_name],
             )
             .map_err(|e| match e {
@@ -443,7 +450,7 @@ fn load_models_for_provider(
     provider_id: &str,
 ) -> Result<Vec<ModelInfo>> {
     let mut stmt = conn.prepare(
-        "SELECT id, provider_id, model_id, display_name, context_limit, is_custom, is_active
+        "SELECT id, provider_id, model_id, display_name, context_limit, supports_tools, is_custom, is_active
          FROM ai_models WHERE provider_id = ?1 AND id != '_default_model' ORDER BY display_name",
     )?;
 
@@ -455,8 +462,9 @@ fn load_models_for_provider(
                 model_id: row.get(2)?,
                 display_name: row.get(3)?,
                 context_limit: row.get(4)?,
-                is_custom: row.get::<_, i32>(5)? != 0,
-                is_active: row.get::<_, i32>(6)? != 0,
+                supports_tools: row.get::<_, i32>(5)? != 0,
+                is_custom: row.get::<_, i32>(6)? != 0,
+                is_active: row.get::<_, i32>(7)? != 0,
             })
         })?
         .filter_map(|r| r.ok())

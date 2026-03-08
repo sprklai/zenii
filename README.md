@@ -1,6 +1,6 @@
 # MesoClaw
 
-An AI-powered multi-interface application built with Rust, producing five binaries from a single codebase: Desktop, Mobile, CLI, TUI, and Daemon.
+An AI-powered multi-interface application built with Rust, producing multiple binaries from a single codebase: Desktop, CLI, and Daemon (with TUI and Mobile planned for future release).
 
 ---
 
@@ -11,10 +11,10 @@ MesoClaw is a Rust workspace that delivers AI assistant capabilities across mult
 ```mermaid
 graph TB
     Desktop["Desktop<br>#40;Tauri 2 + Svelte 5#41;"] --> Core[mesoclaw-core<br>shared logic]
-    Mobile["Mobile<br>#40;Tauri 2 iOS + Android#41;"] --> Core
     CLI["CLI<br>#40;clap#41;"] --> Core
-    TUI["TUI<br>#40;ratatui#41;"] --> Core
     Daemon["Daemon<br>#40;headless server#41;"] --> Core
+    Mobile["Mobile #40;future#41;<br>#40;Tauri 2 iOS + Android#41;"] -.-> Core
+    TUI["TUI #40;future#41;<br>#40;ratatui#41;"] -.-> Core
 ```
 
 ## Features
@@ -29,8 +29,9 @@ graph TB
 - **Skills system** -- bundled + user markdown skills loaded into agent context (Claude Code model)
 - **Progressive user learning** -- SQLite-backed observations with category filtering, confidence scoring, and privacy controls
 - **Secure credentials** via OS keyring with zeroize memory protection
-- **Messaging channels** -- Telegram, Slack, Discord (feature-gated, trait-based with DashMap registry)
-- **Cron scheduler** -- automated recurring tasks
+- **Messaging channels** -- Telegram, Slack, Discord with lifecycle hooks (typing indicators, status messages) and end-to-end channel router pipeline (feature-gated, trait-based with DashMap registry)
+- **Cron scheduler** -- automated recurring tasks with real payload execution (Notify, AgentTurn, Heartbeat, SendViaChannel)
+- **Notifications** -- desktop OS notifications (tauri-plugin-notification) + web toast notifications (svelte-sonner) via WebSocket push
 - **Cross-platform** -- Linux, macOS, Windows, ARM (Raspberry Pi), iOS, Android
 
 ## Tech Stack
@@ -61,9 +62,9 @@ graph TB
 graph TB
     subgraph UI["User Interfaces"]
         Desktop["Desktop<br>#40;Tauri 2#41;"]
-        Mobile["Mobile<br>#40;Tauri 2#41;"]
+        Mobile["Mobile #40;future#41;<br>#40;Tauri 2#41;"]
         CLI["CLI<br>#40;clap#41;"]
-        TUI["TUI<br>#40;ratatui#41;"]
+        TUI["TUI #40;future#41;<br>#40;ratatui#41;"]
         Web["Web Frontend<br>#40;Svelte 5#41;"]
     end
 
@@ -112,11 +113,11 @@ graph TB
 ```mermaid
 graph TD
     desktop[mesoclaw-desktop] --> core[mesoclaw-core]
-    mobile[mesoclaw-mobile] --> core
+    mobile["mesoclaw-mobile<br>#40;future#41;"] -.-> core
     cli[mesoclaw-cli]
     cli --> reqwest["reqwest<br>#40;HTTP client#41;"]
     cli --> tungstenite["tokio-tungstenite<br>#40;WS#41;"]
-    tui[mesoclaw-tui] --> core
+    tui["mesoclaw-tui<br>#40;future#41;"] -.-> core
     daemon[mesoclaw-daemon] --> core
 
     core --> axum["axum<br>#40;gateway#41;"]
@@ -184,7 +185,7 @@ sequenceDiagram
         App->>App: Open Tauri window
     else CLI
         App->>App: Enter REPL loop
-    else TUI
+    else TUI (future release)
         App->>App: Render ratatui UI
     else Daemon
         App->>App: Wait for connections
@@ -257,9 +258,9 @@ mesoclaw/
 ├── crates/
 │   ├── mesoclaw-core/      # Shared library (NO Tauri dependency)
 │   ├── mesoclaw-desktop/   # Tauri 2.10 shell (macOS, Windows, Linux)
-│   ├── mesoclaw-mobile/    # Tauri 2 shell (iOS, Android, deferred to Phase 12)
+│   ├── mesoclaw-mobile/    # Tauri 2 shell (iOS, Android) (future release)
 │   ├── mesoclaw-cli/       # clap CLI
-│   ├── mesoclaw-tui/       # ratatui TUI
+│   ├── mesoclaw-tui/       # ratatui TUI (future release)
 │   └── mesoclaw-daemon/    # Headless daemon
 └── web/                    # Svelte 5 SPA frontend (shared by desktop + mobile)
 ```
@@ -419,7 +420,7 @@ mesoclaw provider default <provider> <model>  # Set default model
 
 Global options: `--host`, `--port`, `--token` (or `MESOCLAW_TOKEN` env var)
 
-## Gateway Routes (59 base + 6 feature-gated = 65 total)
+## Gateway Routes (61 base + 8 feature-gated = 69 total)
 
 | Group | Routes | Description |
 |-------|--------|-------------|
@@ -435,8 +436,8 @@ Global options: `--host`, `--port`, `--token` (or `MESOCLAW_TOKEN` env var)
 | Skills | `GET /skills`, `GET/PUT/DELETE /skills/{id}`, `POST /skills`, `POST /skills/reload` | Skill CRUD |
 | Skill Proposals | `GET /skills/proposals`, `POST /skills/proposals/{id}/approve`, `POST /skills/proposals/{id}/reject`, `DELETE /skills/proposals/{id}` | Self-evolving skill management |
 | User | `GET/POST/DELETE /user/observations`, `GET/DELETE /user/observations/{key}`, `GET /user/profile` | User learning + privacy |
-| Channels | `POST /channels/{name}/test` (always), `GET /channels`, `GET /channels/{name}/status`, `POST /channels/{name}/send`, `POST /channels/{name}/connect/disconnect`, `GET /channels/{name}/health` (feature-gated) | Messaging channels |
-| WebSocket | `GET /ws/chat` | Streaming chat |
+| Channels | `POST /channels/{name}/test` (always), `GET /channels`, `GET /channels/{name}/status`, `POST /channels/{name}/send`, `POST /channels/{name}/connect/disconnect`, `GET /channels/{name}/health`, `POST /channels/{name}/webhook` (feature-gated) | Messaging channels |
+| WebSocket | `GET /ws/chat`, `GET /ws/notifications` | Streaming chat + notification push |
 
 ---
 
@@ -455,6 +456,13 @@ Detailed documentation lives in the `docs/` and `plans/` directories:
 - [Phase 6 Plan](plans/phase6_frontend.md) -- Svelte 5 SPA frontend
 - [Phase 7 Plan](plans/phase7_desktop.md) -- Tauri 2 desktop app
 - [Phase 8 Plans](plans/phase8_credentials.md) -- Credentials, channels, scheduler
+- [Stage 9 Plan](plans/stage9_cross_compilation.md) -- Cross-compilation & build hardening
+- [Stage 10 Plan](plans/stage10_cicd_pipeline.md) -- CI/CD pipeline
+- [Stage 11 Plan](plans/stage11_quality_gates.md) -- Quality gates & automation
+- [Stage 12 Plan](plans/stage12_cli_reference.md) -- CLI reference documentation
+- [Stage 13 Plan](plans/stage13_api_config_reference.md) -- API & configuration reference
+- [Stage 14 Plan](plans/stage14_architecture_deployment.md) -- Architecture & deployment docs
+- [Stage 15 Plan](plans/stage15_community.md) -- Community & open source readiness
 
 ### Implementation Status
 
@@ -469,10 +477,16 @@ Detailed documentation lives in the `docs/` and `plans/` directories:
 | Phase 7: Desktop App | 14 | Complete | 354/354 Rust + 26 JS passing |
 | Phase 8: Credentials & Channels | 15.1-15.2 | Complete | 434/434 Rust + 26 JS passing |
 | Phase 8: Context-Aware Agent | 15.3b | Complete | 488/488 Rust + 26 JS passing |
-| Phase 8: Scheduler | 16 | Not started | -- |
-| Phase 9: TUI & Cross-Compilation | 17-18 | Not started | -- |
-| Phase 10: CI/CD & Quality | 19-20 | Not started | -- |
-| Phase 11: Documentation & Community | 21-22 | Not started | -- |
+| Phase 8: Scheduler + Router + Lifecycle + Hardening | 16, 8.6.1-8.9 | Complete | 827 Rust + 33 JS passing |
+| Stage 9: Cross-Compilation & Build Hardening | -- | Not started | -- |
+| Stage 10: CI/CD Pipeline | -- | Not started | -- |
+| Stage 11: Quality Gates & Automation | -- | Not started | -- |
+| Stage 12: CLI Reference Documentation | -- | Not started | -- |
+| Stage 13: API & Configuration Reference | -- | Not started | -- |
+| Stage 14: Architecture & Deployment Docs | -- | Not started | -- |
+| Stage 15: Community & Open Source Readiness | -- | Not started | -- |
+| FR-1: TUI Binary | -- | Future release | -- |
+| FR-2: Mobile App | -- | Future release | -- |
 
 ---
 

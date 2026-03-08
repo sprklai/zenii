@@ -19,8 +19,10 @@
 - [Desktop App Architecture](#desktop-app-architecture)
 - [Context-Aware Agent System](#context-aware-agent-system)
 - [Self-Evolving Framework](#self-evolving-framework)
-- [Scheduler Notification Flow](#scheduler-notification-flow-stage-861--planned)
-- [Channel Router Pipeline](#channel-router-pipeline-stage-87--planned)
+- [Scheduler Notification Flow](#scheduler-notification-flow-stage-861)
+- [Channel Router Pipeline](#channel-router-pipeline-stage-87)
+- [Channel Lifecycle Hooks](#channel-lifecycle-hooks-stage-88)
+- [Test Debt and Hardening](#test-debt--hardening-stage-89)
 - [Concurrency Rules](#concurrency-rules)
 - [Lessons Learned from v1](#lessons-learned-from-v1)
 
@@ -31,7 +33,7 @@
 ```mermaid
 graph TD
     subgraph Clients["Clients"]
-        Desktop[Desktop] & Mobile[Mobile] & CLI[CLI] & TUI[TUI] & Daemon[Daemon]
+        Desktop[Desktop] & Mobile["Mobile<br>#40;future#41;"] & CLI[CLI] & TUI["TUI<br>#40;future#41;"] & Daemon[Daemon]
         Web["Frontend<br>Svelte 5"]
     end
 
@@ -87,7 +89,7 @@ graph TB
     end
 
     subgraph GW["Gateway :18981"]
-        REST["REST<br>59 routes + 6 feature-gated"]
+        REST["REST<br>59 base + 14 feature-gated"]
         WS["WebSocket<br>/ws/chat"]
     end
 
@@ -118,9 +120,9 @@ graph TD
     desktop --> opnr["tauri-plugin-opener<br>#40;open data dir#41;"]
     desktop -.-> devtools["tauri-plugin-devtools<br>#40;feature-gated#41;"]
 
-    mobile[mesoclaw-mobile] --> core
+    mobile["mesoclaw-mobile<br>#40;future#41;"] -.-> core
     cli[mesoclaw-cli]
-    tui[mesoclaw-tui] --> core
+    tui["mesoclaw-tui<br>#40;future#41;"] -.-> core
     daemon[mesoclaw-daemon] --> core
 
     core --> axum["axum<br>#40;gateway#41;"]
@@ -204,9 +206,9 @@ mesoclaw/
 │   │       ├── lib.rs       # Builder: plugins, tray, IPC, close-to-tray
 │   │       ├── commands.rs  # 4 IPC + boot_gateway() + 7 tests
 │   │       └── tray.rs      # Show/Hide/Quit menu + 1 test
-│   ├── mesoclaw-mobile/    # Tauri 2 shell (iOS + Android, deferred to Phase 12)
+│   ├── mesoclaw-mobile/    # Tauri 2 shell (iOS + Android) (future release)
 │   ├── mesoclaw-cli/       # clap CLI
-│   ├── mesoclaw-tui/       # ratatui TUI
+│   ├── mesoclaw-tui/       # ratatui TUI (future release)
 │   └── mesoclaw-daemon/    # Headless daemon (full gateway server)
 └── web/                    # Svelte 5 frontend (SPA)
     ├── src/
@@ -734,7 +736,7 @@ graph TB
 
 ## Gateway Routes
 
-All clients communicate via the HTTP+WebSocket gateway at `127.0.0.1:18981`. Routes are grouped by subsystem (59 base + 6 feature-gated = 65 total through Phase 8 Step 15.3b).
+All clients communicate via the HTTP+WebSocket gateway at `127.0.0.1:18981`. Routes are grouped by subsystem (59 base + 6 feature-gated + 7 scheduler + 1 channel webhook = 73 total through Phase 8 Stage 8.9).
 
 ### Health (1 route, no auth)
 
@@ -887,18 +889,18 @@ All clients communicate via the HTTP+WebSocket gateway at `127.0.0.1:18981`. Rou
 | GET | `/scheduler/jobs/{id}/history` | Get job execution history |
 | GET | `/scheduler/status` | Scheduler status |
 
-### WebSocket Channels (planned)
+### WebSocket Endpoints (2 routes)
 
 | Path | Feature | Description |
 |---|---|---|
 | `/ws/chat` | always | Streaming chat responses |
 | `/ws/notifications` | `scheduler` | Push scheduler notifications to clients |
 
-### Channel Router (planned)
+### Channel Router (1 route, feature-gated)
 
 | Method | Path | Feature | Description |
 |---|---|---|---|
-| POST | `/channels/{name}/message` | `channels` | Channel message webhook |
+| POST | `/channels/{name}/message` | `channels` | Channel message webhook (ChannelRouter pipeline) |
 
 ## Desktop App Architecture
 
@@ -973,7 +975,9 @@ The frontend detects the Tauri environment via `window.__TAURI__` and provides t
 
 All wrappers are no-ops when running in a browser (non-Tauri) context, so the same frontend works for both desktop and web.
 
-## Scheduler Notification Flow (Stage 8.6.1 — planned)
+## Scheduler Notification Flow (Stage 8.6.1)
+
+The `PayloadExecutor` (`scheduler/payload_executor.rs`) handles 4 payload types dispatched by the scheduler tick loop. The `TokioScheduler` and `AppState` have a circular dependency resolved via `OnceCell` — the scheduler is constructed first, then wired to `AppState` post-construction via `wire()`.
 
 ```mermaid
 graph TB
@@ -983,7 +987,7 @@ graph TB
         Active --> Exec["PayloadExecutor.execute#40;job#41;"]
     end
 
-    subgraph PayloadExec["PayloadExecutor"]
+    subgraph PayloadExec["PayloadExecutor - 4 payload types"]
         Exec --> NotifyP["Notify<br>→ publish event"]
         Exec --> AgentP["AgentTurn<br>→ resolve_agent + chat"]
         Exec --> HeartP["Heartbeat<br>→ sysinfo gather"]
@@ -991,14 +995,14 @@ graph TB
     end
 
     subgraph Delivery["Notification Delivery"]
-        NotifyP --> EventBus["Event Bus<br>SchedulerNotification"]
+        NotifyP --> EventBus["Event Bus<br>SchedulerNotification +<br>SchedulerJobCompleted"]
         EventBus --> WS["WS /ws/notifications<br>push to clients"]
         EventBus --> Toast["Frontend toast<br>svelte-sonner"]
         EventBus --> Desktop["Desktop notification<br>tauri-plugin-notification"]
     end
 
     subgraph Wiring["AppState Wiring"]
-        OnceCell["OnceCell pattern<br>post-construction wire#40;#41;"]
+        OnceCell["OnceCell pattern<br>TokioScheduler created → AppState built →<br>scheduler.wire#40;app_state#41; post-construction"]
     end
 
     style SchedulerTick fill:#2196F3,color:#fff
@@ -1007,7 +1011,18 @@ graph TB
     style Wiring fill:#9E9E9E,color:#fff
 ```
 
-## Channel Router Pipeline (Stage 8.7 — planned)
+### Key Design Decisions
+
+| Decision | Rationale |
+|---|---|
+| OnceCell wiring | TokioScheduler needs AppState for agent/channel access, but AppState contains the scheduler — OnceCell breaks the cycle |
+| WS `/ws/notifications` | Dedicated endpoint for push notifications, separate from `/ws/chat` |
+| svelte-sonner toasts | Frontend subscribes to WS notifications and displays via toast library |
+| tauri-plugin-notification | Desktop OS-level notifications when app is in tray |
+
+## Channel Router Pipeline (Stage 8.7)
+
+The `ChannelRouter` struct orchestrates the full message processing pipeline from inbound channel message to outbound response. It runs as a background task with an `mpsc` receiver and `watch` stop signal.
 
 ```mermaid
 graph TB
@@ -1018,16 +1033,22 @@ graph TB
     end
 
     subgraph Pipeline["Message Pipeline"]
-        Router --> Session["SessionMap<br>resolve or create"]
-        Session --> ToolFilter["ToolPolicy<br>filter allowed tools"]
-        ToolFilter --> Context["channel_system_context<br>preamble override"]
+        Router --> Session["SessionMap<br>resolve or create session"]
+        Session --> ToolFilter["ToolPolicy<br>filter allowed tools per channel"]
+        ToolFilter --> Context["channel_system_context<br>platform-specific preamble"]
         Context --> Agent["resolve_agent<br>with filtered tools"]
         Agent --> Format["ChannelFormatter<br>platform-specific output"]
         Format --> Send["ChannelSender<br>send response"]
-        Send --> Store["SessionManager<br>store messages"]
+        Send --> Store["SessionManager<br>store user + assistant messages"]
     end
 
-    subgraph Hooks["Lifecycle Hooks - Stage 8.8"]
+    subgraph Lifecycle["Lifecycle"]
+        Start["Boot: ChannelRouter::new#40;#41;<br>created in init_services"]
+        Run["router.start#40;#41;<br>spawns mpsc loop"]
+        Stop["watch stop signal<br>graceful shutdown"]
+    end
+
+    subgraph Hooks["Lifecycle Hooks"]
         HookStart["on_agent_start<br>typing / status msg"]
         HookTool["on_tool_use<br>update status"]
         HookDone["on_agent_complete<br>cleanup status"]
@@ -1039,8 +1060,80 @@ graph TB
 
     style Inbound fill:#2196F3,color:#fff
     style Pipeline fill:#4CAF50,color:#fff
+    style Lifecycle fill:#9E9E9E,color:#fff
     style Hooks fill:#FF9800,color:#fff
 ```
+
+### Gateway Integration
+
+| Route | Description |
+|---|---|
+| `POST /channels/{name}/message` | Webhook endpoint — injects message into ChannelRouter pipeline |
+
+### Frontend: Session Source
+
+Channel-originated sessions carry a `source` field displayed as a platform badge (Telegram/Slack/Discord icon) in the session list UI.
+
+## Channel Lifecycle Hooks (Stage 8.8)
+
+Lifecycle hooks run at key points in the ChannelRouter pipeline. They are best-effort — failures are logged but do not block the pipeline.
+
+```mermaid
+graph TB
+    subgraph HookPoints["Hook Points in Pipeline"]
+        Start["on_agent_start"] --> Typing["Show typing / status"]
+        Tool["on_tool_use"] --> Update["Update status message"]
+        Done["on_agent_complete"] --> Cleanup["Clear typing / status"]
+    end
+
+    subgraph TGHooks["Telegram Hooks"]
+        TGStatus["Status messages<br>sent before agent runs"]
+        TGTyping["Typing refresh<br>4s interval loop"]
+    end
+
+    subgraph SLHooks["Slack Hooks"]
+        SLEphem["Ephemeral messages<br>postEphemeral / update / delete"]
+    end
+
+    subgraph DCHooks["Discord Hooks"]
+        DCTyping["Typing indicator<br>via Discord API"]
+    end
+
+    Start --> TGStatus & SLEphem & DCTyping
+    Tool --> TGTyping
+    Done --> TGTyping & SLEphem & DCTyping
+
+    style HookPoints fill:#4CAF50,color:#fff
+    style TGHooks fill:#2196F3,color:#fff
+    style SLHooks fill:#FF9800,color:#fff
+    style DCHooks fill:#9E9E9E,color:#fff
+```
+
+| Platform | on_agent_start | on_tool_use | on_agent_complete |
+|---|---|---|---|
+| Telegram | Send status message | Refresh typing indicator (4s) | Stop typing refresh |
+| Slack | Post ephemeral "thinking..." | Update ephemeral message | Delete ephemeral message |
+| Discord | Start typing indicator | (no-op) | (typing auto-expires) |
+
+## Test Debt and Hardening (Stage 8.9)
+
+Stage 8.9 addressed test coverage gaps and hardened critical modules.
+
+### ProcessTool Kill Action
+
+The `ProcessTool` gained a `kill` action using `sysinfo`-based process lookup. Kill requires `Full` autonomy level — lower autonomy levels are denied with `MesoError::PolicyDenied`.
+
+### Context Engine Tests (52 tests)
+
+Comprehensive unit test coverage for:
+- `ContextEngine` — level determination, compose output, config toggles
+- `BootContext` — OS/arch/hostname/locale detection
+- Context summaries — hash-based cache invalidation, DB storage/retrieval
+- Tier injection — Full/Minimal/Summary content verification
+
+### Agent Tool Loop Tests (5 tests)
+
+Integration tests verifying `RigToolAdapter` dispatch — agent correctly invokes tools during the chat loop and feeds results back to the LLM.
 
 ## Concurrency Rules
 
