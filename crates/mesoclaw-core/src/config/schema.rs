@@ -73,6 +73,11 @@ pub struct AppConfig {
     pub telegram_retry_min_ms: u64,
     pub telegram_retry_max_ms: u64,
     pub telegram_require_group_mention: bool,
+    pub slack_allowed_channel_ids: Vec<String>,
+    pub discord_allowed_guild_ids: Vec<u64>,
+    pub discord_allowed_channel_ids: Vec<u64>,
+    pub channel_router_buffer_size: usize,
+    pub channel_reconnect_max_attempts: u32,
 
     // Phase 4: User Learning
     pub learning_enabled: bool,
@@ -184,6 +189,11 @@ impl Default for AppConfig {
             telegram_retry_min_ms: 1000,
             telegram_retry_max_ms: 60_000,
             telegram_require_group_mention: true,
+            slack_allowed_channel_ids: vec![],
+            discord_allowed_guild_ids: vec![],
+            discord_allowed_channel_ids: vec![],
+            channel_router_buffer_size: 256,
+            channel_reconnect_max_attempts: 10,
 
             // User Learning
             learning_enabled: true,

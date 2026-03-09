@@ -85,6 +85,8 @@ pub fn boot_gateway(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Erro
                 let state = Arc::new(mesoclaw_core::gateway::state::AppState::from(services));
                 #[cfg(feature = "scheduler")]
                 state.wire_scheduler();
+                #[cfg(feature = "channels")]
+                state.wire_channels();
                 let gateway = mesoclaw_core::gateway::GatewayServer::new(state);
 
                 info!("Starting embedded gateway on {host}:{port}");

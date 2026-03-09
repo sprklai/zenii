@@ -102,13 +102,28 @@
 		}
 	}
 
+	let disconnecting = $state<Record<string, boolean>>({});
+
 	async function testConnection(channelId: string) {
 		testing[channelId] = true;
 		testResult[channelId] = null;
 		try {
 			testResult[channelId] = await channelsStore.testConnection(channelId);
+			if (testResult[channelId]?.healthy) {
+				await channelsStore.connectChannel(channelId);
+			}
 		} finally {
 			testing[channelId] = false;
+		}
+	}
+
+	async function disconnectChannel(channelId: string) {
+		disconnecting[channelId] = true;
+		try {
+			await channelsStore.disconnectChannel(channelId);
+			testResult[channelId] = null;
+		} finally {
+			disconnecting[channelId] = false;
 		}
 	}
 
@@ -232,7 +247,7 @@
 								</div>
 							{/each}
 
-							<!-- Test Connection -->
+							<!-- Test Connection / Disconnect -->
 							<div class="border-t pt-3 space-y-2">
 								<div class="flex items-center gap-2">
 									<Button
@@ -243,6 +258,16 @@
 									>
 										{testing[channel.id] ? 'Testing...' : 'Test Connection'}
 									</Button>
+									{#if channel.connected}
+										<Button
+											size="sm"
+											variant="destructive"
+											disabled={disconnecting[channel.id]}
+											onclick={() => disconnectChannel(channel.id)}
+										>
+											{disconnecting[channel.id] ? 'Disconnecting...' : 'Disconnect'}
+										</Button>
+									{/if}
 									{#if testResult[channel.id]}
 										{#if testResult[channel.id]?.healthy}
 											<span class="text-sm text-green-600">

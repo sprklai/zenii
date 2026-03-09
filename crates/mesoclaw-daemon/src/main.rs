@@ -58,6 +58,8 @@ async fn main() {
     let state = Arc::new(mesoclaw_core::gateway::state::AppState::from(services));
     #[cfg(feature = "scheduler")]
     state.wire_scheduler();
+    #[cfg(feature = "channels")]
+    state.wire_channels();
     let gateway = GatewayServer::new(state);
 
     // Graceful shutdown on SIGTERM/SIGINT

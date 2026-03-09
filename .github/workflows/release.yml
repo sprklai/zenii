@@ -60,16 +60,14 @@ jobs:
         working-directory: web
         run: bun run build
 
-      - name: Build desktop (deb, rpm)
+      - name: Build desktop (deb, rpm, appimage)
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          APPIMAGE_EXTRACT_AND_RUN: "1"
         with:
           projectPath: crates/mesoclaw-desktop
-          args: --bundles deb,rpm -- --profile ci-release
-
-      # NOTE: AppImage disabled — linuxdeploy fails on GitHub runners (no FUSE).
-      # Re-enable when GitHub runners support FUSE or Tauri fixes extraction mode.
+          args: --bundles deb,rpm,appimage -- --profile ci-release
 
       - name: Build standalone CLI and daemon
         run: cargo build --profile ci-release -p mesoclaw-cli -p mesoclaw-daemon --all-features
@@ -81,6 +79,7 @@ jobs:
           path: |
             target/ci-release/bundle/deb/*.deb
             target/ci-release/bundle/rpm/*.rpm
+            target/ci-release/bundle/appimage/*.AppImage
 
       - name: Upload standalone binaries
         uses: actions/upload-artifact@v7
@@ -165,7 +164,7 @@ jobs:
       - name: Generate checksums
         run: |
           cd artifacts
-          find . -type f \( -name "*.deb" -o -name "*.rpm" \
+          find . -type f \( -name "*.deb" -o -name "*.rpm" -o -name "*.AppImage" \
             -o -name "*.msi" -o -name "*.exe" \
             -o -name "mesoclaw-cli" -o -name "mesoclaw-daemon" \
             -o -name "mesoclaw-cli.exe" -o -name "mesoclaw-daemon.exe" \) \
@@ -191,6 +190,7 @@ jobs:
           files: |
             artifacts/**/*.deb
             artifacts/**/*.rpm
+            artifacts/**/*.AppImage
             artifacts/**/*.msi
             artifacts/**/*.exe
             artifacts/**/mesoclaw-cli

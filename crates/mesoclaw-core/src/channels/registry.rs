@@ -36,6 +36,17 @@ impl ChannelRegistry {
         Ok(())
     }
 
+    /// Register a channel, replacing any existing registration with the same name.
+    pub fn register_or_replace(&self, channel: Arc<dyn Channel>) -> Result<()> {
+        let name = channel.display_name().to_string();
+        self.unregister(&name);
+        let sender = channel.create_sender();
+        let sender: Arc<dyn ChannelSender> = Arc::from(sender);
+        self.senders.insert(name.clone(), sender);
+        self.channels.insert(name, channel);
+        Ok(())
+    }
+
     /// Unregister a channel by name.
     pub fn unregister(&self, name: &str) -> bool {
         self.senders.remove(name);
@@ -104,11 +115,13 @@ impl ChannelRegistry {
     }
 
     /// Send a message through a named channel.
+    /// Routes through the full Channel object (not the lightweight Sender)
+    /// so that connected channels can use their active bot handles.
     pub async fn send(&self, name: &str, message: ChannelMessage) -> Result<()> {
-        let sender = self
-            .get_sender(name)
+        let channel = self
+            .get_channel(name)
             .ok_or_else(|| MesoError::Channel(format!("channel not found: {name}")))?;
-        sender.send_message(message).await
+        channel.send_message(message).await
     }
 
     /// Number of registered channels.
@@ -245,6 +258,28 @@ mod tests {
         assert_eq!(names.len(), 2);
         assert!(names.contains(&"telegram".into()));
         assert!(names.contains(&"slack".into()));
+    }
+
+    #[test]
+    fn register_or_replace_channel() {
+        let registry = ChannelRegistry::new();
+        let channel1 = Arc::new(MockChannel::new("test"));
+        let channel2 = Arc::new(MockChannel::new("test"));
+        registry.register(channel1).unwrap();
+        assert_eq!(registry.len(), 1);
+        // register_or_replace should succeed even though "test" is already registered
+        let result = registry.register_or_replace(channel2);
+        assert!(result.is_ok());
+        assert_eq!(registry.len(), 1);
+    }
+
+    #[test]
+    fn register_or_replace_new_channel() {
+        let registry = ChannelRegistry::new();
+        let channel = Arc::new(MockChannel::new("test"));
+        let result = registry.register_or_replace(channel);
+        assert!(result.is_ok());
+        assert_eq!(registry.len(), 1);
     }
 
     #[test]

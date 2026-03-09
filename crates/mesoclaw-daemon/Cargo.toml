@@ -18,8 +18,11 @@ clap = { workspace = true }
 workspace = true
 
 [features]
-default = ["keyring"]
+default = ["keyring", "channels", "channels-telegram", "channels-slack", "channels-discord"]
 keyring = ["mesoclaw-core/keyring"]
 channels = ["mesoclaw-core/channels"]
+channels-telegram = ["channels", "mesoclaw-core/channels-telegram"]
+channels-slack = ["channels", "mesoclaw-core/channels-slack"]
+channels-discord = ["channels", "mesoclaw-core/channels-discord"]
 scheduler = ["mesoclaw-core/scheduler"]
 web-dashboard = ["mesoclaw-core/web-dashboard"]

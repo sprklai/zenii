@@ -7,7 +7,7 @@ edition.workspace = true
 tauri-build = { version = "2.5", features = [] }
 
 [dependencies]
-mesoclaw-core = { workspace = true, features = ["gateway", "ai", "keyring"] }
+mesoclaw-core = { workspace = true, features = ["gateway", "ai", "keyring", "channels", "channels-telegram", "channels-slack", "channels-discord"] }
 tauri = { version = "2.10", features = ["tray-icon"] }
 tauri-plugin-window-state = "2.4"
 tauri-plugin-single-instance = "2.4"
@@ -26,6 +26,7 @@ opener = "0.8"
 workspace = true
 
 [features]
-default = ["devtools"]
+default = ["devtools", "channels"]
 devtools = ["dep:tauri-plugin-devtools"]
 scheduler = ["mesoclaw-core/scheduler"]
+channels = ["mesoclaw-core/channels"]

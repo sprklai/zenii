@@ -75,6 +75,40 @@ impl AppState {
             tracing::info!("Scheduler wired with AppState");
         }
     }
+
+    /// Wire channels: start the router and begin listen loops for connected channels.
+    /// Call this after constructing Arc<AppState>.
+    #[cfg(feature = "channels")]
+    pub fn wire_channels(self: &Arc<Self>) {
+        use crate::channels::traits::ChannelStatus;
+
+        if let Some(ref router) = self.channel_router {
+            router.wire(Arc::clone(self));
+            let router_clone = router.clone();
+            let registry = self.channel_registry.clone();
+
+            tokio::spawn(async move {
+                router_clone.start().await;
+
+                // Start listen loops for all already-connected channels
+                for name in registry.list() {
+                    if let Some(channel) = registry.get_channel(&name)
+                        && channel.status() == ChannelStatus::Connected
+                    {
+                        let tx = router_clone.sender();
+                        let ch_name = name.clone();
+                        tokio::spawn(async move {
+                            if let Err(e) = channel.listen(tx).await {
+                                tracing::error!("Channel {ch_name} listen failed: {e}");
+                            }
+                        });
+                    }
+                }
+            });
+
+            tracing::info!("Channel router wired with AppState");
+        }
+    }
 }
 
 #[cfg(test)]

@@ -194,7 +194,7 @@ function createChannelsStore() {
           }
           const liveStatus = liveStatuses[def.id];
           const hasRequiredToken = configuredKeys.size > 0;
-          const isConnected = liveStatus === "Connected";
+          const isConnected = liveStatus?.toLowerCase() === "connected";
           return {
             ...def,
             configuredKeys,
@@ -260,6 +260,26 @@ function createChannelsStore() {
         return result.value;
       } catch {
         return null;
+      }
+    },
+
+    async connectChannel(channelId: string): Promise<boolean> {
+      try {
+        await apiPost(`/channels/${channelId}/connect`, {});
+        await this.load();
+        return true;
+      } catch {
+        return false;
+      }
+    },
+
+    async disconnectChannel(channelId: string): Promise<boolean> {
+      try {
+        await apiPost(`/channels/${channelId}/disconnect`, {});
+        await this.load();
+        return true;
+      } catch {
+        return false;
       }
     },
 

@@ -109,6 +109,7 @@ impl ChannelRouter {
     async fn handle_message(message: ChannelMessage, state: &Arc<AppState>) {
         let channel_name = message.channel.clone();
         let sender = message.sender.clone();
+        let reply_metadata = message.metadata.clone();
 
         // 1. Resolve or create session
         let session_map = ChannelSessionMap::new(state.session_manager.clone());
@@ -208,7 +209,8 @@ impl ChannelRouter {
 
         // 12. Send formatted response parts
         for part in parts {
-            let reply = ChannelMessage::new(&channel_name, &part);
+            let reply =
+                ChannelMessage::new(&channel_name, &part).with_metadata(reply_metadata.clone());
             if let Err(e) = state.channel_registry.send(&channel_name, reply).await {
                 warn!("ChannelRouter: failed to send reply via {channel_name}: {e}");
             }

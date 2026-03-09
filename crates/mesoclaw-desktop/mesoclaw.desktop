@@ -2,8 +2,8 @@
 Name=MesoClaw
 GenericName=AI Assistant
 Comment=AI-powered personal assistant
-Exec=meso-claw
-Icon=meso-claw
+Exec=mesoclaw-desktop
+Icon=mesoclaw-desktop
 Terminal=false
 Type=Application
 Categories=Utility;Office;

@@ -75,19 +75,143 @@ pub async fn send_message(
 
 /// POST /channels/:name/connect -- connect channel
 pub async fn connect_channel(
-    State(_state): State<Arc<AppState>>,
-    Path(_name): Path<String>,
-) -> StatusCode {
-    // Channel connection is managed at boot time
-    StatusCode::OK
+    State(state): State<Arc<AppState>>,
+    Path(name): Path<String>,
+) -> Result<Json<ChannelInfo>, (StatusCode, String)> {
+    let channel: Arc<dyn crate::channels::traits::Channel> = match name.as_str() {
+        #[cfg(feature = "channels-telegram")]
+        "telegram" => {
+            let token = state
+                .credentials
+                .get("channel:telegram:token")
+                .await
+                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+                .ok_or_else(|| {
+                    (
+                        StatusCode::BAD_REQUEST,
+                        "Telegram bot token not configured".to_string(),
+                    )
+                })?;
+
+            let mut tg_config =
+                crate::channels::telegram::config::TelegramConfig::from_app_config(&state.config);
+
+            // Parse allowed_chat_ids from credentials if stored
+            if let Ok(Some(ids_str)) = state
+                .credentials
+                .get("channel:telegram:allowed_chat_ids")
+                .await
+            {
+                tg_config.allowed_chat_ids = ids_str
+                    .split(',')
+                    .filter_map(|s| s.trim().parse::<i64>().ok())
+                    .collect();
+            }
+
+            // The token is needed by the channel but TelegramChannel reads it
+            // from credentials at connect time via the bot API.
+            // Store it back so it's available (it already is, but ensure consistency).
+            let _ = token; // token already in credential store
+
+            Arc::new(crate::channels::telegram::TelegramChannel::new(
+                tg_config,
+                state.credentials.clone(),
+            ))
+        }
+        #[cfg(feature = "channels-slack")]
+        "slack" => {
+            state
+                .credentials
+                .get("channel:slack:bot_token")
+                .await
+                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+                .ok_or_else(|| {
+                    (
+                        StatusCode::BAD_REQUEST,
+                        "Slack bot token not configured".to_string(),
+                    )
+                })?;
+
+            Arc::new(crate::channels::slack::SlackChannel::new(
+                state.credentials.clone(),
+            ))
+        }
+        #[cfg(feature = "channels-discord")]
+        "discord" => {
+            state
+                .credentials
+                .get("channel:discord:token")
+                .await
+                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+                .ok_or_else(|| {
+                    (
+                        StatusCode::BAD_REQUEST,
+                        "Discord bot token not configured".to_string(),
+                    )
+                })?;
+
+            let dc_config =
+                crate::channels::discord::config::DiscordConfig::from_app_config(&state.config);
+            Arc::new(crate::channels::discord::DiscordChannel::new(
+                dc_config,
+                state.credentials.clone(),
+            ))
+        }
+        _ => {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                format!("Unknown or unsupported channel: {name}"),
+            ));
+        }
+    };
+
+    state
+        .channel_registry
+        .register_or_replace(channel.clone())
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    if let Err(e) = channel.connect().await {
+        tracing::warn!("Channel {name} connect failed: {e}");
+    } else {
+        // Spawn listen task after successful connect
+        #[cfg(feature = "gateway")]
+        if let Some(ref router) = state.channel_router {
+            let tx = router.sender();
+            let ch = channel.clone();
+            let ch_name = name.clone();
+            tokio::spawn(async move {
+                if let Err(e) = ch.listen(tx).await {
+                    tracing::error!("Channel {ch_name} listen failed: {e}");
+                }
+            });
+        }
+    }
+
+    let status = state
+        .channel_registry
+        .status(&name)
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| "unknown".into());
+
+    Ok(Json(ChannelInfo { name, status }))
 }
 
 /// POST /channels/:name/disconnect -- disconnect channel
 pub async fn disconnect_channel(
-    State(_state): State<Arc<AppState>>,
-    Path(_name): Path<String>,
-) -> StatusCode {
-    StatusCode::OK
+    State(state): State<Arc<AppState>>,
+    Path(name): Path<String>,
+) -> Result<StatusCode, (StatusCode, String)> {
+    let channel = state
+        .channel_registry
+        .get_channel(&name)
+        .ok_or_else(|| (StatusCode::NOT_FOUND, format!("Channel not found: {name}")))?;
+
+    if let Err(e) = channel.disconnect().await {
+        tracing::warn!("Channel {name} disconnect failed: {e}");
+    }
+
+    state.channel_registry.unregister(&name);
+    Ok(StatusCode::OK)
 }
 
 /// Incoming webhook message body.

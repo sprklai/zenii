@@ -18,8 +18,11 @@ impl DiscordConfig {
         self.allowed_channel_ids.is_empty() || self.allowed_channel_ids.contains(&channel_id)
     }
 
-    pub fn from_app_config(_config: &crate::config::AppConfig) -> Self {
-        Self::default()
+    pub fn from_app_config(config: &crate::config::AppConfig) -> Self {
+        Self {
+            allowed_guild_ids: config.discord_allowed_guild_ids.clone(),
+            allowed_channel_ids: config.discord_allowed_channel_ids.clone(),
+        }
     }
 }
 

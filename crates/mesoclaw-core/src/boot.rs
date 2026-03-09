@@ -20,6 +20,9 @@ use crate::user::UserLearner;
 #[cfg(feature = "channels")]
 use crate::channels::registry::ChannelRegistry;
 
+#[cfg(feature = "channels")]
+use crate::channels::traits::ChannelLifecycle;
+
 #[cfg(feature = "scheduler")]
 use crate::scheduler::{TokioScheduler, traits::Scheduler};
 
@@ -271,7 +274,9 @@ pub async fn init_services(config: AppConfig) -> Result<Services> {
     let channel_router = {
         #[cfg(feature = "gateway")]
         {
-            let router = Arc::new(crate::channels::router::ChannelRouter::new(256));
+            let router = Arc::new(crate::channels::router::ChannelRouter::new(
+                config.channel_router_buffer_size,
+            ));
             info!("Channel router initialized");
             Some(router)
         }
@@ -280,6 +285,69 @@ pub async fn init_services(config: AppConfig) -> Result<Services> {
             None::<Arc<crate::channels::router::ChannelRouter>>
         }
     };
+    // Auto-register channels from stored credentials (only if listed in channels_enabled)
+    #[cfg(feature = "channels-telegram")]
+    if config.channels_enabled.iter().any(|c| c == "telegram")
+        && matches!(credentials.get("channel:telegram:token").await, Ok(Some(_)))
+    {
+        let mut tg_config =
+            crate::channels::telegram::config::TelegramConfig::from_app_config(&config);
+        if let Ok(Some(ids_str)) = credentials.get("channel:telegram:allowed_chat_ids").await {
+            tg_config.allowed_chat_ids = ids_str
+                .split(',')
+                .filter_map(|s| s.trim().parse::<i64>().ok())
+                .collect();
+        }
+        let tg = Arc::new(crate::channels::telegram::TelegramChannel::new(
+            tg_config,
+            credentials.clone(),
+        ));
+        if let Err(e) = channel_registry.register_or_replace(tg.clone()) {
+            tracing::warn!("Failed to register telegram: {e}");
+        } else if let Err(e) = tg.connect().await {
+            tracing::warn!("Failed to connect telegram: {e}");
+        } else {
+            info!("Telegram auto-connected from stored credentials");
+        }
+    }
+
+    #[cfg(feature = "channels-slack")]
+    if config.channels_enabled.iter().any(|c| c == "slack")
+        && matches!(
+            credentials.get("channel:slack:bot_token").await,
+            Ok(Some(_))
+        )
+    {
+        let sl = Arc::new(crate::channels::slack::SlackChannel::new(
+            credentials.clone(),
+        ));
+        if let Err(e) = channel_registry.register_or_replace(sl.clone()) {
+            tracing::warn!("Failed to register slack: {e}");
+        } else if let Err(e) = sl.connect().await {
+            tracing::warn!("Failed to connect slack: {e}");
+        } else {
+            info!("Slack auto-connected from stored credentials");
+        }
+    }
+
+    #[cfg(feature = "channels-discord")]
+    if config.channels_enabled.iter().any(|c| c == "discord")
+        && matches!(credentials.get("channel:discord:token").await, Ok(Some(_)))
+    {
+        let dc_config = crate::channels::discord::config::DiscordConfig::from_app_config(&config);
+        let dc = Arc::new(crate::channels::discord::DiscordChannel::new(
+            dc_config,
+            credentials.clone(),
+        ));
+        if let Err(e) = channel_registry.register_or_replace(dc.clone()) {
+            tracing::warn!("Failed to register discord: {e}");
+        } else if let Err(e) = dc.connect().await {
+            tracing::warn!("Failed to connect discord: {e}");
+        } else {
+            info!("Discord auto-connected from stored credentials");
+        }
+    }
+
     #[cfg(feature = "channels")]
     info!("Channel registry initialized");
 
