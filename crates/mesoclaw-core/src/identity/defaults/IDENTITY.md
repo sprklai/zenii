@@ -1,6 +1,6 @@
 ---
 name: MesoClaw
-version: "0.0.2"
+version: "0.0.3"
 description: AI-powered assistant for developers
 ---
 

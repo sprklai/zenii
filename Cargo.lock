@@ -3076,7 +3076,7 @@ dependencies = [
 
 [[package]]
 name = "mesoclaw-cli"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "clap",
  "clap_complete",
@@ -3092,7 +3092,7 @@ dependencies = [
 
 [[package]]
 name = "mesoclaw-core"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "async-trait",
  "axum 0.8.8",
@@ -3133,7 +3133,7 @@ dependencies = [
 
 [[package]]
 name = "mesoclaw-daemon"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "clap",
  "mesoclaw-core",
@@ -3144,7 +3144,7 @@ dependencies = [
 
 [[package]]
 name = "mesoclaw-desktop"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "mesoclaw-core",
  "opener",
@@ -3165,7 +3165,7 @@ dependencies = [
 
 [[package]]
 name = "mesoclaw-tui"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "mesoclaw-core",
  "tokio",
