@@ -151,10 +151,14 @@ pub fn open_data_dir() -> Result<(), String> {
 mod tests {
     use super::*;
 
+    // Mutex to serialize tests that manipulate MESOCLAW_GATEWAY_URL env var
+    static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
     // 7.1 — External gateway URL skips embedded boot
     #[test]
     fn external_gateway_skips_embedded() {
-        // SAFETY: test-only env manipulation
+        let _guard = ENV_LOCK.lock();
+        // SAFETY: test-only env manipulation, serialized by ENV_LOCK
         unsafe {
             std::env::set_var("MESOCLAW_GATEWAY_URL", "http://localhost:9999");
         }
@@ -169,6 +173,7 @@ mod tests {
     // 7.2 — Invalid external URL returns error
     #[test]
     fn invalid_external_url_returns_error() {
+        let _guard = ENV_LOCK.lock();
         unsafe {
             std::env::set_var("MESOCLAW_GATEWAY_URL", "not a valid url");
         }
@@ -204,6 +209,7 @@ mod tests {
     // 7.1b — No env var means embedded mode
     #[test]
     fn no_env_var_means_embedded_mode() {
+        let _guard = ENV_LOCK.lock();
         unsafe {
             std::env::remove_var("MESOCLAW_GATEWAY_URL");
         }
@@ -214,6 +220,7 @@ mod tests {
     // 7.1c — Empty env var means embedded mode
     #[test]
     fn empty_env_var_means_embedded_mode() {
+        let _guard = ENV_LOCK.lock();
         unsafe {
             std::env::set_var("MESOCLAW_GATEWAY_URL", "");
         }
