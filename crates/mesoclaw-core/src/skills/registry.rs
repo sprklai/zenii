@@ -105,21 +105,19 @@ impl SkillRegistry {
     }
 
     /// Update an existing skill's content.
+    /// Holds write lock for the entire operation to prevent TOCTOU races.
     pub async fn update(&self, id: &str, content: String) -> Result<Skill> {
-        {
-            let skills = self.skills.read().await;
-            if !skills.contains_key(id) {
-                return Err(MesoError::SkillNotFound(format!("skill '{id}' not found")));
-            }
+        let mut skills = self.skills.write().await;
+        if !skills.contains_key(id) {
+            return Err(MesoError::SkillNotFound(format!("skill '{id}' not found")));
         }
 
         let skill = load_skill_from_content(id, &content, SkillSource::User);
 
-        // Write to disk
+        // Write to disk while holding the lock to ensure atomicity
         let path = self.dir.join(format!("{id}.md"));
         std::fs::write(&path, &content)?;
 
-        let mut skills = self.skills.write().await;
         skills.insert(id.to_string(), skill.clone());
         Ok(skill)
     }
@@ -323,6 +321,47 @@ mod tests {
         let result = registry.delete("system-prompt").await;
         assert!(result.is_err());
         assert!(matches!(result.unwrap_err(), MesoError::Skill(_)));
+    }
+
+    // WS-6.7 — Update is atomic (content matches after update)
+    #[tokio::test]
+    async fn registry_update_atomic() {
+        let dir = TempDir::new().unwrap();
+        let registry = SkillRegistry::new(dir.path(), 100_000).unwrap();
+
+        // Create first
+        registry
+            .create(
+                "atomic-test".into(),
+                "---\nname: atomic-test\ndescription: Old\ncategory: test\n---\nOld body.".into(),
+            )
+            .await
+            .unwrap();
+
+        // Update atomically
+        let new_content =
+            "---\nname: atomic-test\ndescription: New\ncategory: test\n---\nNew body.";
+        let updated = registry
+            .update("atomic-test", new_content.into())
+            .await
+            .unwrap();
+        assert!(updated.content.contains("New body"));
+
+        // Verify memory and disk match
+        let from_memory = registry.get("atomic-test").await.unwrap();
+        assert!(from_memory.content.contains("New body"));
+
+        let on_disk = std::fs::read_to_string(dir.path().join("atomic-test.md")).unwrap();
+        assert_eq!(on_disk, new_content);
+    }
+
+    // WS-6.7 — Update of nonexistent skill still fails
+    #[tokio::test]
+    async fn registry_update_nonexistent_fails() {
+        let dir = TempDir::new().unwrap();
+        let registry = SkillRegistry::new(dir.path(), 100_000).unwrap();
+        let result = registry.update("nonexistent", "content".into()).await;
+        assert!(matches!(result.unwrap_err(), MesoError::SkillNotFound(_)));
     }
 
     #[tokio::test]

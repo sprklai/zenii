@@ -1,6 +1,7 @@
 use std::collections::VecDeque;
 use std::str::FromStr;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use async_trait::async_trait;
@@ -46,6 +47,7 @@ pub struct TokioScheduler {
     stuck_threshold_secs: u64,
     max_history_per_job: usize,
     error_backoff_secs: Vec<u64>,
+    running: AtomicBool,
     #[cfg(feature = "gateway")]
     app_state: Arc<tokio::sync::OnceCell<Arc<AppState>>>,
 }
@@ -64,6 +66,7 @@ impl TokioScheduler {
             stuck_threshold_secs: config.scheduler_stuck_threshold_secs,
             max_history_per_job: config.scheduler_max_history_per_job,
             error_backoff_secs: config.scheduler_error_backoff_secs.clone(),
+            running: AtomicBool::new(false),
             #[cfg(feature = "gateway")]
             app_state: Arc::new(tokio::sync::OnceCell::new()),
         })
@@ -242,14 +245,25 @@ impl TokioScheduler {
     }
 
     /// Check if the current local hour is within active hours.
+    /// Supports overnight wraparound (e.g. start=22, end=6 means 22:00-05:59).
     fn is_in_active_hours(active_hours: &Option<ActiveHours>) -> bool {
         match active_hours {
             None => true,
             Some(hours) => {
                 use chrono::Timelike;
                 let local_hour = chrono::Local::now().hour() as u8;
-                local_hour >= hours.start_hour && local_hour < hours.end_hour
+                Self::hour_in_window(local_hour, hours.start_hour, hours.end_hour)
             }
+        }
+    }
+
+    /// Check if `hour` is within `[start, end)`, handling overnight wraparound.
+    fn hour_in_window(hour: u8, start: u8, end: u8) -> bool {
+        if start < end {
+            hour >= start && hour < end
+        } else {
+            // Overnight: e.g. 22..6 means 22,23,0,1,2,3,4,5
+            hour >= start || hour < end
         }
     }
 
@@ -270,9 +284,9 @@ impl TokioScheduler {
         entry.truncate(self.max_history_per_job);
     }
 
-    /// Check if scheduler is running (stop signal not sent).
+    /// Check if scheduler is running.
     pub fn is_running(&self) -> bool {
-        !*self.stop_rx.borrow()
+        self.running.load(Ordering::SeqCst)
     }
 
     /// Get count of registered jobs.
@@ -284,6 +298,15 @@ impl TokioScheduler {
 #[async_trait]
 impl Scheduler for TokioScheduler {
     async fn start(&self) {
+        // Double-start guard: only one tick loop at a time
+        if self
+            .running
+            .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+            .is_err()
+        {
+            return;
+        }
+
         let jobs = self.jobs.clone();
         let history = self.history.clone();
         let bus = self.event_bus.clone();
@@ -406,16 +429,27 @@ impl Scheduler for TokioScheduler {
                             if job.delete_after_run && job_status == JobStatus::Success {
                                 jobs.remove(&job.id);
                                 let _ = TokioScheduler::delete_job_from_db(&db, &job.id).await;
-                            } else if let Some(mut entry) = jobs.get_mut(&job.id) {
-                                if job_status == JobStatus::Success {
-                                    entry.error_count = 0;
-                                } else {
-                                    entry.error_count += 1;
+                            } else {
+                                // Clone data out of DashMap guard to avoid holding it across .await
+                                let snapshot = {
+                                    if let Some(mut entry) = jobs.get_mut(&job.id) {
+                                        if job_status == JobStatus::Success {
+                                            entry.error_count = 0;
+                                        } else {
+                                            entry.error_count += 1;
+                                        }
+                                        if let Ok(next) = TokioScheduler::compute_next_run(&entry.schedule) {
+                                            entry.next_run = Some(next);
+                                        }
+                                        Some(entry.clone())
+                                    } else {
+                                        None
+                                    }
+                                };
+                                // Guard is dropped — safe to .await now
+                                if let Some(snapshot) = snapshot {
+                                    let _ = TokioScheduler::persist_job(&db, &snapshot).await;
                                 }
-                                if let Ok(next) = TokioScheduler::compute_next_run(&entry.schedule) {
-                                    entry.next_run = Some(next);
-                                }
-                                let _ = TokioScheduler::persist_job(&db, &entry).await;
                             }
                         }
                     }
@@ -432,6 +466,7 @@ impl Scheduler for TokioScheduler {
 
     async fn stop(&self) {
         let _ = self.stop_tx.send(true);
+        self.running.store(false, Ordering::SeqCst);
     }
 
     async fn add_job(&self, mut job: ScheduledJob) -> Result<JobId> {
@@ -468,18 +503,24 @@ impl Scheduler for TokioScheduler {
     }
 
     async fn toggle_job(&self, id: &str) -> Result<bool> {
-        let new_state = {
-            let mut entry = self
+        // Read current state and compute new state + snapshot without holding guard across .await
+        let (new_state, snapshot) = {
+            let entry = self
                 .jobs
-                .get_mut(id)
+                .get(id)
                 .ok_or_else(|| MesoError::NotFound(format!("job '{id}' not found")))?;
-            entry.enabled = !entry.enabled;
-            entry.enabled
+            let toggled = !entry.enabled;
+            let mut snapshot = entry.clone();
+            snapshot.enabled = toggled;
+            (toggled, snapshot)
         };
 
-        // Persist updated state
-        if let Some(entry) = self.jobs.get(id) {
-            Self::persist_job(&self.db, &entry).await?;
+        // Persist first — only update in-memory on success
+        Self::persist_job(&self.db, &snapshot).await?;
+
+        // Now update in-memory state
+        if let Some(mut entry) = self.jobs.get_mut(id) {
+            entry.enabled = new_state;
         }
 
         Ok(new_state)
@@ -839,5 +880,99 @@ mod tests {
 
         let history = sched.job_history(&id).await;
         assert!(history.is_empty(), "Disabled job should have no executions");
+    }
+
+    // WS-6.1 — Scheduler tick does not hold DashMap guard across .await
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn scheduler_tick_no_dashmap_guard_across_await() {
+        let (_dir, sched) = test_scheduler();
+        let mut job = test_job("guard_test");
+        job.schedule = Schedule::Interval { secs: 1 };
+        let id = sched.add_job(job).await.unwrap();
+
+        // Force next_run to past so tick fires immediately
+        if let Some(mut entry) = sched.jobs.get_mut(&id) {
+            entry.next_run = Some(Utc::now() - chrono::Duration::seconds(1));
+        }
+
+        sched.start().await;
+
+        // Verify no deadlock by running list_jobs() concurrently with tick
+        let sched_ref = sched.clone();
+        let list_handle = tokio::spawn(async move {
+            for _ in 0..5 {
+                let _jobs = sched_ref.list_jobs().await;
+                tokio::time::sleep(Duration::from_millis(100)).await;
+            }
+        });
+
+        tokio::time::sleep(Duration::from_secs(2)).await;
+        sched.stop().await;
+
+        list_handle.await.expect("concurrent list_jobs should not deadlock");
+
+        // Verify job state was persisted
+        let history = sched.job_history(&id).await;
+        assert!(!history.is_empty(), "Should have at least one execution record");
+    }
+
+    // WS-6.2 — Toggle persists to DB before updating in-memory
+    #[tokio::test]
+    async fn scheduler_toggle_persist_first() {
+        let (_dir, pool) = test_db();
+        let bus: Arc<dyn EventBus> = Arc::new(TokioBroadcastBus::new(16));
+        let config = AppConfig::default();
+
+        let sched = TokioScheduler::new(pool.clone(), bus.clone(), &config);
+        let id = sched.add_job(test_job("toggle_persist")).await.unwrap();
+
+        // Toggle to disabled
+        let new_state = sched.toggle_job(&id).await.unwrap();
+        assert!(!new_state);
+
+        // Load from DB in a new scheduler to verify DB state matches
+        let sched2 = TokioScheduler::new(pool, bus, &config);
+        sched2.load_from_db().await.unwrap();
+        let jobs = sched2.list_jobs().await;
+        assert_eq!(jobs.len(), 1);
+        assert!(!jobs[0].enabled, "DB should reflect disabled state");
+    }
+
+    // WS-6.3 — Double start is prevented
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn scheduler_double_start_prevented() {
+        let (_dir, sched) = test_scheduler();
+
+        assert!(!sched.is_running());
+        sched.start().await;
+        assert!(sched.is_running());
+
+        // Second start should be a no-op (no panic, no second loop)
+        sched.start().await;
+        assert!(sched.is_running());
+
+        // Stop once should stop all
+        sched.stop().await;
+        assert!(!sched.is_running());
+    }
+
+    // WS-6.4 — ActiveHours overnight window (22:00-06:00)
+    #[test]
+    fn active_hours_overnight_window() {
+        assert!(TokioScheduler::hour_in_window(23, 22, 6));
+        assert!(TokioScheduler::hour_in_window(0, 22, 6));
+        assert!(TokioScheduler::hour_in_window(5, 22, 6));
+        assert!(!TokioScheduler::hour_in_window(6, 22, 6));
+        assert!(!TokioScheduler::hour_in_window(12, 22, 6));
+        assert!(TokioScheduler::hour_in_window(22, 22, 6));
+    }
+
+    // WS-6.4 — ActiveHours normal daytime window (09:00-17:00)
+    #[test]
+    fn active_hours_normal_window() {
+        assert!(TokioScheduler::hour_in_window(9, 9, 17));
+        assert!(TokioScheduler::hour_in_window(12, 9, 17));
+        assert!(!TokioScheduler::hour_in_window(17, 9, 17));
+        assert!(!TokioScheduler::hour_in_window(8, 9, 17));
     }
 }

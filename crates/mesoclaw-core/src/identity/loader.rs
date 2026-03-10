@@ -87,6 +87,8 @@ impl SoulLoader {
     }
 
     /// Update an identity file's content on disk and in memory.
+    /// Acquires write lock first, then writes to disk while holding the lock,
+    /// ensuring disk and memory state are always consistent.
     pub async fn update_file(&self, name: &str, content: String) -> Result<()> {
         // Verify it's a known file name
         if !IDENTITY_FILES.iter().any(|(n, _)| *n == name) {
@@ -95,10 +97,11 @@ impl SoulLoader {
             )));
         }
 
+        let mut identity = self.identity.write().await;
+
+        // Write to disk while holding the lock
         let path = self.dir.join(format!("{name}.md"));
         std::fs::write(&path, &content)?;
-
-        let mut identity = self.identity.write().await;
         let default_content = IDENTITY_FILES
             .iter()
             .find(|(n, _)| *n == name)
@@ -236,6 +239,28 @@ mod tests {
         // Verify on disk
         let on_disk = std::fs::read_to_string(identity_dir.join("SOUL.md")).unwrap();
         assert_eq!(on_disk, "Updated soul");
+    }
+
+    // WS-6.8 — Update is atomic (disk and memory match)
+    #[tokio::test]
+    async fn soul_loader_update_atomic() {
+        let dir = TempDir::new().unwrap();
+        let identity_dir = dir.path().join("identity");
+        let loader = SoulLoader::new(&identity_dir).unwrap();
+
+        let new_content = "Atomically updated soul content";
+        loader
+            .update_file("SOUL", new_content.into())
+            .await
+            .unwrap();
+
+        // Verify memory matches
+        let file = loader.get_file("SOUL").await.unwrap();
+        assert_eq!(file.content, new_content);
+
+        // Verify disk matches memory
+        let on_disk = std::fs::read_to_string(identity_dir.join("SOUL.md")).unwrap();
+        assert_eq!(on_disk, new_content);
     }
 
     #[tokio::test]

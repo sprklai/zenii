@@ -19,13 +19,18 @@ impl ToolRegistry {
     }
 
     /// Register a tool. Returns error if a tool with the same name already exists.
+    /// Uses DashMap `entry()` API to avoid TOCTOU race between contains_key + insert.
     pub fn register(&self, tool: Arc<dyn Tool>) -> Result<()> {
         let name = tool.name().to_string();
-        if self.tools.contains_key(&name) {
-            return Err(MesoError::Tool(format!("tool already registered: {name}")));
+        match self.tools.entry(name.clone()) {
+            dashmap::mapref::entry::Entry::Occupied(_) => {
+                Err(MesoError::Tool(format!("tool already registered: {name}")))
+            }
+            dashmap::mapref::entry::Entry::Vacant(entry) => {
+                entry.insert(tool);
+                Ok(())
+            }
         }
-        self.tools.insert(name, tool);
-        Ok(())
     }
 
     /// Get a tool by name.
@@ -163,5 +168,32 @@ mod tests {
         for i in 0..10 {
             assert!(registry.get(&format!("tool_{i}")).is_some());
         }
+    }
+
+    // WS-6.6 — Concurrent duplicate registration is atomic (no TOCTOU)
+    #[test]
+    fn concurrent_duplicate_rejected_atomically() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        use std::thread;
+        let registry = Arc::new(ToolRegistry::new());
+        let success_count = Arc::new(AtomicUsize::new(0));
+        let mut handles = vec![];
+        // 10 threads all try to register the same name
+        for _ in 0..10 {
+            let reg = Arc::clone(&registry);
+            let count = Arc::clone(&success_count);
+            handles.push(thread::spawn(move || {
+                let tool = Arc::new(FakeTool::new("race_tool"));
+                if reg.register(tool).is_ok() {
+                    count.fetch_add(1, Ordering::SeqCst);
+                }
+            }));
+        }
+        for h in handles {
+            h.join().unwrap();
+        }
+        // Exactly one should succeed
+        assert_eq!(success_count.load(Ordering::SeqCst), 1);
+        assert_eq!(registry.len(), 1);
     }
 }

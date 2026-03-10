@@ -3710,6 +3710,7 @@ dependencies = [
  "ignore",
  "keyring",
  "lru",
+ "parking_lot",
  "pulldown-cmark",
  "reqwest 0.13.2",
  "rig-core",
