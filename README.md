@@ -1,12 +1,14 @@
 # MesoClaw
 
 <p align="center">
-  <img src="crates/mesoclaw-desktop/icons/icon.png" alt="MesoClaw — native desktop AI agent" width="180" />
+  <img src="crates/mesoclaw-desktop/icons/icon.png" alt="MesoClaw" width="180" />
 </p>
 
+<h1 align="center">A lightweight, secure, local-first AI agent for desktop, CLI, and daemon.</h1>
+
 <p align="center">
-  <strong>A native desktop AI agent — 18 providers, 11 tools, 3 channels, ~50 MB binary.</strong><br>
-  Built with Rust + Tauri 2. Runs on Windows, macOS, and Linux. No cloud required.
+  Built with Rust + Tauri 2. Privacy-first alternative to <a href="https://github.com/openclaw/openclaw">OpenClaw</a>. &lt;20MB native binary.<br>
+  <a href="https://mesoclaw.sprklai.com">https://mesoclaw.sprklai.com</a>
 </p>
 
 <!-- Row 1: CI & Release -->
@@ -47,7 +49,7 @@
 
 <!-- Row 4: Quality & i18n -->
 <p align="center">
-  <img src="https://img.shields.io/badge/tests-827%20Rust%20%2B%2033%20TS-success?style=flat-square" alt="827 Rust + 33 TS Tests" />
+  <img src="https://img.shields.io/badge/tests-962%20Rust%20%2B%2037%20JS-success?style=flat-square" alt="962 Rust + 37 TS Tests" />
   <img src="https://img.shields.io/badge/i18n-EN-blue?style=flat-square" alt="English" />
 </p>
 
@@ -64,31 +66,55 @@
   </a>
 </p>
 
-An AI-powered multi-interface application built with Rust, producing multiple binaries from a single codebase: Desktop, CLI, and Daemon (with TUI and Mobile planned for future release).
+---
+
+## Why MesoClaw?
+
+- **Native desktop app** -- Tauri 2 + Svelte 5 GUI, not a browser tab or Electron wrapper
+- **<20MB binary** with full GUI -- no Node.js runtime, no JVM, just a native Rust binary
+- **Plugin system in ANY language** -- JSON-RPC protocol, write plugins in Python, Go, JS, or anything that speaks stdio
+- **Self-evolving skills** -- agent learns your preferences and proposes skill changes with human-in-the-loop approval
+- **Semantic memory** -- SQLite FTS5 + vector embeddings for intelligent recall across conversations
+- **Scheduled autonomy** -- cron-driven agent tasks that run unattended
+- **Autonomous reasoning** -- multi-step agent loops with configurable continuation strategies
+- **Privacy-first** -- zero telemetry, all data local, OS keyring for credentials
 
 ---
 
-## Overview
+## How It Compares
 
-MesoClaw is a Rust workspace that delivers AI assistant capabilities across multiple interfaces. All business logic lives in a shared core library (`mesoclaw-core`), while each binary crate is a thin shell that adapts the core to its specific interface.
+| Category | MesoClaw | OpenClaw | ZeroClaw |
+|----------|----------|----------|----------|
+| **Language** | Rust | TypeScript | Rust |
+| **Desktop GUI** | Tauri 2 + Svelte 5 | -- | -- |
+| **CLI** | clap | -- | -- |
+| **Headless Daemon** | axum (88 routes) | Node.js | 3.4MB daemon |
+| **AI Providers** | 18 via rig-core | Multi-model | 22+ |
+| **Built-in Tools** | 15 | 100+ AgentSkills | Tool orchestration |
+| **Plugin System** | JSON-RPC (any language) | AgentSkills | Trait-based adapters |
+| **Memory** | SQLite FTS5 + vectors | File-based | Built-in |
+| **Embeddings** | OpenAI + local FastEmbed | -- | -- |
+| **Self-Evolution** | LearnTool + SkillProposals | -- | -- |
+| **Autonomous Reasoning** | ReasoningEngine | -- | -- |
+| **Scheduler** | Cron + one-shot | -- | -- |
+| **Channels** | Telegram, Slack, Discord | WhatsApp, Signal, Telegram, Discord | Telegram, Discord, WhatsApp |
+| **Binary Size** | <20MB (native w/ GUI) | Node.js runtime | 3.4MB |
+| **Privacy** | 100% local, zero telemetry | Local, model-agnostic | 100% local |
+| **License** | MIT | Open source | Open source |
+| **Tests** | 962 Rust + 37 TS | -- | -- |
 
-```mermaid
-graph TB
-    Desktop["Desktop<br>#40;Tauri 2 + Svelte 5#41;"] --> Core[mesoclaw-core<br>shared logic]
-    CLI["CLI<br>#40;clap#41;"] --> Core
-    Daemon["Daemon<br>#40;headless server#41;"] --> Core
-    Mobile["Mobile #40;future#41;<br>#40;Tauri 2 iOS + Android#41;"] -.-> Core
-    TUI["TUI #40;future#41;<br>#40;ratatui#41;"] -.-> Core
-```
+---
 
 ## Features
 
 - **18 AI providers** via rig-core (OpenAI, Anthropic, Google, Ollama, and more)
-- **Tool calling** with 11 built-in tools (websearch, sysinfo, shell, file read/write/list/search, patch, process, learn, skill_proposal) via DashMap-backed ToolRegistry
+- **Tool calling** with 15 built-in tools (13 base + 2 feature-gated) via DashMap-backed ToolRegistry: websearch, sysinfo, shell, file read/write/list/search, patch, process, learn, skill_proposal, memory, config + feature-gated channel_send, scheduler
+- **Plugin system** -- external process plugins via JSON-RPC 2.0 protocol, installable from git or local paths, with automatic tool and skill registration
+- **Autonomous reasoning** -- ReasoningEngine with ContinuationStrategy for multi-step autonomous agent loops
 - **Context-aware agent** -- 3-tier adaptive context injection (Full/Minimal/Summary) with hash-based cache invalidation
 - **Self-evolving framework** -- agent learns user preferences and proposes skill changes with human-in-the-loop approval
 - **Streaming responses** via WebSocket
-- **Semantic memory** with SQLite FTS5 + vector embeddings (sqlite-vec)
+- **Semantic memory** with SQLite FTS5 + vector embeddings (sqlite-vec), OpenAI and local FastEmbed embedding providers
 - **Soul / Persona system** -- 3 identity files (SOUL/IDENTITY/USER.md) with dynamic prompt composition
 - **Skills system** -- bundled + user markdown skills loaded into agent context (Claude Code model)
 - **Progressive user learning** -- SQLite-backed observations with category filtering, confidence scoring, and privacy controls
@@ -96,7 +122,7 @@ graph TB
 - **Messaging channels** -- Telegram, Slack, Discord with lifecycle hooks (typing indicators, status messages) and end-to-end channel router pipeline (feature-gated, trait-based with DashMap registry)
 - **Cron scheduler** -- automated recurring tasks with real payload execution (Notify, AgentTurn, Heartbeat, SendViaChannel)
 - **Notifications** -- desktop OS notifications (tauri-plugin-notification) + web toast notifications (svelte-sonner) via WebSocket push
-- **Cross-platform** -- Linux, macOS, Windows, ARM (Raspberry Pi), iOS, Android
+- **Cross-platform** -- Linux, macOS, Windows, ARM (Raspberry Pi)
 
 ## Tech Stack
 
@@ -109,12 +135,13 @@ graph TB
 | Gateway | axum (HTTP + WebSocket) |
 | Frontend | Svelte 5 + SvelteKit + shadcn-svelte + Tailwind CSS |
 | Desktop | Tauri 2 |
-| Mobile | Tauri 2 (iOS + Android) |
 | CLI | clap |
-| TUI | ratatui |
+| Plugins | JSON-RPC 2.0 external processes |
 | Channels | Telegram (teloxide), Slack, Discord (serenity) -- feature-gated |
 | Content | serde_yaml (YAML frontmatter parsing) |
 | i18n | paraglide-js (compile-time, tree-shakeable) |
+| Mobile | Tauri 2 (iOS + Android) -- future release |
+| TUI | ratatui -- future release |
 
 ---
 
@@ -144,6 +171,7 @@ graph TD
             Skills["Skills<br>SkillRegistry"]
             UserL["User Profile<br>UserLearner"]
             Channels["Channels"]
+            PluginReg["Plugins<br>PluginRegistry"]
         end
 
         subgraph Support["Support Layer"]
@@ -161,7 +189,7 @@ graph TD
 
     BootEntry --> Gateway & DB & EventBus
     Gateway --> AI & DB & Context
-    Gateway --> Identity & Skills & UserL & Channels
+    Gateway --> Identity & Skills & UserL & Channels & PluginReg
     AI --> Tools & Security & DB
     AI --> Identity & Skills
     Context --> DB & Identity & UserL & Skills
@@ -235,6 +263,7 @@ sequenceDiagram
     participant DB as SQLite
     participant Cred as Keyring
     participant AI as AI Providers
+    participant Plug as Plugins
     participant GW as Gateway
 
     App->>Cfg: Parse CLI args + load TOML
@@ -243,6 +272,7 @@ sequenceDiagram
     App->>Cred: Initialize credential store
     App->>AI: Register providers + load API keys
     App->>AI: Register agent tools
+    App->>Plug: Scan plugins directory + register tools/skills
     App->>GW: Start axum server (:18981)
 
     alt Desktop
@@ -304,21 +334,28 @@ mesoclaw/
 ├── docs/
 │   ├── architecture.md     # Detailed architecture diagrams
 │   ├── phases.md           # Implementation phase details
-│   └── processes.md        # Process flow diagrams
+│   ├── processes.md        # Process flow diagrams
+│   ├── api-reference.md    # All 88 REST/WS routes
+│   ├── configuration.md    # All 60+ config fields
+│   ├── cli-reference.md    # CLI command reference
+│   ├── deployment.md       # Deployment guide
+│   └── development.md      # Development guide
 ├── plans/
 │   ├── phase1_core_foundation.md  # Phase 1 implementation plan
 │   ├── phase2_ai_integration.md   # Phase 2 implementation plan
 │   ├── phase3_gateway_server.md   # Phase 3 implementation plan
 │   ├── phase4_agent_intelligence.md # Phase 4 implementation plan
 │   ├── phase5_combined.md         # Phase 5 implementation plan
-│   └── phase6_frontend.md         # Phase 6 implementation plan
+│   ├── phase6_frontend.md         # Phase 6 implementation plan
+│   └── phase9_plugin_architecture.md # Phase 9 plugin plan
 ├── tests/
 │   ├── phase1_core_foundation.md  # Phase 1 test plan + results
-│   ├── phase2_ai_integration.md   # Phase 2 test plan + results (105 tests)
-│   ├── phase3_gateway_server.md    # Phase 3 test plan + results (96 tests)
-│   ├── phase4_agent_intelligence.md # Phase 4 test plan + results (94 tests)
-│   ├── phase5_combined.md           # Phase 5 test plan + results (20 tests)
-│   └── phase6_frontend.md           # Phase 6 test plan + results (26 tests)
+│   ├── phase2_ai_integration.md   # Phase 2 test plan + results
+│   ├── phase3_gateway_server.md   # Phase 3 test plan + results
+│   ├── phase4_agent_intelligence.md # Phase 4 test plan + results
+│   ├── phase5_combined.md         # Phase 5 test plan + results
+│   ├── phase6_frontend.md         # Phase 6 test plan + results
+│   └── phase9_plugin_architecture.md # Phase 9 test plan
 ├── crates/
 │   ├── mesoclaw-core/      # Shared library (NO Tauri dependency)
 │   ├── mesoclaw-desktop/   # Tauri 2.10 shell (macOS, Windows, Linux)
@@ -466,6 +503,7 @@ See [scripts/build.sh](scripts/build.sh) for full options.
 
 ```bash
 cargo build -p mesoclaw-daemon                          # Core only (gateway + ai + keyring)
+cargo build -p mesoclaw-daemon --features local-embeddings  # + local FastEmbed ONNX embeddings
 cargo build -p mesoclaw-daemon --features channels      # + channel core traits + registry
 cargo build -p mesoclaw-daemon --features channels-telegram  # + Telegram (teloxide)
 cargo build -p mesoclaw-daemon --features channels-slack     # + Slack
@@ -515,6 +553,10 @@ security_autonomy_level = "supervised"  # supervised | autonomous | strict
 max_tool_retries = 3
 # gateway_auth_token = "your-secret-token"  # Optional bearer token for auth
 # agent_max_turns = 20                       # Max tool-calling turns per request
+# agent_max_continuations = 5               # Max autonomous reasoning turns
+# embedding_provider = "none"               # none | openai | local
+# plugins_dir = "/custom/plugins/path"      # Override default plugins directory
+# plugin_auto_update = false                # Auto-update git-sourced plugins
 ```
 
 ## CLI Commands
@@ -536,11 +578,23 @@ mesoclaw provider test <id>           # Test provider connection
 mesoclaw provider add <id> <name> <base_url>  # Add custom provider
 mesoclaw provider remove <id>         # Remove user-defined provider
 mesoclaw provider default <provider> <model>  # Set default model
+mesoclaw embedding activate <provider>       # Activate embeddings (openai/local)
+mesoclaw embedding deactivate                # Deactivate embeddings
+mesoclaw embedding status                    # Show embedding provider status
+mesoclaw embedding test                      # Test embedding generation
+mesoclaw embedding reindex                   # Re-embed all memories
+mesoclaw plugin list                         # List installed plugins
+mesoclaw plugin install <source> [--local]   # Install from git URL or local path
+mesoclaw plugin remove <name>                # Remove a plugin
+mesoclaw plugin update <name>                # Update a plugin
+mesoclaw plugin enable <name>                # Enable a plugin
+mesoclaw plugin disable <name>               # Disable a plugin
+mesoclaw plugin info <name>                  # Show plugin details
 ```
 
 Global options: `--host`, `--port`, `--token` (or `MESOCLAW_TOKEN` env var)
 
-## Gateway Routes (61 base + 8 feature-gated = 69 total)
+## Gateway Routes (73 base + 15 feature-gated = 88 total)
 
 | Group | Routes | Description |
 |-------|--------|-------------|
@@ -556,7 +610,10 @@ Global options: `--host`, `--port`, `--token` (or `MESOCLAW_TOKEN` env var)
 | Skills | `GET /skills`, `GET/PUT/DELETE /skills/{id}`, `POST /skills`, `POST /skills/reload` | Skill CRUD |
 | Skill Proposals | `GET /skills/proposals`, `POST /skills/proposals/{id}/approve`, `POST /skills/proposals/{id}/reject`, `DELETE /skills/proposals/{id}` | Self-evolving skill management |
 | User | `GET/POST/DELETE /user/observations`, `GET/DELETE /user/observations/{key}`, `GET /user/profile` | User learning + privacy |
-| Channels | `POST /channels/{name}/test` (always), `GET /channels`, `GET /channels/{name}/status`, `POST /channels/{name}/send`, `POST /channels/{name}/connect/disconnect`, `GET /channels/{name}/health`, `POST /channels/{name}/webhook` (feature-gated) | Messaging channels |
+| Embeddings | `GET /embeddings/status`, `POST /embeddings/test`, `POST /embeddings/embed`, `POST /embeddings/download`, `POST /embeddings/reindex` | Semantic memory embedding management |
+| Plugins | `GET /plugins`, `POST /plugins/install`, `GET/DELETE /plugins/{name}`, `PUT /plugins/{name}/toggle`, `POST /plugins/{name}/update`, `GET/PUT /plugins/{name}/config` | Plugin management (install, remove, enable/disable, config) |
+| Channels | `POST /channels/{name}/test` (always), `GET /channels`, `GET /channels/{name}/status`, `POST /channels/{name}/send`, `POST /channels/{name}/connect/disconnect`, `GET /channels/{name}/health`, `POST /channels/{name}/message`, `GET /channels/sessions`, `GET /channels/sessions/{id}/messages` (feature-gated) | Messaging channels |
+| Scheduler | `GET/POST /scheduler/jobs`, `PUT /scheduler/jobs/{id}/toggle`, `DELETE /scheduler/jobs/{id}`, `GET /scheduler/jobs/{id}/history`, `GET /scheduler/status` (feature-gated) | Cron job management |
 | WebSocket | `GET /ws/chat`, `GET /ws/notifications` | Streaming chat + notification push |
 
 ---
@@ -566,38 +623,14 @@ Global options: `--host`, `--port`, `--token` (or `MESOCLAW_TOKEN` env var)
 Detailed documentation lives in the `docs/` directory:
 
 - [CLI Reference](docs/cli-reference.md) -- All commands, options, shell completions, recipes
-- [API Reference](docs/api-reference.md) -- All 74 REST/WS routes with request/response schemas
-- [Configuration](docs/configuration.md) -- All config.toml fields with types and defaults
+- [API Reference](docs/api-reference.md) -- All 88 REST/WS routes with request/response schemas
+- [Configuration](docs/configuration.md) -- All 60+ config.toml fields with types and defaults
 - [Deployment Guide](docs/deployment.md) -- Native, Docker, systemd, Raspberry Pi, reverse proxy
 - [Development Guide](docs/development.md) -- Prerequisites, building, testing, how-to guides
 - [Architecture](docs/architecture.md) -- System diagrams, crate dependencies, project structure
 - [Implementation Phases](docs/phases.md) -- Phase gate protocol, checklist, phase details
 - [Process Flows](docs/processes.md) -- Chat request, startup, error handling, WebSocket flows
 - [Changelog](CHANGELOG.md) -- Release history
-
-### Implementation Status
-
-| Phase | Steps | Status | Tests |
-|-------|-------|--------|-------|
-| Phase 1: Core Foundation | 1-4 | Complete | 16/16 passing |
-| Phase 2: AI Integration | 5-7 | Complete | 137/137 passing |
-| Phase 3: Gateway Server | 8-10 | Complete | 233/233 passing |
-| Phase 4: Agent Intelligence | 10a-10c | Complete | 327/327 passing |
-| Phase 5: Binary Shells + Tools + Memory | 11-12 | Complete | 347/347 passing |
-| Phase 6: Frontend | 13 | Complete | 347 Rust + 26 JS passing |
-| Phase 7: Desktop App | 14 | Complete | 354/354 Rust + 26 JS passing |
-| Phase 8: Credentials & Channels | 15.1-15.2 | Complete | 434/434 Rust + 26 JS passing |
-| Phase 8: Context-Aware Agent | 15.3b | Complete | 488/488 Rust + 26 JS passing |
-| Phase 8: Scheduler + Router + Lifecycle + Hardening | 16, 8.6.1-8.9 | Complete | 827 Rust + 33 JS passing |
-| Stage 9: Cross-Compilation & Build Hardening | -- | Complete | Build profiles, Docker, smoke tests |
-| Stage 10: CI/CD Pipeline | -- | Complete | CI, release, dependabot, labeler |
-| Stage 11: Quality Gates & Automation | -- | Complete | Workspace lints, audit, quality-check.sh |
-| Stage 12: CLI Reference Documentation | -- | Complete | 25 CLI tests + shell completions |
-| Stage 13: API & Configuration Reference | -- | Complete | 74 routes + 55+ config fields documented |
-| Stage 14: Architecture & Deployment Docs | -- | Complete | Dockerfile, docker-compose, guides |
-| Stage 15: Community & Open Source Readiness | -- | Complete | LICENSE, CoC, SECURITY, templates |
-| FR-1: TUI Binary | -- | Future release | -- |
-| FR-2: Mobile App | -- | Future release | -- |
 
 ---
 

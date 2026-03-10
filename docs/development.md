@@ -138,6 +138,7 @@ Features are defined on `mesoclaw-core` and flow through to binary crates:
 | `gateway` | HTTP+WebSocket gateway (axum) | Yes |
 | `ai` | AI agent (rig-core) | Yes |
 | `keyring` | OS keyring credential storage | Yes |
+| `local-embeddings` | Local FastEmbed ONNX embedding provider | No |
 | `channels` | Channel messaging framework | No |
 | `channels-telegram` | Telegram bot adapter | No |
 | `channels-slack` | Slack bot adapter | No |

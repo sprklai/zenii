@@ -503,7 +503,11 @@ mod tests {
     async fn fts5_special_chars_dont_crash() {
         let (_dir, store) = setup().await;
         store
-            .store("test", "some content with special chars", MemoryCategory::Core)
+            .store(
+                "test",
+                "some content with special chars",
+                MemoryCategory::Core,
+            )
             .await
             .unwrap();
         let r1 = store.recall("hello AND world", 10, 0).await;

@@ -31,10 +31,7 @@ pub async fn execute_tool(
         .ok_or_else(|| MesoError::NotFound(format!("tool not found: {name}")))?;
 
     // Security policy check before execution
-    match state
-        .security
-        .validate_tool_execution(&name, &body.args)
-    {
+    match state.security.validate_tool_execution(&name, &body.args) {
         ValidationResult::Allowed => {}
         ValidationResult::NeedsApproval => {
             return Err(MesoError::PolicyDenied(format!(
@@ -121,6 +118,8 @@ mod tests {
             soul_loader: base_state.soul_loader.clone(),
             skill_registry: base_state.skill_registry.clone(),
             user_learner: base_state.user_learner.clone(),
+            plugin_registry: base_state.plugin_registry.clone(),
+            plugin_installer: base_state.plugin_installer.clone(),
             #[cfg(feature = "channels")]
             channel_registry: base_state.channel_registry.clone(),
             #[cfg(feature = "channels")]

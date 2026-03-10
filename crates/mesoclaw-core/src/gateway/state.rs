@@ -11,6 +11,8 @@ use crate::db::DbPool;
 use crate::event_bus::EventBus;
 use crate::identity::SoulLoader;
 use crate::memory::traits::Memory;
+use crate::plugins::installer::PluginInstaller;
+use crate::plugins::registry::PluginRegistry;
 use crate::security::policy::SecurityPolicy;
 use crate::skills::SkillRegistry;
 use crate::tools::ToolRegistry;
@@ -64,6 +66,8 @@ pub struct AppState {
     pub soul_loader: Arc<SoulLoader>,
     pub skill_registry: Arc<SkillRegistry>,
     pub user_learner: Arc<UserLearner>,
+    pub plugin_registry: Arc<PluginRegistry>,
+    pub plugin_installer: Arc<PluginInstaller>,
     #[cfg(feature = "channels")]
     pub channel_registry: Arc<ChannelRegistry>,
     #[cfg(feature = "channels")]

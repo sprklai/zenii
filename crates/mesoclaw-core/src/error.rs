@@ -89,6 +89,12 @@ pub enum MesoError {
     #[error("scheduler error: {0}")]
     Scheduler(String),
 
+    #[error("plugin error: {0}")]
+    Plugin(String),
+
+    #[error("plugin not found: {0}")]
+    PluginNotFound(String),
+
     #[error("{0}")]
     Other(String),
 }

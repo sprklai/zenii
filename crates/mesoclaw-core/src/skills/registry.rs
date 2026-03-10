@@ -157,6 +157,19 @@ impl SkillRegistry {
         Ok(())
     }
 
+    /// Register an external skill (from a plugin). Does not write to disk.
+    /// If a skill with the same id already exists, it is skipped.
+    pub async fn register_external(&self, id: &str, content: String) -> Result<()> {
+        let mut skills = self.skills.write().await;
+        if skills.contains_key(id) {
+            return Ok(()); // skip duplicates silently
+        }
+        let skill = load_skill_from_content(id, &content, SkillSource::User);
+        skills.insert(id.to_string(), skill);
+        info!("Registered external skill: {id}");
+        Ok(())
+    }
+
     /// Get all enabled skills as (name, content) pairs for prompt composition.
     pub async fn active_skills(&self) -> Vec<(String, String)> {
         let skills = self.skills.read().await;
@@ -342,7 +355,10 @@ mod tests {
             .unwrap();
 
         let result = registry
-            .create("test".into(), "---\nname: test\ndescription: Other\ncategory: test\n---\nOther.".into())
+            .create(
+                "test".into(),
+                "---\nname: test\ndescription: Other\ncategory: test\n---\nOther.".into(),
+            )
             .await;
         assert!(result.is_err(), "Creating duplicate skill should fail");
         assert!(matches!(result.unwrap_err(), MesoError::Skill(_)));
@@ -356,7 +372,10 @@ mod tests {
         let result = registry
             .create("system-prompt".into(), "# override".into())
             .await;
-        assert!(result.is_err(), "Creating skill with bundled id should fail");
+        assert!(
+            result.is_err(),
+            "Creating skill with bundled id should fail"
+        );
         assert!(matches!(result.unwrap_err(), MesoError::Skill(_)));
     }
 

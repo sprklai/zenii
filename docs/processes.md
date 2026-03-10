@@ -19,7 +19,10 @@
 - [Context Injection Flow](#context-injection-flow)
 - [Skill Proposal Flow](#skill-proposal-flow)
 - [Scheduler Notification Flow](#scheduler-notification-flow)
+- [Embedding Flow](#embedding-flow)
+- [Reasoning Continuation Flow](#reasoning-continuation-flow)
 - [Channel Router Message Pipeline](#channel-router-message-pipeline)
+- [Plugin Lifecycle Flow](#plugin-lifecycle-flow)
 
 ---
 
@@ -80,7 +83,7 @@ sequenceDiagram
     DB->>DB: Run pending migrations
     App->>Cred: Initialize credential store (KeyringStore / InMemoryStore)
     App->>AI: Register providers + load API keys
-    App->>AI: Register 9 agent tools into ToolRegistry (DashMap)
+    App->>AI: Register 13 base + 2 feature-gated agent tools into ToolRegistry (DashMap)
     App->>App: Load identity (SoulLoader from data_dir/identity/)
     App->>App: Load skills (SkillRegistry from data_dir/skills/)
     App->>App: Init user learner (UserLearner from DB pool)
@@ -574,6 +577,67 @@ sequenceDiagram
     Sched->>Sched: Compute next_run
 ```
 
+## Embedding Flow
+
+```mermaid
+sequenceDiagram
+    participant API as Gateway API
+    participant MS as SqliteMemoryStore
+    participant EP as EmbeddingProvider
+    participant VI as VectorIndex (sqlite-vec)
+    participant FTS as FTS5 Index
+
+    Note over API,FTS: Store with embedding
+    API->>MS: store(key, content, category)
+    MS->>FTS: Insert into FTS5 index
+    MS->>EP: embed(content)
+    alt OpenAI provider
+        EP->>EP: POST /v1/embeddings (with API key)
+    else Local (FastEmbed)
+        EP->>EP: ONNX inference (no API key)
+    end
+    EP-->>MS: Vec of f32 (384 dims)
+    MS->>VI: upsert(key, vector)
+
+    Note over API,FTS: Recall with hybrid search
+    API->>MS: recall(query, limit, offset)
+    MS->>FTS: FTS5 BM25 search
+    FTS-->>MS: Text matches + scores
+    MS->>EP: embed(query)
+    EP-->>MS: Query vector
+    MS->>VI: search(query_vector, limit)
+    VI-->>MS: Vector matches + distances
+    MS->>MS: Merge scores (fts_weight * fts + vector_weight * vec)
+    MS-->>API: Ranked results
+```
+
+## Reasoning Continuation Flow
+
+```mermaid
+sequenceDiagram
+    participant Caller as Chat Handler
+    participant RE as ReasoningEngine
+    participant Agent as MesoAgent
+    participant LLM as LLM Provider
+
+    Caller->>RE: chat(agent, prompt, session)
+    RE->>Agent: prompt(message)
+    Agent->>LLM: Send with tools
+    LLM-->>Agent: Response
+
+    loop ContinuationStrategy (max N turns)
+        RE->>RE: Run strategies on response
+        alt Continuation signal detected
+            RE->>RE: Inject nudge prompt
+            RE->>Agent: prompt(nudge)
+            Agent->>LLM: Continue
+            LLM-->>Agent: Next response
+        else Complete or max reached
+            RE-->>Caller: Final aggregated response
+        end
+    end
+```
+
 ## Channel Router Message Pipeline
 
 The `ChannelRouter` orchestrates the full message processing flow from inbound channel message to outbound response. It runs as a background task spawned during `init_services()`, consuming messages from an `mpsc` channel and using a `watch` signal for graceful shutdown. Lifecycle hooks (Stage 8.8) are best-effort — failures are logged but do not block the pipeline.
@@ -630,4 +694,48 @@ sequenceDiagram
     Send->>Ext: Deliver response
 
     CR->>DB: store user + assistant messages
+```
+
+## Plugin Lifecycle Flow
+
+```mermaid
+sequenceDiagram
+    participant User as User / CLI
+    participant GW as Gateway
+    participant Inst as PluginInstaller
+    participant Reg as PluginRegistry
+    participant Proc as PluginProcess
+    participant Ext as External Binary
+
+    Note over User,Ext: Installation
+    User->>GW: POST /plugins/install
+    GW->>Inst: install_from_git(url)
+    Inst->>Inst: git clone + parse plugin.toml
+    Inst->>Reg: register(manifest)
+    Inst->>GW: Register tools in ToolRegistry
+    GW-->>User: 201 Created
+
+    Note over User,Ext: Tool Execution
+    User->>GW: POST /tools/get_weather/execute
+    GW->>Proc: spawn if not running
+    Proc->>Ext: Start binary + JSON-RPC handshake
+    Ext-->>Proc: capabilities response
+    Proc->>Ext: JSON-RPC call
+    Ext-->>Proc: JSON-RPC result
+    Proc-->>GW: ToolResult
+    GW-->>User: Response
+
+    Note over User,Ext: Crash Recovery
+    Ext--xProc: Process crash
+    Proc->>Proc: Detect exit, increment restart count
+    alt restart_count < max_restart_attempts
+        Proc->>Ext: Restart binary
+    else max restarts exceeded
+        Proc->>Reg: Mark plugin as errored
+    end
+
+    Note over User,Ext: Idle Shutdown
+    Proc->>Proc: No calls for idle_timeout_secs
+    Proc->>Ext: SIGTERM
+    Ext-->>Proc: Process exits
 ```

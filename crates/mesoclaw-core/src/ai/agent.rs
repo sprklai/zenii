@@ -249,7 +249,14 @@ pub async fn resolve_agent(
     tool_event_tx: Option<broadcast::Sender<ToolCallEvent>>,
     preamble_override: Option<&str>,
 ) -> Result<Arc<MesoAgent>> {
-    resolve_agent_with_tools(requested_model, state, tool_event_tx, preamble_override, None).await
+    resolve_agent_with_tools(
+        requested_model,
+        state,
+        tool_event_tx,
+        preamble_override,
+        None,
+    )
+    .await
 }
 
 /// Like `resolve_agent`, but accepts an optional tool override for channel tool policy filtering.

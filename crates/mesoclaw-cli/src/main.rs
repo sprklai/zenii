@@ -86,6 +86,11 @@ enum Commands {
         #[command(subcommand)]
         action: EmbeddingAction,
     },
+    /// Manage plugins (install, remove, update, enable, disable)
+    Plugin {
+        #[command(subcommand)]
+        action: PluginAction,
+    },
     /// View channel conversations and messages
     Channel {
         #[command(subcommand)]
@@ -242,6 +247,45 @@ enum ScheduleAction {
     },
     /// Show scheduler status
     Status,
+}
+
+#[derive(Subcommand)]
+enum PluginAction {
+    /// List installed plugins
+    List,
+    /// Install a plugin from a git URL or local path
+    Install {
+        /// Git URL or local path to the plugin
+        source: String,
+        /// Install from a local directory instead of git
+        #[arg(long)]
+        local: bool,
+    },
+    /// Remove an installed plugin
+    Remove {
+        /// Plugin name
+        name: String,
+    },
+    /// Update a git-installed plugin to the latest version
+    Update {
+        /// Plugin name
+        name: String,
+    },
+    /// Enable a disabled plugin
+    Enable {
+        /// Plugin name
+        name: String,
+    },
+    /// Disable a plugin without removing it
+    Disable {
+        /// Plugin name
+        name: String,
+    },
+    /// Show detailed plugin information
+    Info {
+        /// Plugin name
+        name: String,
+    },
 }
 
 #[derive(Subcommand)]
@@ -410,6 +454,17 @@ async fn main() {
             EmbeddingAction::Download => commands::embedding::download(&client).await,
             EmbeddingAction::Test => commands::embedding::test(&client).await,
             EmbeddingAction::Reindex => commands::embedding::reindex(&client).await,
+        },
+        Commands::Plugin { action } => match action {
+            PluginAction::List => commands::plugin::list(&client).await,
+            PluginAction::Install { source, local } => {
+                commands::plugin::install(&client, &source, local).await
+            }
+            PluginAction::Remove { name } => commands::plugin::remove(&client, &name).await,
+            PluginAction::Update { name } => commands::plugin::update(&client, &name).await,
+            PluginAction::Enable { name } => commands::plugin::enable(&client, &name).await,
+            PluginAction::Disable { name } => commands::plugin::disable(&client, &name).await,
+            PluginAction::Info { name } => commands::plugin::info(&client, &name).await,
         },
         Commands::Channel { action } => match action {
             ChannelAction::List { source } => {
@@ -865,6 +920,114 @@ mod tests {
                 assert_eq!(before.as_deref(), Some("msg-xyz"));
             }
             _ => panic!("expected Channel Messages"),
+        }
+    }
+
+    // 9.0 — parse plugin list
+    #[test]
+    fn parse_plugin_list() {
+        let cli = parse(&["mesoclaw", "plugin", "list"]);
+        assert!(matches!(
+            cli.command,
+            Commands::Plugin {
+                action: PluginAction::List
+            }
+        ));
+    }
+
+    // 9.0 — parse plugin install from git
+    #[test]
+    fn parse_plugin_install_git() {
+        let cli = parse(&["mesoclaw", "plugin", "install", "github.com/user/weather"]);
+        match cli.command {
+            Commands::Plugin {
+                action: PluginAction::Install { source, local },
+            } => {
+                assert_eq!(source, "github.com/user/weather");
+                assert!(!local);
+            }
+            _ => panic!("expected Plugin Install"),
+        }
+    }
+
+    // 9.0 — parse plugin install from local
+    #[test]
+    fn parse_plugin_install_local() {
+        let cli = parse(&["mesoclaw", "plugin", "install", "./my-plugin", "--local"]);
+        match cli.command {
+            Commands::Plugin {
+                action: PluginAction::Install { source, local },
+            } => {
+                assert_eq!(source, "./my-plugin");
+                assert!(local);
+            }
+            _ => panic!("expected Plugin Install Local"),
+        }
+    }
+
+    // 9.0 — parse plugin remove
+    #[test]
+    fn parse_plugin_remove() {
+        let cli = parse(&["mesoclaw", "plugin", "remove", "weather"]);
+        match cli.command {
+            Commands::Plugin {
+                action: PluginAction::Remove { name },
+            } => {
+                assert_eq!(name, "weather");
+            }
+            _ => panic!("expected Plugin Remove"),
+        }
+    }
+
+    // 9.0 — parse plugin info
+    #[test]
+    fn parse_plugin_info() {
+        let cli = parse(&["mesoclaw", "plugin", "info", "weather"]);
+        match cli.command {
+            Commands::Plugin {
+                action: PluginAction::Info { name },
+            } => {
+                assert_eq!(name, "weather");
+            }
+            _ => panic!("expected Plugin Info"),
+        }
+    }
+
+    // 9.0 — parse plugin enable/disable
+    #[test]
+    fn parse_plugin_enable_disable() {
+        let cli = parse(&["mesoclaw", "plugin", "enable", "weather"]);
+        match cli.command {
+            Commands::Plugin {
+                action: PluginAction::Enable { name },
+            } => {
+                assert_eq!(name, "weather");
+            }
+            _ => panic!("expected Plugin Enable"),
+        }
+
+        let cli = parse(&["mesoclaw", "plugin", "disable", "docker"]);
+        match cli.command {
+            Commands::Plugin {
+                action: PluginAction::Disable { name },
+            } => {
+                assert_eq!(name, "docker");
+            }
+            _ => panic!("expected Plugin Disable"),
+        }
+    }
+
+    // 9.0 — parse plugin update
+    #[test]
+    fn parse_plugin_update() {
+        let cli = parse(&["mesoclaw", "plugin", "update", "rss"]);
+        match cli.command {
+            Commands::Plugin {
+                action: PluginAction::Update { name },
+            } => {
+                assert_eq!(name, "rss");
+            }
+            _ => panic!("expected Plugin Update"),
         }
     }
 }

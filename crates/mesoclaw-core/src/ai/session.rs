@@ -1200,9 +1200,7 @@ mod tests {
         let s1 = mgr.create_session("first").await.unwrap();
         let _s2 = mgr.create_session("second").await.unwrap();
         tokio::time::sleep(std::time::Duration::from_millis(50)).await;
-        mgr.append_message(&s1.id, "user", "hello")
-            .await
-            .unwrap();
+        mgr.append_message(&s1.id, "user", "hello").await.unwrap();
         let sessions = mgr.list_sessions().await.unwrap();
         assert_eq!(
             sessions[0].id, s1.id,

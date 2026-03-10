@@ -86,7 +86,7 @@ jobs:
         with:
           name: linux-standalone
           path: |
-            target/ci-release/mesoclaw-cli
+            target/ci-release/mesoclaw
             target/ci-release/mesoclaw-daemon
 
   build-windows:
@@ -137,7 +137,7 @@ jobs:
         with:
           name: windows-standalone
           path: |
-            target/ci-release/mesoclaw-cli.exe
+            target/ci-release/mesoclaw.exe
             target/ci-release/mesoclaw-daemon.exe
 
   build-macos:
@@ -166,17 +166,50 @@ jobs:
         working-directory: web
         run: bun run build
 
-      - name: Build desktop (dmg) - unsigned
+      - name: Import Apple certificate
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+        run: |
+          CERTIFICATE_PATH=$RUNNER_TEMP/build_certificate.p12
+          KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
+
+          echo -n "$APPLE_CERTIFICATE" | base64 --decode -o $CERTIFICATE_PATH
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+          security set-keychain-settings -lut 21600 $KEYCHAIN_PATH
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+
+          security import $CERTIFICATE_PATH -P "$APPLE_CERTIFICATE_PASSWORD" \
+            -A -t cert -f pkcs12 -k $KEYCHAIN_PATH
+          security set-key-partition-list -S apple-tool:,apple: \
+            -k "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+          security list-keychain -d user -s $KEYCHAIN_PATH
+
+      - name: Build desktop (dmg) - aarch64
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Skip code signing when no Apple certificates are configured
-          APPLE_CERTIFICATE: ""
-          APPLE_CERTIFICATE_PASSWORD: ""
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: "6BQSGY2B74"
         with:
           projectPath: crates/mesoclaw-desktop
-          args: --bundles dmg -- --profile ci-release
-        continue-on-error: true
+          args: --target aarch64-apple-darwin --bundles dmg -- --profile ci-release
+
+      - name: Build desktop (dmg) - x86_64
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: "6BQSGY2B74"
+        with:
+          projectPath: crates/mesoclaw-desktop
+          args: --target x86_64-apple-darwin --bundles dmg -- --profile ci-release
 
       - name: Build standalone CLI and daemon (universal)
         run: |
@@ -184,9 +217,9 @@ jobs:
           cargo build --profile ci-release -p mesoclaw-cli -p mesoclaw-daemon --features keyring,channels,channels-telegram,channels-slack,channels-discord,scheduler,web-dashboard --target x86_64-apple-darwin
           mkdir -p target/ci-release/universal
           lipo -create \
-            target/aarch64-apple-darwin/ci-release/mesoclaw-cli \
-            target/x86_64-apple-darwin/ci-release/mesoclaw-cli \
-            -output target/ci-release/universal/mesoclaw-cli
+            target/aarch64-apple-darwin/ci-release/mesoclaw \
+            target/x86_64-apple-darwin/ci-release/mesoclaw \
+            -output target/ci-release/universal/mesoclaw
           lipo -create \
             target/aarch64-apple-darwin/ci-release/mesoclaw-daemon \
             target/x86_64-apple-darwin/ci-release/mesoclaw-daemon \
@@ -197,15 +230,24 @@ jobs:
         with:
           name: macos-desktop
           path: |
-            target/ci-release/bundle/dmg/*.dmg
+            target/aarch64-apple-darwin/ci-release/bundle/dmg/*.dmg
+            target/x86_64-apple-darwin/ci-release/bundle/dmg/*.dmg
 
       - name: Upload standalone binaries
         uses: actions/upload-artifact@v7
         with:
           name: macos-standalone
           path: |
-            target/ci-release/universal/mesoclaw-cli
+            target/ci-release/universal/mesoclaw
             target/ci-release/universal/mesoclaw-daemon
+
+      - name: Cleanup keychain
+        if: always()
+        run: |
+          KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
+          if [ -f "$KEYCHAIN_PATH" ]; then
+            security delete-keychain $KEYCHAIN_PATH
+          fi
 
   build-embedded:
     name: Build Embedded (${{ matrix.target }})
@@ -246,7 +288,7 @@ jobs:
         with:
           name: embedded-${{ matrix.label }}
           path: |
-            target/${{ matrix.target }}/ci-release/mesoclaw-cli
+            target/${{ matrix.target }}/ci-release/mesoclaw
             target/${{ matrix.target }}/ci-release/mesoclaw-daemon
 
   release:
@@ -273,8 +315,8 @@ jobs:
           cd artifacts
           find . -type f \( -name "*.deb" -o -name "*.rpm" -o -name "*.AppImage" \
             -o -name "*.dmg" -o -name "*.msi" -o -name "*.exe" \
-            -o -name "mesoclaw-cli" -o -name "mesoclaw-daemon" \
-            -o -name "mesoclaw-cli.exe" -o -name "mesoclaw-daemon.exe" \) \
+            -o -name "mesoclaw" -o -name "mesoclaw-daemon" \
+            -o -name "mesoclaw.exe" -o -name "mesoclaw-daemon.exe" \) \
             -exec sha256sum {} \; > ../SHA256SUMS.txt
           cat ../SHA256SUMS.txt
 
@@ -301,7 +343,7 @@ jobs:
             artifacts/**/*.dmg
             artifacts/**/*.msi
             artifacts/**/*.exe
-            artifacts/**/mesoclaw-cli
+            artifacts/**/mesoclaw
             artifacts/**/mesoclaw-daemon
             SHA256SUMS.txt
         env:

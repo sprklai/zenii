@@ -23,6 +23,11 @@
 - [Channel Router Pipeline](#channel-router-pipeline-stage-87)
 - [Channel Lifecycle Hooks](#channel-lifecycle-hooks-stage-88)
 - [Test Debt and Hardening](#test-debt--hardening-stage-89)
+- [Agent Action Tools](#agent-action-tools-phase-810)
+- [Autonomous Reasoning Engine](#autonomous-reasoning-engine-phase-811)
+- [Semantic Memory and Embeddings](#semantic-memory-and-embeddings-phase-811)
+- [Phase 18 Hardening](#phase-18-hardening)
+- [Plugin Architecture](#plugin-architecture-phase-9)
 - [Concurrency Rules](#concurrency-rules)
 - [Lessons Learned from v1](#lessons-learned-from-v1)
 
@@ -89,7 +94,7 @@ graph TB
     end
 
     subgraph GW["Gateway :18981"]
-        REST["REST<br>59 base + 14 feature-gated"]
+        REST["REST<br>73 base + 15 feature-gated"]
         WS["WebSocket<br>/ws/chat"]
     end
 
@@ -170,7 +175,7 @@ mesoclaw/
 │   ├── mesoclaw-core/      # Shared library (NO Tauri dependency)
 │   │   ├── src/
 │   │   │   ├── lib.rs      # Module exports + Result<T> alias
-│   │   │   ├── error.rs    # MesoError enum (28 variants, thiserror)
+│   │   │   ├── error.rs    # MesoError enum (30 variants, thiserror)
 │   │   │   ├── boot.rs     # init_services() -> Services -> AppState, single boot entry point
 │   │   │   ├── config/     # TOML config (schema + load/save + OS paths)
 │   │   │   ├── db/         # rusqlite pool + WAL + migrations + spawn_blocking
@@ -178,9 +183,9 @@ mesoclaw/
 │   │   │   ├── memory/     # Memory trait + SqliteMemoryStore (FTS5 + vectors) + InMemoryStore
 │   │   │   ├── credential/ # CredentialStore trait + KeyringStore + InMemoryCredentialStore
 │   │   │   ├── security/   # SecurityPolicy + AutonomyLevel + rate limiter + audit log
-│   │   │   ├── tools/      # Tool trait + ToolRegistry (DashMap) + 11 tools (shell, file ops, web search, sysinfo, patch, process, learn, skill_proposal)
+│   │   │   ├── tools/      # Tool trait + ToolRegistry (DashMap) + 15 tools (13 base + 2 feature-gated)
 │   │   │   ├── ai/         # AI agent (rig-core), providers, session manager, tool adapter, context engine
-│   │   │   ├── gateway/    # axum HTTP+WS gateway (59+6 routes, auth middleware, error mapping, MESO_VALIDATION)
+│   │   │   ├── gateway/    # axum HTTP+WS gateway (73 base + 15 feature-gated routes, auth middleware, error mapping, MESO_VALIDATION)
 │   │   │   ├── identity/   # SoulLoader + PromptComposer + defaults (SOUL/IDENTITY/USER.md)
 │   │   │   ├── skills/     # SkillRegistry + bundled/user skills (markdown + YAML frontmatter)
 │   │   │   ├── user/       # UserLearner + SQLite observations + privacy controls
@@ -736,7 +741,7 @@ graph TB
 
 ## Gateway Routes
 
-All clients communicate via the HTTP+WebSocket gateway at `127.0.0.1:18981`. Routes are grouped by subsystem (59 base + 6 feature-gated + 7 scheduler + 1 channel webhook = 73 total through Phase 8 Stage 8.9).
+All clients communicate via the HTTP+WebSocket gateway at `127.0.0.1:18981`. Routes are grouped by subsystem (73 base + 15 feature-gated = 88 total).
 
 ### Health (1 route, no auth)
 
@@ -888,6 +893,29 @@ All clients communicate via the HTTP+WebSocket gateway at `127.0.0.1:18981`. Rou
 | PUT | `/scheduler/jobs/{id}/toggle` | Toggle job enabled/disabled |
 | GET | `/scheduler/jobs/{id}/history` | Get job execution history |
 | GET | `/scheduler/status` | Scheduler status |
+
+### Embeddings (5 routes)
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/embeddings/status` | Current embedding provider and model info |
+| POST | `/embeddings/test` | Test embedding generation |
+| POST | `/embeddings/embed` | Embed arbitrary text |
+| POST | `/embeddings/download` | Download local embedding model |
+| POST | `/embeddings/reindex` | Re-embed all stored memories |
+
+### Plugins (8 routes)
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/plugins` | List all installed plugins |
+| POST | `/plugins/install` | Install plugin from git URL or local path |
+| DELETE | `/plugins/{name}` | Remove installed plugin |
+| GET | `/plugins/{name}` | Get plugin info and manifest |
+| PUT | `/plugins/{name}/toggle` | Enable or disable a plugin |
+| POST | `/plugins/{name}/update` | Update plugin to latest version |
+| GET | `/plugins/{name}/config` | Get plugin configuration |
+| PUT | `/plugins/{name}/config` | Update plugin configuration |
 
 ### WebSocket Endpoints (2 routes)
 
@@ -1134,6 +1162,175 @@ Comprehensive unit test coverage for:
 ### Agent Tool Loop Tests (5 tests)
 
 Integration tests verifying `RigToolAdapter` dispatch — agent correctly invokes tools during the chat loop and feeds results back to the LLM.
+
+## Agent Action Tools (Phase 8.10)
+
+Four new agent-callable tools give the AI agent direct control over system functions:
+
+```mermaid
+graph TD
+    subgraph ToolRegistry["ToolRegistry - 15 tools"]
+        subgraph Base["Base Tools - 13"]
+            SysInfo[system_info]
+            WebSearch[web_search]
+            FileR[file_read]
+            FileW[file_write]
+            FileL[file_list]
+            FileS[file_search]
+            Shell[shell]
+            Process[process]
+            Patch[patch]
+            Learn[learn]
+            SkillP[skill_proposal]
+            MemT[memory]
+            ConfigT[config]
+        end
+        subgraph FeatureGated["Feature-Gated - 2"]
+            ChanSend["channel_send<br>#40;channels#41;"]
+            SchedT["scheduler<br>#40;scheduler#41;"]
+        end
+    end
+
+    ConfigT -->|ArcSwap| Config["AppConfig<br>hot-reload"]
+    MemT --> Memory["Memory trait<br>store/recall/forget"]
+    ChanSend --> ChanReg["ChannelRegistry<br>send/list/status"]
+    SchedT --> Sched["TokioScheduler<br>CRUD + history"]
+
+    style Base fill:#4CAF50,color:#fff
+    style FeatureGated fill:#FF9800,color:#fff
+```
+
+## Autonomous Reasoning Engine (Phase 8.11)
+
+The `ReasoningEngine` provides an extensible pipeline for autonomous multi-step agent operation:
+
+```mermaid
+flowchart TD
+    Chat([Chat request]) --> RE["ReasoningEngine::chat()"]
+    RE --> Agent["MesoAgent::prompt()"]
+    Agent --> LLM["LLM Provider"]
+    LLM --> Response["Agent response"]
+    Response --> Strategies["Run strategies"]
+
+    Strategies --> CS{"ContinuationStrategy<br>check for continuation signals"}
+    CS -->|"Needs more work<br>turn less than max"| Nudge["Inject continuation nudge"]
+    Nudge --> Agent
+    CS -->|"Complete or<br>max turns reached"| Done([Final response])
+
+    style RE fill:#4CAF50,color:#fff
+    style CS fill:#FF9800,color:#fff
+```
+
+Key components:
+- **ReasoningEngine** -- orchestrates agent calls with pluggable strategy pipeline
+- **ContinuationStrategy** -- detects incomplete responses, injects continuation nudges, respects `agent_max_continuations` limit
+- **BootContext** -- system environment discovery (OS, arch, hostname, home dir, desktop, downloads, shell, username)
+
+## Semantic Memory and Embeddings (Phase 8.11)
+
+Hybrid search combining FTS5 full-text search with vector similarity:
+
+```mermaid
+flowchart TD
+    Store([Memory store]) --> Content["Content text"]
+    Content --> FTS["FTS5 index<br>BM25 scoring"]
+    Content --> Embed{"Embedding provider?"}
+    Embed -->|openai| OpenAI["OpenAI /v1/embeddings<br>API key from keyring"]
+    Embed -->|local| FastEmbed["FastEmbed ONNX<br>no API key needed"]
+    Embed -->|none| NoVec["FTS5 only"]
+    OpenAI --> Vec["sqlite-vec index"]
+    FastEmbed --> Vec
+
+    Recall([Memory recall]) --> Hybrid["Hybrid scoring"]
+    FTS --> Hybrid
+    Vec --> Hybrid
+    Hybrid --> Results["Weighted results<br>fts_weight + vector_weight"]
+
+    style Store fill:#4CAF50,color:#fff
+    style Recall fill:#2196F3,color:#fff
+```
+
+Gateway embedding routes (5):
+- `GET /embeddings/status` -- current provider and model info
+- `POST /embeddings/test` -- test embedding generation
+- `POST /embeddings/embed` -- embed arbitrary text
+- `POST /embeddings/download` -- download local model
+- `POST /embeddings/reindex` -- re-embed all stored memories
+
+## Phase 18 Hardening
+
+Phase 18 addressed 51 issues from two code audits across 8 parallel work streams:
+
+- **ArcSwap config** -- runtime config hot-reload via `arc_swap::ArcSwap<AppConfig>` replacing manual TOML write + reload
+- **Security** -- CORS origin validation improvements, path traversal protection in file tools
+- **Concurrency** -- eliminated data races in scheduler, security, and tools modules
+- **Channel reliability** -- UTF-8 safe message splitting, Slack echo loop prevention
+- **Frontend** -- svelte-check warnings reduced from 19 to 0
+- **CI/CD** -- all-features testing added to CI pipeline
+
+## Plugin Architecture (Phase 9)
+
+```mermaid
+graph TD
+    subgraph PluginSystem["Plugin System"]
+        Manifest["PluginManifest<br>TOML metadata + permissions"]
+        Registry["PluginRegistry<br>DashMap + JSON persistence"]
+        Process["PluginProcess<br>JSON-RPC 2.0 lifecycle"]
+        Adapter["PluginToolAdapter<br>Tool trait bridge"]
+        Installer["PluginInstaller<br>git + local install"]
+    end
+
+    subgraph Integration["Integration Points"]
+        ToolReg["ToolRegistry<br>built-in + plugin tools"]
+        SkillReg["SkillRegistry<br>bundled + plugin skills"]
+        GWHandlers["Gateway Handlers<br>8 REST endpoints"]
+        CLICmds["CLI Commands<br>7 subcommands"]
+    end
+
+    Installer -->|parses| Manifest
+    Installer -->|registers| Registry
+    Registry -->|spawns| Process
+    Process -->|wraps| Adapter
+    Adapter -->|registers| ToolReg
+    Installer -->|registers| SkillReg
+    GWHandlers -->|queries| Registry
+    GWHandlers -->|calls| Installer
+    CLICmds -->|HTTP| GWHandlers
+
+    style PluginSystem fill:#FF9800,color:#fff
+    style Integration fill:#4CAF50,color:#fff
+```
+
+### Plugin Lifecycle
+
+- **Discovery**: On boot, `PluginRegistry` scans `plugins_dir` for installed plugins
+- **Registration**: Each plugin's tools are wrapped in `PluginToolAdapter` and registered in `ToolRegistry`
+- **Execution**: When a tool is called, `PluginProcess` spawns the plugin binary, communicates via JSON-RPC 2.0 over stdio
+- **Recovery**: Crashed plugins are automatically restarted up to `plugin_max_restart_attempts` times
+- **Idle Shutdown**: Inactive plugin processes are terminated after `plugin_idle_timeout_secs`
+
+### Plugin Manifest Format (plugin.toml)
+
+```toml
+[plugin]
+name = "weather"
+version = "1.0.0"
+description = "Weather forecast tool"
+author = "example"
+
+[permissions]
+network = true
+filesystem = false
+
+[[tools]]
+name = "get_weather"
+binary = "weather-tool"
+description = "Get weather for a location"
+
+[[skills]]
+name = "weather-prompt"
+file = "skills/weather.md"
+```
 
 ## Concurrency Rules
 

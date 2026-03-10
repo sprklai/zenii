@@ -22,6 +22,8 @@
   - [Skills](#skills)
   - [Skill Proposals](#skill-proposals)
   - [User](#user)
+  - [Embeddings](#embeddings)
+  - [Plugins](#plugins)
   - [Channels (Always Available)](#channels-always-available)
   - [Channels (Feature-Gated)](#channels-feature-gated)
   - [Scheduler (Feature-Gated)](#scheduler-feature-gated)
@@ -95,6 +97,8 @@ All errors return JSON with the following structure:
 | `MESO_YAML_PARSE_ERROR` | 400 | `Yaml` | Invalid YAML syntax |
 | `MESO_VALIDATION` | 400 | `Validation` | Input validation failed |
 | `MESO_SCHEDULER_ERROR` | 500 | `Scheduler` | Scheduler operation failed |
+| `MESO_PLUGIN_ERROR` | 500 | `Plugin` | Plugin system error |
+| `MESO_PLUGIN_NOT_FOUND` | 404 | `PluginNotFound` | Plugin not found |
 | `MESO_INTERNAL_ERROR` | 500 | `Other` | Unclassified internal error |
 
 ---
@@ -921,6 +925,235 @@ Get the composed user profile context string (used for agent prompts).
 
 ---
 
+### Embeddings
+
+#### GET /embeddings/status
+
+Get the current embedding provider configuration and status.
+
+**Response:**
+```json
+{
+  "provider": "local",
+  "model": "BAAI/bge-small-en-v1.5",
+  "active": true
+}
+```
+
+If no provider is configured:
+```json
+{
+  "provider": "none",
+  "model": null,
+  "active": false
+}
+```
+
+**Example:**
+```bash
+curl http://127.0.0.1:18981/embeddings/status \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+#### POST /embeddings/test
+
+Test embedding generation with the current provider.
+
+**Request Body:**
+```json
+{
+  "text": "Test embedding generation"
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "dimensions": 384,
+  "provider": "local"
+}
+```
+
+#### POST /embeddings/embed
+
+Generate an embedding vector for the given text.
+
+**Request Body:**
+```json
+{
+  "text": "Text to embed"
+}
+```
+
+**Response:**
+```json
+{
+  "vector": [0.123, -0.456, ...],
+  "dimensions": 384
+}
+```
+
+#### POST /embeddings/download
+
+Download a local embedding model (for `local` provider only).
+
+**Request Body:**
+```json
+{
+  "model": "BAAI/bge-small-en-v1.5"
+}
+```
+
+**Response:**
+```json
+{
+  "status": "downloaded",
+  "model": "BAAI/bge-small-en-v1.5"
+}
+```
+
+#### POST /embeddings/reindex
+
+Re-embed all stored memories with the current provider. Useful after switching providers.
+
+**Response:**
+```json
+{
+  "reindexed": 42,
+  "provider": "local"
+}
+```
+
+**Example:**
+```bash
+curl -X POST http://127.0.0.1:18981/embeddings/reindex \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+---
+
+### Plugins
+
+#### GET /plugins
+
+Returns all installed plugins with their status.
+
+**Response:**
+```json
+[
+  {
+    "name": "weather",
+    "version": "1.0.0",
+    "description": "Weather forecast tool",
+    "enabled": true,
+    "tools": ["get_weather"],
+    "skills": ["weather-prompt"]
+  }
+]
+```
+
+#### POST /plugins/install
+
+Install a plugin from a git URL or local path.
+
+**Request Body:**
+```json
+{
+  "source": "https://github.com/user/weather-plugin",
+  "local": false
+}
+```
+
+**Response (201):**
+```json
+{
+  "name": "weather",
+  "version": "1.0.0",
+  "installed": true
+}
+```
+
+#### GET /plugins/{name}
+
+Returns details for a specific plugin.
+
+**Response:**
+```json
+{
+  "name": "weather",
+  "version": "1.0.0",
+  "description": "Weather forecast tool",
+  "author": "example",
+  "enabled": true,
+  "tools": ["get_weather"],
+  "skills": ["weather-prompt"],
+  "permissions": {
+    "network": true,
+    "filesystem": false
+  }
+}
+```
+
+#### DELETE /plugins/{name}
+
+Removes an installed plugin and unregisters its tools and skills.
+
+**Response:** `204 No Content`
+
+#### PUT /plugins/{name}/toggle
+
+Enable or disable a plugin.
+
+**Request Body:**
+```json
+{
+  "enabled": true
+}
+```
+
+**Response:** `200 OK`
+
+#### POST /plugins/{name}/update
+
+Update a git-sourced plugin to the latest version.
+
+**Response:**
+```json
+{
+  "name": "weather",
+  "version": "1.1.0",
+  "updated": true
+}
+```
+
+#### GET /plugins/{name}/config
+
+Returns the plugin's configuration values.
+
+**Response:**
+```json
+{
+  "api_key_source": "env",
+  "cache_ttl": 300
+}
+```
+
+#### PUT /plugins/{name}/config
+
+Update a plugin's configuration.
+
+**Request Body:**
+```json
+{
+  "cache_ttl": 600
+}
+```
+
+**Response:** `200 OK`
+
+---
+
 ### Channels (Always Available)
 
 This endpoint is always available regardless of the `channels` feature flag.
@@ -1028,6 +1261,28 @@ Health check for a specific channel.
 Webhook endpoint for receiving inbound messages from a channel connector.
 
 **Request Body:** `ChannelMessage` object (varies by channel implementation).
+
+#### GET /channels/sessions
+
+List all channel-originated sessions.
+
+**Response:**
+```json
+[
+  {
+    "session_id": "uuid",
+    "channel": "telegram",
+    "thread_id": "chat-123",
+    "created_at": "2026-03-10T12:00:00Z"
+  }
+]
+```
+
+#### GET /channels/sessions/{id}/messages
+
+Get messages for a channel session.
+
+**Response:** Array of message objects (same format as `/sessions/{id}/messages`).
 
 ---
 

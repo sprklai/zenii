@@ -48,8 +48,7 @@ impl ChannelRegistry {
     pub fn register_or_replace(&self, channel: Arc<dyn Channel>) -> Result<()> {
         let name = channel.display_name().to_string();
         let sender: Arc<dyn ChannelSender> = Arc::from(channel.create_sender());
-        self.entries
-            .insert(name, ChannelEntry { channel, sender });
+        self.entries.insert(name, ChannelEntry { channel, sender });
         Ok(())
     }
 
@@ -60,12 +59,16 @@ impl ChannelRegistry {
 
     /// Get the full channel object by name.
     pub fn get_channel(&self, name: &str) -> Option<Arc<dyn Channel>> {
-        self.entries.get(name).map(|r| Arc::clone(&r.value().channel))
+        self.entries
+            .get(name)
+            .map(|r| Arc::clone(&r.value().channel))
     }
 
     /// Get a lightweight send-only handle for a channel.
     pub fn get_sender(&self, name: &str) -> Option<Arc<dyn ChannelSender>> {
-        self.entries.get(name).map(|r| Arc::clone(&r.value().sender))
+        self.entries
+            .get(name)
+            .map(|r| Arc::clone(&r.value().sender))
     }
 
     /// List all registered channel names.

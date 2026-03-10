@@ -5,12 +5,14 @@
 	import MessageSquare from '@lucide/svelte/icons/message-square';
 	import KeyRound from '@lucide/svelte/icons/key-round';
 	import Brain from '@lucide/svelte/icons/brain';
+	import Puzzle from '@lucide/svelte/icons/puzzle';
 	import GeneralSettings from '$lib/components/settings/GeneralSettings.svelte';
 	import ProvidersSettings from '$lib/components/settings/ProvidersSettings.svelte';
 	import PersonaSettings from '$lib/components/settings/PersonaSettings.svelte';
 	import ChannelsSettings from '$lib/components/settings/ChannelsSettings.svelte';
 	import ServicesSettings from '$lib/components/settings/ServicesSettings.svelte';
 	import EmbeddingsSettings from '$lib/components/settings/EmbeddingsSettings.svelte';
+	import PluginsSettings from '$lib/components/settings/PluginsSettings.svelte';
 	import { onMount } from 'svelte';
 
 	const tabs = [
@@ -20,6 +22,7 @@
 		{ id: 'channels', label: 'Channels', icon: MessageSquare },
 		{ id: 'services', label: 'Services', icon: KeyRound },
 		{ id: 'embeddings', label: 'Embeddings', icon: Brain },
+		{ id: 'plugins', label: 'Plugins', icon: Puzzle },
 	];
 
 	let activeTab = $state('general');
@@ -92,6 +95,8 @@
 			<ServicesSettings />
 		{:else if activeTab === 'embeddings'}
 			<EmbeddingsSettings />
+		{:else if activeTab === 'plugins'}
+			<PluginsSettings />
 		{/if}
 	</div>
 </div>

@@ -1,8 +1,14 @@
 [target.aarch64-unknown-linux-gnu]
-pre-build = ["apt-get update && apt-get install -y libssl-dev pkg-config"]
+pre-build = [
+    "dpkg --add-architecture $CROSS_DEB_ARCH && apt-get update && apt-get install --assume-yes libssl-dev:$CROSS_DEB_ARCH pkg-config"
+]
 
 [target.armv7-unknown-linux-gnueabihf]
-pre-build = ["apt-get update && apt-get install -y libssl-dev pkg-config"]
+pre-build = [
+    "dpkg --add-architecture $CROSS_DEB_ARCH && apt-get update && apt-get install --assume-yes libssl-dev:$CROSS_DEB_ARCH pkg-config"
+]
 
 [target.x86_64-unknown-linux-musl]
-pre-build = ["apt-get update && apt-get install -y libssl-dev pkg-config musl-tools"]
+pre-build = [
+    "DEBIAN_FRONTEND=noninteractive apt-get update && apt-get install --assume-yes -o Dpkg::Options::='--force-confdef' -o Dpkg::Options::='--force-confold' libssl-dev pkg-config musl-tools"
+]

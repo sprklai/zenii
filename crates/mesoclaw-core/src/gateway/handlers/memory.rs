@@ -56,7 +56,9 @@ pub async fn recall_memories(
     Query(params): Query<RecallQuery>,
 ) -> crate::Result<impl IntoResponse> {
     let query = params.q.unwrap_or_default();
-    let limit = params.limit.unwrap_or(state.config.load().memory_default_limit);
+    let limit = params
+        .limit
+        .unwrap_or(state.config.load().memory_default_limit);
     let offset = params.offset.unwrap_or(0);
     let results = state.memory.recall(&query, limit, offset).await?;
     Ok(Json(results))

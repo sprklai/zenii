@@ -53,4 +53,6 @@ build/
 no_commit/
 plans/
 tests/
+docs/plans/
+.claude/plans/
 .claude/worktrees/

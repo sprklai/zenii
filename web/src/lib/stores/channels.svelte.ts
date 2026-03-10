@@ -222,10 +222,7 @@ function createChannelsStore() {
       }
     },
 
-    async credentialExists(
-      channelId: string,
-      field: string,
-    ): Promise<boolean> {
+    async credentialExists(channelId: string, field: string): Promise<boolean> {
       try {
         const result = await apiGet<{ exists: boolean }>(
           `/credentials/${encodeURIComponent(credKey(channelId, field))}/exists`,

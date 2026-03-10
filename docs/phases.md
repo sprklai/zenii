@@ -13,7 +13,11 @@
   - [Phase 5: Binary Shells + Tools + Memory](#phase-5-binary-shells--tools--memory--complete)
   - [Phase 6: Frontend](#phase-6-frontend--complete)
   - [Phase 7: Desktop App](#phase-7-desktop-app--complete)
-  - [Phase 8: Credentials, Channels & Scheduler](#phase-8-credentials-channels--scheduler--in-progress)
+  - [Phase 8: Credentials, Channels & Scheduler](#phase-8-credentials-channels--scheduler--complete)
+  - [Phase 8.10: Agent Action Tools](#phase-810-agent-action-tools--complete)
+  - [Phase 8.11: Autonomous Reasoning + Semantic Memory](#phase-811-autonomous-reasoning--semantic-memory--complete)
+  - [Phase 18: Parallel Issue Fix Sprint](#phase-18-parallel-issue-fix-sprint--complete)
+  - [Phase 9: Plugin Architecture](#phase-9-plugin-architecture--complete)
   - [Stage 9: Cross-Compilation & Build Hardening](#stage-9-cross-compilation--build-hardening--complete)
   - [Stage 10: CI/CD Pipeline](#stage-10-cicd-pipeline--complete)
   - [Stage 11: Quality Gates & Automation](#stage-11-quality-gates--automation--complete)
@@ -133,6 +137,12 @@ gantt
     Phase 7 - Desktop App               :done, p7, after p6, 1
     section Credentials/Channels
     Phase 8 - Credentials, Channels & Scheduler :done, p8, after p7, 1
+    Phase 8.10 - Agent Action Tools :done, p810, after p8, 1
+    Phase 8.11 - Autonomous Reasoning :done, p811, after p810, 1
+    section Hardening
+    Phase 18 - Parallel Issue Fix Sprint :done, p18, after p811, 1
+    section Plugins
+    Phase 9 - Plugin Architecture :done, p9, after p18, 1
     section Cross-Compile
     Stage 9 - Cross-Compilation         :done, s9, after p8, 1
     section CI/CD
@@ -153,6 +163,7 @@ gantt
 
 ```
 Phase 8 (done) ─────┐
+                    ├──> Phase 8.10 ──> Phase 8.11 ──> Phase 18 ──> Phase 9 (Plugins)
                     ├──> [Group A] Stage 9 (Cross-Compile) ──> Stage 10 (CI/CD)
                     │                                              │
                     │                                              ├──> [Group B] Stage 11 (Quality Gates)
@@ -460,9 +471,73 @@ Phase 8 (done) ─────┐
 **New dependencies (15.1)**: keyring 3, websearch (workspace)
 **New dependencies (15.2)**: teloxide 0.13+ (channels-telegram), serenity 0.12+ (channels-discord)
 **New dependencies (8.6.1)**: svelte-sonner (web), tauri-plugin-notification v2 (desktop)
-- **Tests**: ~340 new tests across all steps (827 total Rust + 33 JS), 5 ignored, 0 failures. Zero clippy warnings.
+- **Tests**: ~340 new tests across 8.1-8.9 (827 Rust + 33 JS at end of 8.9), 5 ignored, 0 failures. Zero clippy warnings.
 - **Plans**: [plans/phase8.1_credentials.md](../plans/phase8.1_credentials.md), [plans/phase8.2_channels.md](../plans/phase8.2_channels.md), [plans/phase8.3_context.md](../plans/phase8.3_context.md), [plans/phase8.4_context_agent.md](../plans/phase8.4_context_agent.md), [plans/phase8.5_channel_router.md](../plans/phase8.5_channel_router.md), [plans/phase8.6_scheduler.md](../plans/phase8.6_scheduler.md), [plans/phase8.6.1_scheduler_notification.md](../plans/phase8.6.1_scheduler_notification.md), [plans/phase8.7_channel_router.md](../plans/phase8.7_channel_router.md), [plans/phase8.8_channel_lifecycle.md](../plans/phase8.8_channel_lifecycle.md), [plans/phase8.9_test_debt.md](../plans/phase8.9_test_debt.md)
 - **Test plans**: [tests/phase8.1_credentials.md](../tests/phase8.1_credentials.md), [tests/phase8.2_channels.md](../tests/phase8.2_channels.md), [tests/phase8.3_context.md](../tests/phase8.3_context.md), [tests/phase8.3.1_tool_visibility.md](../tests/phase8.3.1_tool_visibility.md), [tests/phase8.3.2_web_search.md](../tests/phase8.3.2_web_search.md), [tests/phase8.4_context_agent.md](../tests/phase8.4_context_agent.md), [tests/phase8.5_channel_router.md](../tests/phase8.5_channel_router.md), [tests/phase8.6_scheduler.md](../tests/phase8.6_scheduler.md), [tests/phase8.6.1_scheduler_notification.md](../tests/phase8.6.1_scheduler_notification.md), [tests/phase8.7_channel_router.md](../tests/phase8.7_channel_router.md), [tests/phase8.8_channel_lifecycle.md](../tests/phase8.8_channel_lifecycle.md), [tests/phase8.9_test_debt.md](../tests/phase8.9_test_debt.md)
+
+---
+
+### Phase 8.10: Agent Action Tools — `[COMPLETE]`
+
+**4 new agent-callable tools** enabling the AI agent to directly manipulate memory, configuration, channels, and scheduler:
+
+- **MemoryTool** -- store/recall/forget memory entries via Memory trait
+- **ConfigTool** -- get/update whitelisted config keys (context_injection_enabled, self_evolution_enabled, learning_enabled, agent_system_prompt) with ArcSwap hot-reload
+- **ChannelSendTool** -- send/list/status via ChannelRegistry (feature-gated `channels`)
+- **SchedulerTool** -- create/list/delete/toggle/history via TokioScheduler (feature-gated `scheduler`)
+- Boot registers 13 base tools + 2 feature-gated (channel_send + scheduler) = 15 total
+- ArcSwap-based config hot-swapping for runtime config updates without restart
+
+- **Tests**: ~24 new tests (851 total Rust + 33 JS), 0 clippy warnings.
+- **Plan**: [plans/phase8.10_agent_tools.md](../plans/phase8.10_agent_tools.md)
+- **Test plan**: [tests/phase8.10_agent_tools.md](../tests/phase8.10_agent_tools.md)
+
+---
+
+### Phase 8.11: Autonomous Reasoning + Semantic Memory — `[COMPLETE]`
+
+**Autonomous Reasoning Engine**:
+- `ReasoningEngine` -- extensible reasoning pipeline with pluggable strategies
+- `ContinuationStrategy` -- autonomous multi-step continuation with configurable max turns
+- `BootContext` extended with environment discovery (home dir, desktop, downloads, shell, username)
+- Reasoning guidance section injected into system prompt via `compose_full()`
+- All 4 chat call sites (REST, WS, channel router, scheduler) wired through reasoning engine
+- Config: `agent_max_continuations` (default 5), `agent_reasoning_guidance`
+
+**Semantic Memory with Embeddings**:
+- **OpenAI embedding provider** -- reqwest-based `/v1/embeddings` with credential key resolution
+- **FastEmbed local provider** -- feature-gated ONNX embedding with lazy model download (no API key required)
+- `SqliteMemoryStore` upgraded to support optional vector index for hybrid FTS5 + vector search
+- 5 embedding gateway routes: status, test, embed, download, reindex
+- CLI embedding commands: `mesoclaw embedding activate/deactivate/status/test/reindex`
+- Desktop settings UI for embedding provider selection and model management
+- Config: `embedding_provider` (none/openai/local), `embedding_model`, `embedding_download_dir`
+
+**New dependencies**: arc-swap (config hot-swap), fastembed (local-embeddings feature)
+- **Tests**: 44 new automated tests (20 reasoning + 24 semantic memory), 958 total Rust + 37 JS. Zero clippy warnings.
+- **Plans**: [plans/phase8.11_autonomous_reasoning.md](../plans/phase8.11_autonomous_reasoning.md), [plans/phase8.11_semantic_memory.md](../plans/phase8.11_semantic_memory.md)
+- **Test plans**: [tests/phase8.11_autonomous_reasoning.md](../tests/phase8.11_autonomous_reasoning.md), [tests/phase8.11_semantic_memory.md](../tests/phase8.11_semantic_memory.md)
+
+---
+
+### Phase 18: Parallel Issue Fix Sprint — `[COMPLETE]`
+
+**51 tasks across 8 parallel work streams**, addressing issues from Phase 16 (Opus audit) and Phase 17 (Codex audit):
+
+| Work Stream | Focus | Key Changes |
+|------------|-------|-------------|
+| WS-1 | First-run UX | AuthGate health check fix, chat submission blocking when no model configured |
+| WS-2 | Channel reliability | UTF-8 safe message splitting, Slack echo loop prevention |
+| WS-3 | Config state integrity | ArcSwap-based config hot-reload replacing manual TOML writes |
+| WS-4 | Security hardening | CORS improvements, path traversal protection |
+| WS-5 | Settings UI truthfulness | Hide unsupported integrations in UI |
+| WS-6 | Concurrency hazards | Fixes across scheduler, security, and tools modules |
+| WS-7 | Polish and cleanup | svelte-check warnings reduced from 19 to 0 |
+| WS-8 | CI/CD pipeline | All-features testing in CI |
+
+- **Tests**: 41 new tests, 958 total Rust + 37 JS. Zero clippy warnings.
+- **Plan**: [plans/phase18_parallel_issues_fixed.md](../plans/phase18_parallel_issues_fixed.md)
+- **Test plan**: [tests/phase18_parallel_issues_fixed.md](../tests/phase18_parallel_issues_fixed.md)
 
 ---
 
@@ -576,6 +651,28 @@ Phase 8 (done) ─────┐
 
 - **Plan**: [plans/stage15_community.md](../plans/stage15_community.md)
 - **Test plan**: [tests/stage15_community.md](../tests/stage15_community.md)
+
+---
+
+### Phase 9: Plugin Architecture — `[COMPLETE]`
+
+**External process plugin system with JSON-RPC 2.0 protocol**
+
+- **Plugin Manifest** -- TOML-based metadata with permissions model, config schema, and security validation
+- **Plugin Process Manager** -- JSON-RPC 2.0 lifecycle with crash recovery, timeout handling, and idle shutdown
+- **Plugin Registry** -- DashMap-backed with JSON persistence and directory scanning
+- **Plugin Tool Adapter** -- makes external plugin tools indistinguishable from built-in tools via `Tool` trait
+- **Plugin Installer** -- git clone and local path installation with automatic asset registration
+- **Plugin Gateway Handlers** -- 8 REST endpoints for plugin management (list, install, remove, info, toggle, update, config get/set)
+- **Plugin CLI Commands** -- 7 subcommands: list, install, remove, update, enable, disable, info
+- **Boot Integration** -- automatic plugin directory scanning, tool/skill registration at startup
+- Config: `plugins_dir`, `plugin_idle_timeout_secs`, `plugin_max_restart_attempts`, `plugin_execute_timeout_secs`, `plugin_auto_update`
+
+**New modules**: `plugins/manifest.rs`, `plugins/process.rs`, `plugins/registry.rs`, `plugins/adapter.rs`, `plugins/installer.rs`, `gateway/handlers/plugins.rs`, `cli/commands/plugin.rs`
+- **Routes**: 8 new base routes (73 base total, 88 with feature-gated)
+- **Tests**: 4 new tests (962 total Rust + 37 JS), zero clippy warnings
+- **Plan**: [plans/phase9_plugin_architecture.md](../plans/phase9_plugin_architecture.md)
+- **Test plan**: [tests/phase9_plugin_architecture.md](../tests/phase9_plugin_architecture.md)
 
 ---
 

@@ -177,16 +177,10 @@ pub async fn update_config(
         {
             config.telegram_require_group_mention = v;
         }
-        if let Some(v) = obj
-            .get("telegram_retry_min_ms")
-            .and_then(|v| v.as_u64())
-        {
+        if let Some(v) = obj.get("telegram_retry_min_ms").and_then(|v| v.as_u64()) {
             config.telegram_retry_min_ms = v;
         }
-        if let Some(v) = obj
-            .get("telegram_retry_max_ms")
-            .and_then(|v| v.as_u64())
-        {
+        if let Some(v) = obj.get("telegram_retry_max_ms").and_then(|v| v.as_u64()) {
             config.telegram_retry_max_ms = v;
         }
         if let Some(v) = obj
@@ -202,19 +196,13 @@ pub async fn update_config(
             .get("discord_allowed_guild_ids")
             .and_then(|v| v.as_array())
         {
-            config.discord_allowed_guild_ids = v
-                .iter()
-                .filter_map(|x| x.as_u64())
-                .collect();
+            config.discord_allowed_guild_ids = v.iter().filter_map(|x| x.as_u64()).collect();
         }
         if let Some(v) = obj
             .get("discord_allowed_channel_ids")
             .and_then(|v| v.as_array())
         {
-            config.discord_allowed_channel_ids = v
-                .iter()
-                .filter_map(|x| x.as_u64())
-                .collect();
+            config.discord_allowed_channel_ids = v.iter().filter_map(|x| x.as_u64()).collect();
         }
     }
 
@@ -279,6 +267,8 @@ mod tests {
             soul_loader: base_state.soul_loader.clone(),
             skill_registry: base_state.skill_registry.clone(),
             user_learner: base_state.user_learner.clone(),
+            plugin_registry: base_state.plugin_registry.clone(),
+            plugin_installer: base_state.plugin_installer.clone(),
             #[cfg(feature = "channels")]
             channel_registry: base_state.channel_registry.clone(),
             #[cfg(feature = "channels")]

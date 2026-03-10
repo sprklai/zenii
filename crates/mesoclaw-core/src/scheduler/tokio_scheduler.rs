@@ -909,11 +909,16 @@ mod tests {
         tokio::time::sleep(Duration::from_secs(2)).await;
         sched.stop().await;
 
-        list_handle.await.expect("concurrent list_jobs should not deadlock");
+        list_handle
+            .await
+            .expect("concurrent list_jobs should not deadlock");
 
         // Verify job state was persisted
         let history = sched.job_history(&id).await;
-        assert!(!history.is_empty(), "Should have at least one execution record");
+        assert!(
+            !history.is_empty(),
+            "Should have at least one execution record"
+        );
     }
 
     // WS-6.2 — Toggle persists to DB before updating in-memory

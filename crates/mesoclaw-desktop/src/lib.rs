@@ -5,6 +5,7 @@ use tauri::Manager;
 
 #[allow(clippy::expect_used)]
 pub fn run() {
+    #[allow(unused_mut)]
     let mut builder = tauri::Builder::default();
 
     #[cfg(feature = "devtools")]

@@ -7,13 +7,13 @@ use tracing::{info, warn};
 use crate::gateway::state::AppState;
 
 #[cfg(feature = "ai")]
-use tokio::sync::broadcast;
-#[cfg(feature = "ai")]
 use crate::ai::adapter::{ToolCallEvent, ToolCallPhase};
 #[cfg(feature = "ai")]
 use crate::ai::context::ContextEngine;
 #[cfg(feature = "ai")]
 use crate::event_bus::AppEvent;
+#[cfg(feature = "ai")]
+use tokio::sync::broadcast;
 
 #[cfg(feature = "ai")]
 use super::format::formatter_for;
@@ -164,10 +164,7 @@ impl ChannelRouter {
             }
         };
         let channel_key = ChannelSessionMap::channel_key(&message);
-        let session_id = match sm
-            .resolve_session(&channel_key, &channel_name)
-            .await
-        {
+        let session_id = match sm.resolve_session(&channel_key, &channel_name).await {
             Ok(id) => id,
             Err(e) => {
                 warn!("ChannelRouter: failed to resolve session for {channel_key}: {e}");
@@ -264,15 +261,15 @@ impl ChannelRouter {
         )
         .await
         {
-                Ok(a) => a,
-                Err(e) => {
-                    warn!("ChannelRouter: failed to resolve agent for {channel_name}: {e}");
-                    if let Some(channel) = state.channel_registry.get_channel(&channel_name) {
-                        channel.on_agent_complete(recipient.as_deref()).await;
-                    }
-                    return;
+            Ok(a) => a,
+            Err(e) => {
+                warn!("ChannelRouter: failed to resolve agent for {channel_name}: {e}");
+                if let Some(channel) = state.channel_registry.get_channel(&channel_name) {
+                    channel.on_agent_complete(recipient.as_deref()).await;
                 }
-            };
+                return;
+            }
+        };
 
         // 9. Spawn tool event listener that forwards events to channel lifecycle hooks
         let tool_channel_name = channel_name.clone();

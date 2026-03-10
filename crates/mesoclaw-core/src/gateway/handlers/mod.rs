@@ -10,6 +10,7 @@ pub mod identity;
 pub mod memory;
 pub mod messages;
 pub mod models;
+pub mod plugins;
 pub mod providers;
 #[cfg(feature = "scheduler")]
 pub mod scheduler;
@@ -32,6 +33,8 @@ pub(crate) mod tests {
     use crate::gateway::state::AppState;
     use crate::identity::SoulLoader;
     use crate::memory::in_memory_store::InMemoryStore;
+    use crate::plugins::installer::PluginInstaller;
+    use crate::plugins::registry::PluginRegistry;
     use crate::security::policy::SecurityPolicy;
     use crate::skills::SkillRegistry;
     use crate::user::UserLearner;
@@ -77,6 +80,17 @@ pub(crate) mod tests {
             config.clone(),
         ));
 
+        let plugins_dir = dir.path().join("plugins");
+        let tool_registry = Arc::new(crate::tools::ToolRegistry::new());
+        let plugin_registry = Arc::new(PluginRegistry::new(plugins_dir).unwrap());
+        let plugin_installer = Arc::new(PluginInstaller::new(
+            plugin_registry.clone(),
+            tool_registry.clone(),
+            skill_registry.clone(),
+            60,
+            3,
+        ));
+
         let state = Arc::new(AppState {
             config: Arc::new(arc_swap::ArcSwap::from(config)),
             config_path: dir.path().join("config.toml"),
@@ -86,7 +100,7 @@ pub(crate) mod tests {
             memory,
             credentials: Arc::new(InMemoryCredentialStore::new()),
             security: Arc::new(SecurityPolicy::default_policy()),
-            tools: Arc::new(crate::tools::ToolRegistry::new()),
+            tools: tool_registry,
             session_manager,
             agent: None,
             provider_registry,
@@ -99,6 +113,8 @@ pub(crate) mod tests {
             soul_loader,
             skill_registry,
             user_learner,
+            plugin_registry,
+            plugin_installer,
             #[cfg(feature = "channels")]
             channel_registry,
             #[cfg(feature = "channels")]

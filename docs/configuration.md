@@ -16,6 +16,9 @@
   - [Web Search](#web-search)
   - [Context Injection](#context-injection)
   - [Context Management](#context-management)
+  - [Embeddings](#embeddings)
+  - [Reasoning](#reasoning)
+  - [Plugins](#plugins)
   - [Channels](#channels)
   - [Scheduler](#scheduler)
   - [Credentials](#credentials)
@@ -257,6 +260,50 @@ context_extract_interval = 3
 context_summary_model = ""
 ```
 
+### Embeddings
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `embedding_provider` | String | `"none"` | Embedding provider type: `none` (FTS5 only), `openai`, or `local` (FastEmbed) |
+| `embedding_model` | String | `"BAAI/bge-small-en-v1.5"` | Model ID for embedding generation |
+| `embedding_download_dir` | Option\<String\> | `null` | Directory for local embedding model downloads (defaults to data dir) |
+
+```toml
+embedding_provider = "local"
+embedding_model = "BAAI/bge-small-en-v1.5"
+# embedding_download_dir = "/custom/path/models"
+```
+
+### Reasoning
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `agent_max_continuations` | usize | `5` | Maximum autonomous continuation turns for the reasoning engine |
+| `agent_reasoning_guidance` | Option\<String\> | `null` | Custom reasoning instructions appended to agent system prompt |
+
+```toml
+agent_max_continuations = 5
+agent_reasoning_guidance = "Think step by step before taking actions."
+```
+
+### Plugins
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `plugins_dir` | Option\<String\> | `{data_dir}/plugins/` | Directory containing installed plugins |
+| `plugin_idle_timeout_secs` | u64 | `300` | Seconds before idle plugin processes are stopped |
+| `plugin_max_restart_attempts` | u32 | `3` | Maximum restart attempts for crashed plugin processes |
+| `plugin_execute_timeout_secs` | u64 | `60` | Timeout for plugin tool execution |
+| `plugin_auto_update` | bool | `false` | Whether to auto-update plugins on boot |
+
+```toml
+# plugins_dir = "/custom/path/plugins"
+plugin_idle_timeout_secs = 300
+plugin_max_restart_attempts = 3
+plugin_execute_timeout_secs = 60
+plugin_auto_update = false
+```
+
 ### Channels
 
 | Field | Type | Default | Description |
@@ -359,6 +406,7 @@ Some configuration fields are only relevant when specific feature flags are enab
 
 | Feature Flag | Relevant Config Fields |
 |---|---|
+| `local-embeddings` | `embedding_provider` (when set to `"local"`), `embedding_model`, `embedding_download_dir` |
 | `channels` | `channels_enabled`, `channel_tool_policy` |
 | `channels-telegram` | `telegram_polling_timeout_secs`, `telegram_dm_policy`, `telegram_retry_min_ms`, `telegram_retry_max_ms`, `telegram_require_group_mention` |
 | `channels-slack` | (uses `channel_tool_policy` for Slack-specific tool allowlists) |
@@ -414,6 +462,13 @@ tool_file_read_max_lines = 10000
 # Web Search
 web_search_timeout_secs = 30
 web_search_max_results = 20
+
+# Embeddings
+embedding_provider = "none"
+embedding_model = "BAAI/bge-small-en-v1.5"
+
+# Reasoning
+agent_max_continuations = 5
 
 # Context
 context_injection_enabled = true

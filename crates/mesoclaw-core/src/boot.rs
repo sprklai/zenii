@@ -12,6 +12,8 @@ use crate::db::{self, DbPool};
 use crate::event_bus::TokioBroadcastBus;
 use crate::identity::SoulLoader;
 use crate::memory::traits::Memory;
+use crate::plugins::installer::PluginInstaller;
+use crate::plugins::registry::PluginRegistry;
 use crate::security::policy::SecurityPolicy;
 use crate::skills::SkillRegistry;
 use crate::tools::ToolRegistry;
@@ -66,6 +68,8 @@ pub struct Services {
     pub soul_loader: Arc<SoulLoader>,
     pub skill_registry: Arc<SkillRegistry>,
     pub user_learner: Arc<UserLearner>,
+    pub plugin_registry: Arc<PluginRegistry>,
+    pub plugin_installer: Arc<PluginInstaller>,
     #[cfg(feature = "channels")]
     pub channel_registry: Arc<ChannelRegistry>,
     #[cfg(feature = "channels")]
@@ -532,6 +536,62 @@ pub async fn init_services(config: AppConfig) -> Result<Services> {
             .unwrap_or_else(|e| tracing::warn!("Failed to register scheduler tool: {e}"));
     }
 
+    // 15. Plugin system
+    let plugins_dir = config
+        .plugins_dir
+        .as_ref()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| data_dir.join("plugins"));
+    let plugin_registry = Arc::new(PluginRegistry::new(plugins_dir)?);
+
+    // Register enabled plugin tools into ToolRegistry
+    for plugin in plugin_registry.list() {
+        if !plugin.enabled {
+            continue;
+        }
+        for tool_def in &plugin.manifest.tools {
+            let binary = plugin.install_path.join(&tool_def.binary);
+            let process = crate::plugins::process::PluginProcess::new(
+                &tool_def.name,
+                binary,
+                config.plugin_execute_timeout_secs,
+                config.plugin_max_restart_attempts,
+            );
+            let adapter = crate::plugins::adapter::PluginToolAdapter::new(
+                tool_def.name.clone(),
+                tool_def.description.clone(),
+                serde_json::json!({}),
+                Arc::new(tokio::sync::Mutex::new(process)),
+            );
+            tools.register(Arc::new(adapter)).unwrap_or_else(|e| {
+                tracing::warn!("Failed to register plugin tool '{}': {e}", tool_def.name);
+            });
+        }
+        for skill_def in &plugin.manifest.skills {
+            let path = plugin.install_path.join(&skill_def.file);
+            if let Ok(content) = std::fs::read_to_string(&path)
+                && let Err(e) = skill_registry
+                    .register_external(&skill_def.name, content)
+                    .await
+            {
+                tracing::warn!("Failed to register plugin skill '{}': {e}", skill_def.name);
+            }
+        }
+    }
+
+    let plugin_installer = Arc::new(PluginInstaller::new(
+        plugin_registry.clone(),
+        tools.clone(),
+        skill_registry.clone(),
+        config.plugin_execute_timeout_secs,
+        config.plugin_max_restart_attempts,
+    ));
+
+    info!(
+        "Plugin system initialized: {} plugins",
+        plugin_registry.list().len()
+    );
+
     info!("All services initialized");
 
     Ok(Services {
@@ -563,6 +623,8 @@ pub async fn init_services(config: AppConfig) -> Result<Services> {
         soul_loader,
         skill_registry,
         user_learner,
+        plugin_registry,
+        plugin_installer,
         #[cfg(feature = "channels")]
         channel_registry,
         #[cfg(feature = "channels")]
@@ -606,6 +668,8 @@ impl From<Services> for AppState {
             soul_loader: s.soul_loader,
             skill_registry: s.skill_registry,
             user_learner: s.user_learner,
+            plugin_registry: s.plugin_registry,
+            plugin_installer: s.plugin_installer,
             #[cfg(feature = "channels")]
             channel_registry: s.channel_registry,
             #[cfg(feature = "channels")]

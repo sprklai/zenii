@@ -132,6 +132,13 @@ pub struct AppConfig {
     /// User's location/region description (e.g., "New York, US"). Used for context injection.
     pub user_location: Option<String>,
 
+    // Phase 9: Plugins
+    pub plugins_dir: Option<String>,
+    pub plugin_idle_timeout_secs: u64,
+    pub plugin_max_restart_attempts: u32,
+    pub plugin_execute_timeout_secs: u64,
+    pub plugin_auto_update: bool,
+
     // Phase 8: Self-Evolution
     pub self_evolution_enabled: bool,
     pub learning_archive_threshold: f64,
@@ -271,6 +278,13 @@ impl Default for AppConfig {
             // Environment overrides
             user_timezone: None,
             user_location: None,
+
+            // Plugins
+            plugins_dir: None,
+            plugin_idle_timeout_secs: 300,
+            plugin_max_restart_attempts: 3,
+            plugin_execute_timeout_secs: 60,
+            plugin_auto_update: false,
 
             // Self-Evolution
             self_evolution_enabled: true,
@@ -446,15 +460,21 @@ mod tests {
             !config.gateway_cors_origins.is_empty(),
             "Default CORS origins must not be empty"
         );
-        assert!(config
-            .gateway_cors_origins
-            .contains(&"http://localhost:18971".to_string()));
-        assert!(config
-            .gateway_cors_origins
-            .contains(&"tauri://localhost".to_string()));
-        assert!(config
-            .gateway_cors_origins
-            .contains(&"https://tauri.localhost".to_string()));
+        assert!(
+            config
+                .gateway_cors_origins
+                .contains(&"http://localhost:18971".to_string())
+        );
+        assert!(
+            config
+                .gateway_cors_origins
+                .contains(&"tauri://localhost".to_string())
+        );
+        assert!(
+            config
+                .gateway_cors_origins
+                .contains(&"https://tauri.localhost".to_string())
+        );
     }
 
     // 18.10 — default embedding_provider is "none"

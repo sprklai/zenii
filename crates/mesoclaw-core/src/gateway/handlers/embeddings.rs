@@ -51,8 +51,7 @@ pub async fn embeddings_test(
     }
 
     // Use MockEmbeddingProvider for testing when no real provider is wired
-    let provider =
-        crate::memory::embeddings::MockEmbeddingProvider::new(cfg.embedding_dim);
+    let provider = crate::memory::embeddings::MockEmbeddingProvider::new(cfg.embedding_dim);
     let start = std::time::Instant::now();
     match provider.embed("test embedding").await {
         Ok(vec) => Ok(Json(EmbedTestResult {
@@ -132,8 +131,7 @@ pub async fn embeddings_embed(
     }
 
     // Use mock provider for the embed endpoint in tests
-    let provider =
-        crate::memory::embeddings::MockEmbeddingProvider::new(cfg.embedding_dim);
+    let provider = crate::memory::embeddings::MockEmbeddingProvider::new(cfg.embedding_dim);
     match provider.embed(&body.text).await {
         Ok(vec) => Ok(Json(serde_json::json!({
             "dimensions": vec.len(),

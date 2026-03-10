@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use axum::Router;
 use axum::middleware;
-use axum::routing::{delete, get, post};
+use axum::routing::{delete, get, post, put};
 use tower_http::cors::{AllowOrigin, CorsLayer};
 use tower_http::trace::TraceLayer;
 
@@ -184,6 +184,25 @@ pub fn build_router(state: Arc<AppState>) -> Router {
         .route(
             "/embeddings/reindex",
             post(handlers::embeddings::embeddings_reindex),
+        )
+        // Plugins (Phase 9)
+        .route("/plugins", get(handlers::plugins::list_plugins))
+        .route("/plugins/install", post(handlers::plugins::install_plugin))
+        .route(
+            "/plugins/{name}",
+            get(handlers::plugins::get_plugin).delete(handlers::plugins::remove_plugin),
+        )
+        .route(
+            "/plugins/{name}/toggle",
+            put(handlers::plugins::toggle_plugin),
+        )
+        .route(
+            "/plugins/{name}/update",
+            post(handlers::plugins::update_plugin),
+        )
+        .route(
+            "/plugins/{name}/config",
+            get(handlers::plugins::get_plugin_config).put(handlers::plugins::update_plugin_config),
         )
         // Channel credential test (always available, no feature gate)
         .route(

@@ -49,6 +49,8 @@ impl IntoResponse for MesoError {
             MesoError::Yaml(_) => (StatusCode::BAD_REQUEST, "MESO_YAML_PARSE_ERROR"),
             MesoError::Validation(_) => (StatusCode::BAD_REQUEST, "MESO_VALIDATION"),
             MesoError::Scheduler(_) => (StatusCode::INTERNAL_SERVER_ERROR, "MESO_SCHEDULER_ERROR"),
+            MesoError::Plugin(_) => (StatusCode::INTERNAL_SERVER_ERROR, "MESO_PLUGIN_ERROR"),
+            MesoError::PluginNotFound(_) => (StatusCode::NOT_FOUND, "MESO_PLUGIN_NOT_FOUND"),
             MesoError::Other(_) => (StatusCode::INTERNAL_SERVER_ERROR, "MESO_INTERNAL_ERROR"),
         };
 
@@ -226,6 +228,8 @@ mod tests {
             },
             MesoError::Validation("t".into()),
             MesoError::Scheduler("t".into()),
+            MesoError::Plugin("t".into()),
+            MesoError::PluginNotFound("t".into()),
             MesoError::Other("t".into()),
         ];
 
@@ -235,8 +239,8 @@ mod tests {
             assert!(codes.insert(code.clone()), "duplicate error code: {code}");
         }
 
-        // 29 variants tested (Http skipped because reqwest::Error can't be easily constructed)
-        assert_eq!(codes.len(), 29);
+        // 31 variants tested (Http skipped because reqwest::Error can't be easily constructed)
+        assert_eq!(codes.len(), 31);
     }
 
     #[test]
@@ -305,7 +309,8 @@ mod tests {
 
     #[test]
     fn database_error_does_not_leak_details() {
-        let err = MesoError::Database("connection to /var/db/mesoclaw.db failed: SQLITE_BUSY".into());
+        let err =
+            MesoError::Database("connection to /var/db/mesoclaw.db failed: SQLITE_BUSY".into());
         let (_, _, message) = response_parts_full(err);
         assert!(
             message.contains("Internal"),

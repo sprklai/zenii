@@ -93,8 +93,9 @@ pub async fn connect_channel(
                     )
                 })?;
 
-            let mut tg_config =
-                crate::channels::telegram::config::TelegramConfig::from_app_config(&state.config.load());
+            let mut tg_config = crate::channels::telegram::config::TelegramConfig::from_app_config(
+                &state.config.load(),
+            );
 
             // Parse allowed_chat_ids from credentials if stored
             if let Ok(Some(ids_str)) = state
@@ -151,8 +152,9 @@ pub async fn connect_channel(
                     )
                 })?;
 
-            let dc_config =
-                crate::channels::discord::config::DiscordConfig::from_app_config(&state.config.load());
+            let dc_config = crate::channels::discord::config::DiscordConfig::from_app_config(
+                &state.config.load(),
+            );
             Arc::new(crate::channels::discord::DiscordChannel::new(
                 dc_config,
                 state.credentials.clone(),
@@ -235,7 +237,9 @@ pub async fn list_channel_sessions(
     State(state): State<Arc<AppState>>,
     axum::extract::Query(query): axum::extract::Query<ChannelSessionsQuery>,
 ) -> Json<Vec<crate::ai::session::SessionSummary>> {
-    let limit = query.limit.unwrap_or(state.config.load().inbox_sessions_page_size);
+    let limit = query
+        .limit
+        .unwrap_or(state.config.load().inbox_sessions_page_size);
     let offset = query.offset.unwrap_or(0);
     let sessions = state
         .session_manager

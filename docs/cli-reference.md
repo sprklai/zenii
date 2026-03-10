@@ -561,6 +561,189 @@ mesoclaw schedule status
 
 ---
 
+### `embedding` -- Manage semantic memory embeddings
+
+#### `embedding activate`
+
+Activate an embedding provider.
+
+```
+mesoclaw embedding activate <PROVIDER>
+```
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `<PROVIDER>` | Yes | Provider name: `openai` or `local` |
+
+Examples:
+
+```bash
+# Activate local embeddings (no API key required)
+mesoclaw embedding activate local
+
+# Activate OpenAI embeddings (requires api_key:openai)
+mesoclaw embedding activate openai
+```
+
+#### `embedding deactivate`
+
+Deactivate the current embedding provider (fall back to FTS5 only).
+
+```bash
+mesoclaw embedding deactivate
+```
+
+#### `embedding status`
+
+Show the current embedding provider status.
+
+```bash
+mesoclaw embedding status
+```
+
+#### `embedding test`
+
+Test embedding generation with the current provider.
+
+```bash
+mesoclaw embedding test
+```
+
+#### `embedding reindex`
+
+Re-embed all stored memories with the current provider.
+
+```bash
+mesoclaw embedding reindex
+```
+
+---
+
+### `plugin` -- Manage external plugins
+
+#### `plugin list`
+
+List all installed plugins.
+
+```bash
+mesoclaw plugin list
+```
+
+#### `plugin install`
+
+Install a plugin from a git URL or local path.
+
+```
+mesoclaw plugin install <SOURCE> [--local]
+```
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `<SOURCE>` | Yes | Git URL or local path to the plugin |
+| `--local` | No | Treat source as a local directory path |
+
+Examples:
+
+```bash
+# Install from git
+mesoclaw plugin install https://github.com/user/weather-plugin
+
+# Install from local directory
+mesoclaw plugin install ./my-plugin --local
+```
+
+#### `plugin remove`
+
+Remove an installed plugin.
+
+```
+mesoclaw plugin remove <NAME>
+```
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `<NAME>` | Yes | Plugin name to remove |
+
+Examples:
+
+```bash
+mesoclaw plugin remove weather
+```
+
+#### `plugin update`
+
+Update a git-sourced plugin to the latest version.
+
+```
+mesoclaw plugin update <NAME>
+```
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `<NAME>` | Yes | Plugin name to update |
+
+Examples:
+
+```bash
+mesoclaw plugin update weather
+```
+
+#### `plugin enable`
+
+Enable a disabled plugin.
+
+```
+mesoclaw plugin enable <NAME>
+```
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `<NAME>` | Yes | Plugin name to enable |
+
+Examples:
+
+```bash
+mesoclaw plugin enable weather
+```
+
+#### `plugin disable`
+
+Disable a plugin.
+
+```
+mesoclaw plugin disable <NAME>
+```
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `<NAME>` | Yes | Plugin name to disable |
+
+Examples:
+
+```bash
+mesoclaw plugin disable weather
+```
+
+#### `plugin info`
+
+Show plugin details.
+
+```
+mesoclaw plugin info <NAME>
+```
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `<NAME>` | Yes | Plugin name to inspect |
+
+Examples:
+
+```bash
+mesoclaw plugin info weather
+```
+
+---
+
 ### `completions` -- Generate shell completions (hidden)
 
 Generate shell completion scripts. This command is hidden from `--help` output.

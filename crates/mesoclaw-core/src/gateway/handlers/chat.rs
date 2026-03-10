@@ -37,7 +37,8 @@ pub async fn chat(
     let ctx_enabled = state
         .context_injection_enabled
         .load(std::sync::atomic::Ordering::Relaxed);
-    let context_engine = ContextEngine::new(state.db.clone(), state.config.load_full(), ctx_enabled);
+    let context_engine =
+        ContextEngine::new(state.db.clone(), state.config.load_full(), ctx_enabled);
     let (message_count, last_message_at, summary) = if let Some(ref sid) = req.session_id {
         state
             .session_manager
