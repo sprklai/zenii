@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - Release pipeline: exclude keyring/dbus from embedded cross-builds, fix asset name collisions, disable musl target pending OpenSSL cross-compilation fix
+- Remove musl references from release checksums and artifact globs to prevent missing file warnings
+- Fix GitHub Actions injection pattern in version extraction step
 
 ## [0.0.8] - 2026-03-10
 
