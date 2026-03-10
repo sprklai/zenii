@@ -1,7 +1,8 @@
 use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
 use std::time::Instant;
+
+use parking_lot::Mutex;
 
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
@@ -103,7 +104,9 @@ const MEDIUM_RISK_GIT: &[&str] = &["add", "commit"];
 const MEDIUM_RISK_CARGO: &[&str] = &["build", "test", "run"];
 
 /// Shell injection patterns that are always denied.
-const INJECTION_PATTERNS: &[&str] = &["`", "$(", "|", ";", "&&", "||", ">", ">>"];
+const INJECTION_PATTERNS: &[&str] = &[
+    "`", "$(", "|", ";", "&&", "||", ">", ">>", "\n", "<(", ">(", "<<",
+];
 
 /// Security policy engine that validates commands and paths based on autonomy level.
 pub struct SecurityPolicy {
@@ -230,9 +233,7 @@ impl SecurityPolicy {
 
         // Check rate limit
         {
-            let Ok(mut limiter) = self.rate_limiter.lock() else {
-                return ValidationResult::Denied("rate limiter lock poisoned".to_string());
-            };
+            let mut limiter = self.rate_limiter.lock();
             if !limiter.check_and_record() {
                 return ValidationResult::Denied("rate limited".to_string());
             }
@@ -263,6 +264,10 @@ impl SecurityPolicy {
     }
 
     /// Validate whether a file path is allowed under the current policy.
+    ///
+    /// When the path exists on disk, canonicalize it first to resolve symlinks
+    /// and prevent symlink-based traversal attacks. Falls back to the raw path
+    /// for write operations to paths that don't exist yet.
     pub fn validate_path(&self, path: &Path) -> ValidationResult {
         let path_str = path.to_string_lossy();
 
@@ -278,9 +283,19 @@ impl SecurityPolicy {
             }
         }
 
-        // Blocked directories
+        // Canonicalize if path exists to resolve symlinks
+        let effective_path = if path.exists() {
+            match std::fs::canonicalize(path) {
+                Ok(canonical) => canonical,
+                Err(_) => path.to_path_buf(),
+            }
+        } else {
+            path.to_path_buf()
+        };
+
+        // Blocked directories (check canonical path)
         for blocked in &self.blocked_dirs {
-            if path.starts_with(blocked) {
+            if effective_path.starts_with(blocked) {
                 return ValidationResult::Denied(format!(
                     "path is in blocked directory: {}",
                     blocked.display()
@@ -288,9 +303,9 @@ impl SecurityPolicy {
             }
         }
 
-        // Workspace root enforcement
+        // Workspace root enforcement (check canonical path)
         if let Some(root) = &self.workspace_root
-            && !path.starts_with(root)
+            && !effective_path.starts_with(root)
         {
             return ValidationResult::Denied(format!(
                 "path is outside workspace root: {}",
@@ -301,6 +316,46 @@ impl SecurityPolicy {
         ValidationResult::Allowed
     }
 
+    /// Validate whether a tool execution is allowed under the current policy.
+    ///
+    /// Logs the action to the audit log and returns `ValidationResult::Denied`
+    /// if the autonomy level is `ReadOnly` and the tool performs write operations.
+    pub fn validate_tool_execution(
+        &self,
+        tool_name: &str,
+        _args: &serde_json::Value,
+    ) -> ValidationResult {
+        // Write-oriented tools that are restricted in ReadOnly mode
+        const WRITE_TOOLS: &[&str] = &[
+            "file_write",
+            "shell",
+            "patch",
+            "channel_send",
+            "scheduler",
+            "config",
+            "memory",
+        ];
+
+        let is_write_tool = WRITE_TOOLS.contains(&tool_name);
+
+        let result = match self.autonomy_level {
+            AutonomyLevel::ReadOnly if is_write_tool => ValidationResult::Denied(format!(
+                "tool '{tool_name}' requires write access, denied in read-only mode"
+            )),
+            AutonomyLevel::Supervised if is_write_tool => ValidationResult::NeedsApproval,
+            _ => ValidationResult::Allowed,
+        };
+
+        let result_str = match &result {
+            ValidationResult::Allowed => "allowed",
+            ValidationResult::NeedsApproval => "needs_approval",
+            ValidationResult::Denied(_) => "denied",
+        };
+        self.log_action(&format!("tool_execute:{tool_name}"), result_str);
+
+        result
+    }
+
     /// Record an action in the audit log.
     pub fn log_action(&self, action: &str, result: &str) {
         let entry = AuditEntry {
@@ -309,9 +364,7 @@ impl SecurityPolicy {
             timestamp: Utc::now().to_rfc3339(),
         };
 
-        let Ok(mut log) = self.audit_log.lock() else {
-            return;
-        };
+        let mut log = self.audit_log.lock();
         if log.len() >= self.audit_capacity {
             log.pop_front();
         }
@@ -320,9 +373,7 @@ impl SecurityPolicy {
 
     /// Return a copy of the audit log entries.
     pub fn audit_log(&self) -> Vec<AuditEntry> {
-        let Ok(log) = self.audit_log.lock() else {
-            return Vec::new();
-        };
+        let log = self.audit_log.lock();
         log.iter().cloned().collect()
     }
 }
@@ -490,6 +541,48 @@ mod tests {
         let policy = supervised_policy();
         let result = policy.validate_command("echo bad > /etc/passwd");
         assert!(matches!(result, ValidationResult::Denied(msg) if msg.contains("injection")));
+    }
+
+    // --- WS-4.6: Additional injection patterns ---
+
+    #[test]
+    fn injection_patterns_block_newline() {
+        let policy = supervised_policy();
+        let result = policy.validate_command("echo hello\nrm -rf /");
+        assert!(
+            matches!(result, ValidationResult::Denied(msg) if msg.contains("injection")),
+            "Newline injection should be blocked"
+        );
+    }
+
+    #[test]
+    fn injection_patterns_block_process_substitution() {
+        let policy = supervised_policy();
+        let result = policy.validate_command("cat <(echo secret)");
+        assert!(
+            matches!(result, ValidationResult::Denied(msg) if msg.contains("injection")),
+            "Process substitution <() should be blocked"
+        );
+    }
+
+    #[test]
+    fn injection_patterns_block_heredoc() {
+        let policy = supervised_policy();
+        let result = policy.validate_command("cat <<EOF\ndata\nEOF");
+        assert!(
+            matches!(result, ValidationResult::Denied(msg) if msg.contains("injection")),
+            "Heredoc << should be blocked"
+        );
+    }
+
+    #[test]
+    fn injection_patterns_block_output_process_substitution() {
+        let policy = supervised_policy();
+        let result = policy.validate_command("tee >(cat)");
+        assert!(
+            matches!(result, ValidationResult::Denied(msg) if msg.contains("injection")),
+            "Process substitution >() should be blocked"
+        );
     }
 
     #[test]
@@ -671,6 +764,31 @@ mod tests {
         assert_eq!(policy.validate_path(&path), ValidationResult::Allowed);
     }
 
+    // --- Symlink traversal (WS-4.4) ---
+
+    #[test]
+    fn symlink_traversal_blocked() {
+        let tmp = tempfile::tempdir().unwrap();
+        let link = tmp.path().join("innocent");
+        std::os::unix::fs::symlink("/etc/passwd", &link).unwrap();
+        let policy = SecurityPolicy::default_policy();
+        let result = policy.validate_path(&link);
+        assert!(
+            matches!(&result, ValidationResult::Denied(msg) if msg.contains("blocked")),
+            "Symlink to blocked path should be rejected, got: {result:?}"
+        );
+    }
+
+    #[test]
+    fn non_symlink_path_still_allowed() {
+        let tmp = tempfile::tempdir().unwrap();
+        let file = tmp.path().join("normal.txt");
+        std::fs::write(&file, "hello").unwrap();
+        // Use a policy with no blocked dirs to test normal path
+        let policy = SecurityPolicy::new(AutonomyLevel::Full, None, vec![], 60, 60, 100);
+        assert_eq!(policy.validate_path(&file), ValidationResult::Allowed);
+    }
+
     // --- Audit log ---
 
     #[test]
@@ -736,5 +854,86 @@ mod tests {
         let json = serde_json::to_string(&risk).unwrap();
         let back: RiskLevel = serde_json::from_str(&json).unwrap();
         assert_eq!(back, risk);
+    }
+
+    // --- Tool execution validation (WS-4.3) ---
+
+    #[test]
+    fn tool_execution_readonly_denies_write_tools() {
+        let policy = readonly_policy();
+        let args = serde_json::json!({});
+        let result = policy.validate_tool_execution("file_write", &args);
+        assert!(
+            matches!(result, ValidationResult::Denied(msg) if msg.contains("read-only")),
+            "Write tool should be denied in read-only mode"
+        );
+    }
+
+    #[test]
+    fn tool_execution_readonly_allows_read_tools() {
+        let policy = readonly_policy();
+        let args = serde_json::json!({});
+        assert_eq!(
+            policy.validate_tool_execution("file_read", &args),
+            ValidationResult::Allowed
+        );
+        assert_eq!(
+            policy.validate_tool_execution("system_info", &args),
+            ValidationResult::Allowed
+        );
+    }
+
+    #[test]
+    fn tool_execution_supervised_needs_approval_for_write() {
+        let policy = supervised_policy();
+        let args = serde_json::json!({});
+        assert_eq!(
+            policy.validate_tool_execution("shell", &args),
+            ValidationResult::NeedsApproval
+        );
+    }
+
+    #[test]
+    fn tool_execution_full_allows_all() {
+        let policy = full_policy();
+        let args = serde_json::json!({});
+        assert_eq!(
+            policy.validate_tool_execution("file_write", &args),
+            ValidationResult::Allowed
+        );
+        assert_eq!(
+            policy.validate_tool_execution("shell", &args),
+            ValidationResult::Allowed
+        );
+    }
+
+    #[test]
+    fn tool_execution_logs_to_audit() {
+        let policy = full_policy();
+        let args = serde_json::json!({});
+        policy.validate_tool_execution("file_read", &args);
+        let log = policy.audit_log();
+        assert_eq!(log.len(), 1);
+        assert_eq!(log[0].action, "tool_execute:file_read");
+        assert_eq!(log[0].result, "allowed");
+    }
+
+    // WS-6.5 — parking_lot::Mutex does not poison after panic
+    #[test]
+    fn security_policy_mutex_no_poison() {
+        let policy = std::sync::Arc::new(SecurityPolicy::default_policy());
+        let p = std::sync::Arc::clone(&policy);
+        let _ = std::thread::spawn(move || {
+            let _guard = p.rate_limiter.lock();
+            panic!("test panic");
+        })
+        .join();
+        // After panic, lock should still be acquirable (parking_lot doesn't poison)
+        let _guard = policy.rate_limiter.lock();
+        // Also verify audit_log lock is not poisoned
+        policy.log_action("post_panic", "ok");
+        let log = policy.audit_log();
+        assert_eq!(log.len(), 1);
+        assert_eq!(log[0].action, "post_panic");
     }
 }

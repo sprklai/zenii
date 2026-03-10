@@ -7,6 +7,7 @@ use serde::Deserialize;
 
 use crate::MesoError;
 use crate::gateway::state::AppState;
+use crate::security::policy::ValidationResult;
 
 #[derive(Deserialize)]
 pub struct ExecuteToolRequest {
@@ -28,6 +29,22 @@ pub async fn execute_tool(
         .tools
         .get(&name)
         .ok_or_else(|| MesoError::NotFound(format!("tool not found: {name}")))?;
+
+    // Security policy check before execution
+    match state
+        .security
+        .validate_tool_execution(&name, &body.args)
+    {
+        ValidationResult::Allowed => {}
+        ValidationResult::NeedsApproval => {
+            return Err(MesoError::PolicyDenied(format!(
+                "tool '{name}' requires approval in supervised mode"
+            )));
+        }
+        ValidationResult::Denied(reason) => {
+            return Err(MesoError::PolicyDenied(reason));
+        }
+    }
 
     let result = tool.execute(body.args).await?;
     Ok(Json(result))

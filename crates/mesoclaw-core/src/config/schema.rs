@@ -183,7 +183,11 @@ impl Default for AppConfig {
             // Gateway
             gateway_auth_token: None,
             ws_max_connections: 32,
-            gateway_cors_origins: vec!["http://localhost:18971".into()],
+            gateway_cors_origins: vec![
+                "http://localhost:18971".into(),
+                "tauri://localhost".into(),
+                "https://tauri.localhost".into(),
+            ],
 
             // Agent
             agent_max_turns: 20,
@@ -424,6 +428,25 @@ mod tests {
         let config: AppConfig = toml::from_str(toml_str).unwrap();
         assert_eq!(config.user_timezone.as_deref(), Some("America/New_York"));
         assert_eq!(config.user_location.as_deref(), Some("New York, US"));
+    }
+
+    // WS-4.1 — default CORS origins include all required origins
+    #[test]
+    fn default_cors_origins_not_empty() {
+        let config = AppConfig::default();
+        assert!(
+            !config.gateway_cors_origins.is_empty(),
+            "Default CORS origins must not be empty"
+        );
+        assert!(config
+            .gateway_cors_origins
+            .contains(&"http://localhost:18971".to_string()));
+        assert!(config
+            .gateway_cors_origins
+            .contains(&"tauri://localhost".to_string()));
+        assert!(config
+            .gateway_cors_origins
+            .contains(&"https://tauri.localhost".to_string()));
     }
 
     // 18.10 — default embedding_provider is "none"

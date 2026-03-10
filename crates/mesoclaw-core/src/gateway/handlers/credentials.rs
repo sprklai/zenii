@@ -44,16 +44,18 @@ pub async fn delete_credential(
     Ok(Json(serde_json::json!({ "deleted": deleted })))
 }
 
-/// GET /credentials/{key}/value -- get a credential value (for local UI reveal).
+/// GET /credentials/{key}/value -- check if a credential exists (no raw value exposed).
+///
+/// Returns `{ "exists": true/false }` instead of the raw secret.
+/// Raw credential values must never be returned over the gateway.
 pub async fn get_credential_value(
     State(state): State<Arc<AppState>>,
     Path(key): Path<String>,
 ) -> crate::Result<impl IntoResponse> {
     let value = state.credentials.get(&key).await?;
-    match value {
-        Some(v) => Ok(Json(serde_json::json!({ "key": key, "value": v }))),
-        None => Err(crate::MesoError::NotFound(format!("credential '{key}'"))),
-    }
+    Ok(Json(CredentialExistsResponse {
+        exists: value.is_some(),
+    }))
 }
 
 /// GET /credentials/{key}/exists -- check if a credential exists (bool, no value).
@@ -85,6 +87,7 @@ mod tests {
         Router::new()
             .route("/credentials", post(set_credential).get(list_credentials))
             .route("/credentials/{key}", delete(delete_credential))
+            .route("/credentials/{key}/value", get(get_credential_value))
             .route("/credentials/{key}/exists", get(credential_exists))
             .with_state(state)
     }
@@ -152,6 +155,38 @@ mod tests {
         let body = axum::body::to_bytes(resp.into_body(), 4096).await.unwrap();
         let result: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert_eq!(result["deleted"], true);
+    }
+
+    // WS-4.2 — /credentials/{key}/value no longer returns raw secret
+    #[tokio::test]
+    async fn credential_value_endpoint_no_raw_value() {
+        let (_dir, state) = test_state().await;
+        state
+            .credentials
+            .set("api_key:openai", "sk-secret-test-value")
+            .await
+            .unwrap();
+
+        let router = app(state);
+        let req = Request::builder()
+            .uri("/credentials/api_key:openai/value")
+            .body(Body::empty())
+            .unwrap();
+        let resp = router.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        let body = axum::body::to_bytes(resp.into_body(), 4096).await.unwrap();
+        let body_str = String::from_utf8_lossy(&body);
+
+        // Must NOT contain the actual secret value
+        assert!(
+            !body_str.contains("sk-secret-test-value"),
+            "Response must not contain the raw credential value"
+        );
+
+        // Should contain exists: true
+        let result: CredentialExistsResponse = serde_json::from_slice(&body).unwrap();
+        assert!(result.exists);
     }
 
     #[tokio::test]

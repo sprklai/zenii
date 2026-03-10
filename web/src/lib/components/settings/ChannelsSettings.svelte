@@ -12,9 +12,6 @@
 	let confirmOpen = $state(false);
 	let deleteTarget = $state<{ channelId: string; field: string } | null>(null);
 	let credInputs = $state<Record<string, string>>({});
-	let showField = $state<Record<string, boolean>>({});
-	let revealedValues = $state<Record<string, string>>({});
-	let revealing = $state<Record<string, boolean>>({});
 	let saving = $state<Record<string, boolean>>({});
 	let testing = $state<Record<string, boolean>>({});
 	let testResult = $state<Record<string, { healthy: boolean; error?: string; latency_ms?: number } | null>>({});
@@ -42,21 +39,8 @@
 		return field === 'token' || field === 'bot_token' || field === 'app_token' || field === 'access_token';
 	}
 
-	async function toggleReveal(channelId: string, field: string) {
-		const k = inputKey(channelId, field);
-		if (showField[k]) {
-			showField[k] = false;
-			delete revealedValues[k];
-		} else {
-			revealing[k] = true;
-			const val = await channelsStore.getCredentialValue(channelId, field);
-			revealing[k] = false;
-			if (val !== null) {
-				revealedValues[k] = val;
-				showField[k] = true;
-			}
-		}
-	}
+	// Credential values are never exposed over the gateway for security.
+	// The reveal button has been removed.
 
 	function statusDotClass(ch: ChannelWithStatus): string {
 		if (ch.connected) return 'bg-green-500';
@@ -181,36 +165,12 @@
 									{/if}
 								</label>
 								<div class="flex gap-2">
-									{#if showField[k] && revealedValues[k]}
-										<Input
-											id="cred-{k}"
-											type="text"
-											value={revealedValues[k]}
-											readonly
-											class="font-mono text-sm bg-muted"
-										/>
-									{:else}
-										<Input
-											id="cred-{k}"
-											type={secret ? 'password' : 'text'}
-											placeholder={isSet ? '\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022  (value is set)' : cred.placeholder}
-											bind:value={credInputs[k]}
-										/>
-									{/if}
-									{#if secret && isSet}
-										<Button
-											variant="ghost"
-											size="sm"
-											disabled={revealing[k]}
-											onclick={() => toggleReveal(channel.id, cred.key)}
-										>
-											{#if revealing[k]}
-												...
-											{:else}
-												{showField[k] ? 'Hide' : 'Show'}
-											{/if}
-										</Button>
-									{/if}
+									<Input
+										id="cred-{k}"
+										type={secret ? 'password' : 'text'}
+										placeholder={isSet ? '\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022  (value is set)' : cred.placeholder}
+										bind:value={credInputs[k]}
+									/>
 								</div>
 								<div class="flex gap-2">
 									<Button

@@ -5,7 +5,7 @@ use axum::extract::{State, WebSocketUpgrade};
 use axum::response::IntoResponse;
 use serde::{Deserialize, Serialize};
 use tokio::sync::broadcast;
-use tracing::{info, warn};
+use tracing::{debug, info, warn};
 
 use crate::ai::adapter::{ToolCallEvent, ToolCallPhase};
 use crate::ai::context::ContextEngine;
@@ -243,7 +243,7 @@ async fn handle_ws(mut socket: WebSocket, state: Arc<AppState>) {
 
         // Merge preambles: ContextBuilder (identity + memory + user) + ContextEngine (boot + summaries)
         let merged_preamble = format!("{preamble}\n\n{engine_preamble}");
-        info!(
+        debug!(
             "WS chat: session={}, history={} msgs, preamble={}B, prompt='{}'",
             request.session_id.as_deref().unwrap_or("none"),
             history.len(),
@@ -259,11 +259,11 @@ async fn handle_ws(mut socket: WebSocket, state: Arc<AppState>) {
                     format!("assistant: {:?}", content)
                 }
             };
-            info!("  history[{i}] {}", &preview[..preview.len().min(120)]);
+            debug!("  history[{i}] {}", &preview[..preview.len().min(120)]);
         }
 
         // Create per-request broadcast channel for tool events
-        let (tool_tx, mut tool_rx) = broadcast::channel::<ToolCallEvent>(32);
+        let (tool_tx, mut tool_rx) = broadcast::channel::<ToolCallEvent>(128);
 
         let agent = match resolve_agent(
             request.model.as_deref(),

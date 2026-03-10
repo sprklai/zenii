@@ -249,17 +249,17 @@ function createChannelsStore() {
       }
     },
 
-    async getCredentialValue(
+    async credentialExists(
       channelId: string,
       field: string,
-    ): Promise<string | null> {
+    ): Promise<boolean> {
       try {
-        const result = await apiGet<{ key: string; value: string }>(
-          `/credentials/${encodeURIComponent(credKey(channelId, field))}/value`,
+        const result = await apiGet<{ exists: boolean }>(
+          `/credentials/${encodeURIComponent(credKey(channelId, field))}/exists`,
         );
-        return result.value;
+        return result.exists;
       } catch {
-        return null;
+        return false;
       }
     },
 

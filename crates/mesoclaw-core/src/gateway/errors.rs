@@ -2,6 +2,7 @@ use axum::Json;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use serde::Serialize;
+use tracing::error;
 
 use crate::MesoError;
 
@@ -51,9 +52,19 @@ impl IntoResponse for MesoError {
             MesoError::Other(_) => (StatusCode::INTERNAL_SERVER_ERROR, "MESO_INTERNAL_ERROR"),
         };
 
+        // Sanitize internal error messages to prevent info leakage.
+        // Log the detailed error server-side, return generic message to client.
+        let message = match &self {
+            MesoError::Sqlite(_) | MesoError::Database(_) | MesoError::Io(_) => {
+                error!("Internal error ({}): {}", error_code, self);
+                "Internal server error".to_string()
+            }
+            _ => self.to_string(),
+        };
+
         let body = ErrorResponse {
             error_code: error_code.to_string(),
-            message: self.to_string(),
+            message,
         };
 
         (status, Json(body)).into_response()
@@ -66,15 +77,11 @@ mod tests {
     use axum::http::StatusCode;
     use std::collections::HashSet;
 
-    /// Helper to extract status and error_code from a MesoError response.
-    fn response_parts(err: MesoError) -> (StatusCode, String) {
+    /// Helper to extract status, error_code, and message from a MesoError response.
+    fn response_parts_full(err: MesoError) -> (StatusCode, String, String) {
         let response = err.into_response();
         let status = response.status();
 
-        // We need to extract the body synchronously for tests.
-        // Use the IntoResponse mapping logic directly instead.
-        // Re-derive the error_code from status by re-calling the mapping.
-        // Actually, let's just parse the response body.
         let rt = tokio::runtime::Builder::new_current_thread()
             .build()
             .expect("test runtime");
@@ -85,7 +92,16 @@ mod tests {
         });
         let error_resp: ErrorResponse =
             serde_json::from_slice(&body_bytes).expect("parse error response");
-        (status, error_resp.error_code.to_string())
+        (
+            status,
+            error_resp.error_code.to_string(),
+            error_resp.message,
+        )
+    }
+
+    fn response_parts(err: MesoError) -> (StatusCode, String) {
+        let (status, code, _) = response_parts_full(err);
+        (status, code)
     }
 
     #[test]
@@ -264,5 +280,67 @@ mod tests {
         let (status, code) = response_parts(MesoError::Yaml(yaml_err));
         assert_eq!(status, StatusCode::BAD_REQUEST);
         assert_eq!(code, "MESO_YAML_PARSE_ERROR");
+    }
+
+    // --- WS-4.5: Error message sanitization ---
+
+    #[test]
+    fn sqlite_error_does_not_leak_path() {
+        let err = MesoError::Sqlite(rusqlite::Error::SqliteFailure(
+            rusqlite::ffi::Error::new(1),
+            Some("/home/user/.local/share/mesoclaw/data.db: disk I/O error".into()),
+        ));
+        let (status, code, message) = response_parts_full(err);
+        assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
+        assert_eq!(code, "MESO_SQLITE_ERROR");
+        assert!(
+            message.contains("Internal"),
+            "SQLite error should return generic message, got: {message}"
+        );
+        assert!(
+            !message.contains("/home"),
+            "SQLite error should not leak file paths, got: {message}"
+        );
+    }
+
+    #[test]
+    fn database_error_does_not_leak_details() {
+        let err = MesoError::Database("connection to /var/db/mesoclaw.db failed: SQLITE_BUSY".into());
+        let (_, _, message) = response_parts_full(err);
+        assert!(
+            message.contains("Internal"),
+            "Database error should return generic message, got: {message}"
+        );
+        assert!(
+            !message.contains("/var/db"),
+            "Database error should not leak file paths, got: {message}"
+        );
+    }
+
+    #[test]
+    fn io_error_does_not_leak_path() {
+        let err = MesoError::Io(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            "/home/user/secret/file.txt not found",
+        ));
+        let (_, _, message) = response_parts_full(err);
+        assert!(
+            message.contains("Internal"),
+            "IO error should return generic message, got: {message}"
+        );
+        assert!(
+            !message.contains("/home"),
+            "IO error should not leak file paths, got: {message}"
+        );
+    }
+
+    #[test]
+    fn not_found_still_returns_details() {
+        let err = MesoError::NotFound("session abc-123".into());
+        let (_, _, message) = response_parts_full(err);
+        assert!(
+            message.contains("abc-123"),
+            "NotFound should still include details for debugging"
+        );
     }
 }

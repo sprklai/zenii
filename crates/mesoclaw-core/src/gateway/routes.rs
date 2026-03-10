@@ -288,8 +288,14 @@ fn scheduler_routes() -> Router<Arc<AppState>> {
 }
 
 fn build_cors(origins: &[String]) -> CorsLayer {
-    if origins.is_empty() || origins.iter().any(|o| o == "*") {
+    if origins.iter().any(|o| o == "*") {
         CorsLayer::permissive()
+    } else if origins.is_empty() {
+        // Empty origins = deny all cross-origin requests (safe default)
+        CorsLayer::new()
+            .allow_origin(AllowOrigin::list(Vec::<axum::http::HeaderValue>::new()))
+            .allow_methods(tower_http::cors::Any)
+            .allow_headers(tower_http::cors::Any)
     } else {
         let origins: Vec<_> = origins.iter().filter_map(|o| o.parse().ok()).collect();
         CorsLayer::new()
