@@ -15,10 +15,11 @@ pub struct EmbeddingStatus {
 
 /// GET /embeddings/status — returns current embedding provider info
 pub async fn embeddings_status(State(state): State<Arc<AppState>>) -> Json<EmbeddingStatus> {
+    let cfg = state.config.load();
     Json(EmbeddingStatus {
-        provider: state.config.embedding_provider.clone(),
-        model: state.config.embedding_model.clone(),
-        dimensions: state.config.embedding_dim,
+        provider: cfg.embedding_provider.clone(),
+        model: cfg.embedding_model.clone(),
+        dimensions: cfg.embedding_dim,
     })
 }
 
@@ -39,7 +40,8 @@ pub struct EmbedTestResult {
 pub async fn embeddings_test(
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<EmbedTestResult>, (StatusCode, Json<serde_json::Value>)> {
-    if state.config.embedding_provider == "none" {
+    let cfg = state.config.load();
+    if cfg.embedding_provider == "none" {
         return Ok(Json(EmbedTestResult {
             success: false,
             dimensions: None,
@@ -50,7 +52,7 @@ pub async fn embeddings_test(
 
     // Use MockEmbeddingProvider for testing when no real provider is wired
     let provider =
-        crate::memory::embeddings::MockEmbeddingProvider::new(state.config.embedding_dim);
+        crate::memory::embeddings::MockEmbeddingProvider::new(cfg.embedding_dim);
     let start = std::time::Instant::now();
     match provider.embed("test embedding").await {
         Ok(vec) => Ok(Json(EmbedTestResult {
@@ -72,7 +74,8 @@ pub async fn embeddings_test(
 pub async fn embeddings_download(
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
-    if state.config.embedding_provider != "local" {
+    let cfg = state.config.load();
+    if cfg.embedding_provider != "local" {
         return Err((
             StatusCode::BAD_REQUEST,
             Json(serde_json::json!({
@@ -84,7 +87,7 @@ pub async fn embeddings_download(
 
     Ok(Json(serde_json::json!({
         "status": "download_triggered",
-        "model": state.config.embedding_model
+        "model": cfg.embedding_model
     })))
 }
 
@@ -92,7 +95,8 @@ pub async fn embeddings_download(
 pub async fn embeddings_reindex(
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
-    if state.config.embedding_provider == "none" {
+    let cfg = state.config.load();
+    if cfg.embedding_provider == "none" {
         return Err((
             StatusCode::BAD_REQUEST,
             Json(serde_json::json!({
@@ -105,7 +109,7 @@ pub async fn embeddings_reindex(
     // For now, return success — full re-indexing will be triggered in background
     Ok(Json(serde_json::json!({
         "status": "reindex_triggered",
-        "provider": state.config.embedding_provider
+        "provider": cfg.embedding_provider
     })))
 }
 
@@ -116,7 +120,8 @@ pub async fn embeddings_embed(
     State(state): State<Arc<AppState>>,
     Json(body): Json<EmbedRequest>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
-    if state.config.embedding_provider == "none" {
+    let cfg = state.config.load();
+    if cfg.embedding_provider == "none" {
         return Err((
             StatusCode::BAD_REQUEST,
             Json(serde_json::json!({
@@ -128,7 +133,7 @@ pub async fn embeddings_embed(
 
     // Use mock provider for the embed endpoint in tests
     let provider =
-        crate::memory::embeddings::MockEmbeddingProvider::new(state.config.embedding_dim);
+        crate::memory::embeddings::MockEmbeddingProvider::new(cfg.embedding_dim);
     match provider.embed(&body.text).await {
         Ok(vec) => Ok(Json(serde_json::json!({
             "dimensions": vec.len(),

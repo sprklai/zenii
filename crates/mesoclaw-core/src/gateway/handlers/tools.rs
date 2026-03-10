@@ -102,6 +102,7 @@ mod tests {
         let state = Arc::new(AppState {
             config: base_state.config.clone(),
             config_path: base_state.config_path.clone(),
+            config_write_lock: tokio::sync::Mutex::new(()),
             db: base_state.db.clone(),
             event_bus: base_state.event_bus.clone(),
             memory: base_state.memory.clone(),

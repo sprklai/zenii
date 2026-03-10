@@ -325,7 +325,7 @@ impl SessionManager {
                  FROM sessions s
                  LEFT JOIN messages m ON m.session_id = s.id
                  GROUP BY s.id
-                 ORDER BY s.created_at DESC",
+                 ORDER BY s.updated_at DESC",
             )?;
 
             let rows = stmt
@@ -425,6 +425,11 @@ impl SessionManager {
             conn.execute(
                 "INSERT INTO messages (id, session_id, role, content, created_at) VALUES (?1, ?2, ?3, ?4, ?5)",
                 rusqlite::params![msg_id, msg_session_id, msg_role, msg_content, msg_now],
+            )?;
+            // Update session's updated_at timestamp whenever a message is appended
+            conn.execute(
+                "UPDATE sessions SET updated_at = ?1 WHERE id = ?2",
+                rusqlite::params![msg_now, msg_session_id],
             )?;
             Ok(())
         })
@@ -742,7 +747,7 @@ mod tests {
 
         let sessions = mgr.list_sessions().await.unwrap();
         assert_eq!(sessions.len(), 2);
-        // Ordered by created_at DESC, so "Second" first
+        // Ordered by updated_at DESC, so "Second" first (no messages appended, both at creation time)
         assert_eq!(sessions[0].title, "Second");
         assert_eq!(sessions[1].title, "First");
         assert_eq!(sessions[0].message_count, 0);
@@ -1169,6 +1174,40 @@ mod tests {
         assert_eq!(msgs.len(), 2);
         assert_eq!(msgs[0].content, "msg 1");
         assert_eq!(msgs[1].content, "msg 2");
+    }
+
+    // WS-3.3 — append_message updates session updated_at
+    #[tokio::test]
+    async fn append_message_updates_session_timestamp() {
+        let (_dir, mgr) = setup().await;
+        let session = mgr.create_session("test").await.unwrap();
+        let original_updated = session.updated_at.clone();
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        mgr.append_message(&session.id, "user", "hello")
+            .await
+            .unwrap();
+        let updated = mgr.get_session(&session.id).await.unwrap();
+        assert!(
+            updated.updated_at > original_updated,
+            "updated_at should increase after append_message"
+        );
+    }
+
+    // WS-3.4 — sessions ordered by updated_at (most recently updated first)
+    #[tokio::test]
+    async fn sessions_ordered_by_updated_at() {
+        let (_dir, mgr) = setup().await;
+        let s1 = mgr.create_session("first").await.unwrap();
+        let _s2 = mgr.create_session("second").await.unwrap();
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        mgr.append_message(&s1.id, "user", "hello")
+            .await
+            .unwrap();
+        let sessions = mgr.list_sessions().await.unwrap();
+        assert_eq!(
+            sessions[0].id, s1.id,
+            "Most recently updated should be first"
+        );
     }
 
     // IN.8 — channel_key unique constraint prevents duplicates

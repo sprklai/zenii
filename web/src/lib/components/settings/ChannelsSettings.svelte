@@ -23,8 +23,8 @@
 	onMount(async () => {
 		await channelsStore.load();
 		tgDmPolicy = channelsStore.channelConfig.telegram_dm_policy;
-		tgPollingTimeout = channelsStore.channelConfig.telegram_polling_timeout;
-		tgGroupMentionOnly = channelsStore.channelConfig.telegram_group_mention_only;
+		tgPollingTimeout = channelsStore.channelConfig.telegram_polling_timeout_secs;
+		tgGroupMentionOnly = channelsStore.channelConfig.telegram_require_group_mention;
 	});
 
 	function toggle(id: string) {
@@ -110,8 +110,8 @@
 	async function saveTelegramConfig() {
 		await channelsStore.updateConfig({
 			telegram_dm_policy: tgDmPolicy,
-			telegram_polling_timeout: tgPollingTimeout,
-			telegram_group_mention_only: tgGroupMentionOnly,
+			telegram_polling_timeout_secs: tgPollingTimeout,
+			telegram_require_group_mention: tgGroupMentionOnly,
 		});
 	}
 </script>

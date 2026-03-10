@@ -15,11 +15,11 @@ export interface ChannelWithStatus extends ChannelDef {
 
 export interface ChannelConfig {
   telegram_dm_policy: string;
-  telegram_polling_timeout: number;
-  telegram_group_mention_only: boolean;
-  slack_channel_allowlist: string[];
-  discord_guild_allowlist: string[];
-  discord_channel_allowlist: string[];
+  telegram_polling_timeout_secs: number;
+  telegram_require_group_mention: boolean;
+  slack_allowed_channel_ids: string[];
+  discord_allowed_guild_ids: number[];
+  discord_allowed_channel_ids: number[];
 }
 
 const BUILTIN_CHANNELS: ChannelDef[] = [
@@ -122,11 +122,11 @@ function createChannelsStore() {
   let loading = $state(false);
   let channelConfig = $state<ChannelConfig>({
     telegram_dm_policy: "allowlist",
-    telegram_polling_timeout: 30,
-    telegram_group_mention_only: true,
-    slack_channel_allowlist: [],
-    discord_guild_allowlist: [],
-    discord_channel_allowlist: [],
+    telegram_polling_timeout_secs: 30,
+    telegram_require_group_mention: true,
+    slack_allowed_channel_ids: [],
+    discord_allowed_guild_ids: [],
+    discord_allowed_channel_ids: [],
   });
 
   return {
@@ -170,16 +170,16 @@ function createChannelsStore() {
           channelConfig = {
             telegram_dm_policy:
               (config.telegram_dm_policy as string) ?? "allowlist",
-            telegram_polling_timeout:
-              (config.telegram_polling_timeout as number) ?? 30,
-            telegram_group_mention_only:
-              (config.telegram_group_mention_only as boolean) ?? true,
-            slack_channel_allowlist:
-              (config.slack_channel_allowlist as string[]) ?? [],
-            discord_guild_allowlist:
-              (config.discord_guild_allowlist as string[]) ?? [],
-            discord_channel_allowlist:
-              (config.discord_channel_allowlist as string[]) ?? [],
+            telegram_polling_timeout_secs:
+              (config.telegram_polling_timeout_secs as number) ?? 30,
+            telegram_require_group_mention:
+              (config.telegram_require_group_mention as boolean) ?? true,
+            slack_allowed_channel_ids:
+              (config.slack_allowed_channel_ids as string[]) ?? [],
+            discord_allowed_guild_ids:
+              (config.discord_allowed_guild_ids as number[]) ?? [],
+            discord_allowed_channel_ids:
+              (config.discord_allowed_channel_ids as number[]) ?? [],
           };
         } catch {
           // Use defaults

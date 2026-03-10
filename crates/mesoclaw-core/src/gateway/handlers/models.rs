@@ -9,7 +9,7 @@ use crate::gateway::state::AppState;
 
 /// GET /models -- returns list of available models from config.
 pub async fn list_models(State(state): State<Arc<AppState>>) -> impl IntoResponse {
-    let config = &state.config;
+    let config = state.config.load();
     Json(json!([
         {
             "id": config.provider_model_id,

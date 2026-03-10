@@ -33,7 +33,8 @@ pub fn load_config(path: &Path) -> Result<AppConfig> {
         return Ok(AppConfig::default());
     }
     let content = std::fs::read_to_string(path)?;
-    let config: AppConfig = toml::from_str(&content)?;
+    let mut config: AppConfig = toml::from_str(&content)?;
+    config.validate();
     Ok(config)
 }
 

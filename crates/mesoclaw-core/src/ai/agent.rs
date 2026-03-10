@@ -299,7 +299,7 @@ pub async fn resolve_agent_with_tools(
                 provider.provider.requires_api_key,
                 state.credentials.as_ref(),
                 &tools,
-                &state.config,
+                &state.config.load(),
                 tx,
                 preamble_override,
             )
@@ -312,7 +312,7 @@ pub async fn resolve_agent_with_tools(
                 provider.provider.requires_api_key,
                 state.credentials.as_ref(),
                 &tools,
-                &state.config,
+                &state.config.load(),
                 preamble_override,
             )
             .await?

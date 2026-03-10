@@ -197,7 +197,7 @@ impl ChannelRouter {
         });
 
         // 3. Get allowed tools for this channel (enforced via resolve_agent_with_tools)
-        let tool_policy = ChannelToolPolicy::new(state.config.clone());
+        let tool_policy = ChannelToolPolicy::new(state.config.load_full());
         let allowed_tools = tool_policy.allowed_tools(&channel_name, &state.tools);
 
         // 4. Build full context (identity + memory + user + environment + reasoning)
@@ -214,7 +214,7 @@ impl ChannelRouter {
             .context_injection_enabled
             .load(std::sync::atomic::Ordering::Relaxed);
         let context_engine =
-            ContextEngine::new(state.db.clone(), state.config.clone(), ctx_enabled);
+            ContextEngine::new(state.db.clone(), state.config.load_full(), ctx_enabled);
         let (msg_count, last_at, summary) = state
             .session_manager
             .get_context_info(&session_id)
@@ -343,7 +343,7 @@ impl ChannelRouter {
         let response_preview = response.chars().take(100).collect::<String>();
         let _ = state.event_bus.publish(AppEvent::ChannelMessageReceived {
             channel: channel_name.clone(),
-            sender: state.config.identity_name.clone(),
+            sender: state.config.load().identity_name.clone(),
             session_id: session_id.clone(),
             content_preview: response_preview,
             role: "assistant".into(),

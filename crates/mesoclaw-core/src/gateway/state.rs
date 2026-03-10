@@ -2,6 +2,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
+use arc_swap::ArcSwap;
 use tokio::sync::RwLock;
 
 use crate::config::AppConfig;
@@ -32,8 +33,10 @@ use crate::ai::reasoning::ReasoningEngine;
 use crate::ai::session::SessionManager;
 
 pub struct AppState {
-    pub config: Arc<AppConfig>,
+    pub config: Arc<ArcSwap<AppConfig>>,
     pub config_path: PathBuf,
+    /// Write lock for config read-modify-write cycles (prevents lost updates).
+    pub config_write_lock: tokio::sync::Mutex<()>,
     pub db: DbPool,
     pub event_bus: Arc<dyn EventBus>,
     pub memory: Arc<dyn Memory>,

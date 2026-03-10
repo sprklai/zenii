@@ -2,6 +2,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
+use arc_swap::ArcSwap;
 use async_trait::async_trait;
 use serde_json::json;
 
@@ -19,7 +20,7 @@ const WHITELISTED_KEYS: &[&str] = &[
 
 /// Agent tool for reading and updating app configuration.
 pub struct ConfigTool {
-    config: Arc<AppConfig>,
+    config: Arc<ArcSwap<AppConfig>>,
     config_path: PathBuf,
     context_injection_enabled: Arc<AtomicBool>,
     self_evolution_enabled: Arc<AtomicBool>,
@@ -27,7 +28,7 @@ pub struct ConfigTool {
 
 impl ConfigTool {
     pub fn new(
-        config: Arc<AppConfig>,
+        config: Arc<ArcSwap<AppConfig>>,
         config_path: PathBuf,
         context_injection_enabled: Arc<AtomicBool>,
         self_evolution_enabled: Arc<AtomicBool>,
@@ -80,7 +81,8 @@ impl Tool for ConfigTool {
 
         match action {
             "get" => {
-                let config_json = serde_json::to_value(&*self.config).map_err(|e| {
+                let cfg = self.config.load();
+                let config_json = serde_json::to_value(cfg.as_ref()).map_err(|e| {
                     MesoError::Validation(format!("Failed to serialize config: {e}"))
                 })?;
 
@@ -138,7 +140,7 @@ impl Tool for ConfigTool {
                     }
                     "learning_enabled" | "agent_system_prompt" => {
                         // These require config file update — mutate a clone and save
-                        let mut new_config = (*self.config).clone();
+                        let mut new_config = (**self.config.load()).clone();
                         match key {
                             "learning_enabled" => {
                                 let val: bool = value.parse().map_err(|_| {
@@ -152,6 +154,7 @@ impl Tool for ConfigTool {
                             _ => unreachable!(),
                         }
                         save_config(&self.config_path, &new_config)?;
+                        self.config.store(Arc::new(new_config));
                         Ok(ToolResult::ok(format!(
                             "{key} updated (saved to config file)"
                         )))
@@ -173,7 +176,7 @@ mod tests {
     fn setup() -> (tempfile::TempDir, ConfigTool) {
         let dir = tempfile::TempDir::new().unwrap();
         let config_path = dir.path().join("config.toml");
-        let config = Arc::new(AppConfig::default());
+        let config = Arc::new(ArcSwap::from_pointee(AppConfig::default()));
         let tool = ConfigTool::new(
             config,
             config_path,

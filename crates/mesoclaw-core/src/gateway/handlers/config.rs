@@ -9,27 +9,27 @@ use crate::gateway::state::AppState;
 
 /// GET /config — return the current AppConfig with secrets redacted and paths resolved.
 pub async fn get_config(State(state): State<Arc<AppState>>) -> crate::Result<impl IntoResponse> {
-    let mut config_value = serde_json::to_value(state.config.as_ref())?;
+    let cfg = state.config.load();
+    let mut config_value = serde_json::to_value(cfg.as_ref())?;
     if let Some(obj) = config_value.as_object_mut() {
         // Redact secrets
         obj.insert("gateway_auth_token".to_string(), serde_json::Value::Null);
 
         // Resolve None paths to their actual defaults so the UI shows real values
         let default_data_dir = crate::config::default_data_dir();
-        let data_dir = state
-            .config
+        let data_dir = cfg
             .data_dir
             .as_ref()
             .map(std::path::PathBuf::from)
             .unwrap_or_else(|| default_data_dir.clone());
 
-        if state.config.data_dir.is_none() {
+        if cfg.data_dir.is_none() {
             obj.insert(
                 "data_dir".to_string(),
                 serde_json::Value::String(default_data_dir.to_string_lossy().into()),
             );
         }
-        if state.config.db_path.is_none() {
+        if cfg.db_path.is_none() {
             obj.insert(
                 "db_path".to_string(),
                 serde_json::Value::String(
@@ -40,7 +40,7 @@ pub async fn get_config(State(state): State<Arc<AppState>>) -> crate::Result<imp
                 ),
             );
         }
-        if state.config.memory_db_path.is_none() {
+        if cfg.memory_db_path.is_none() {
             obj.insert(
                 "memory_db_path".to_string(),
                 serde_json::Value::String(
@@ -51,13 +51,13 @@ pub async fn get_config(State(state): State<Arc<AppState>>) -> crate::Result<imp
                 ),
             );
         }
-        if state.config.identity_dir.is_none() {
+        if cfg.identity_dir.is_none() {
             obj.insert(
                 "identity_dir".to_string(),
                 serde_json::Value::String(data_dir.join("identity").to_string_lossy().into()),
             );
         }
-        if state.config.skills_dir.is_none() {
+        if cfg.skills_dir.is_none() {
             obj.insert(
                 "skills_dir".to_string(),
                 serde_json::Value::String(data_dir.join("skills").to_string_lossy().into()),
@@ -92,6 +92,9 @@ pub async fn update_config(
     State(state): State<Arc<AppState>>,
     Json(body): Json<serde_json::Value>,
 ) -> crate::Result<impl IntoResponse> {
+    // Acquire write lock to prevent concurrent read-modify-write races
+    let _lock = state.config_write_lock.lock().await;
+
     // Load current config from disk, merge partial update, save back
     let mut config = crate::config::load_config(&state.config_path)?;
 
@@ -158,9 +161,70 @@ pub async fn update_config(
         if let Some(v) = obj.get("embedding_model").and_then(|v| v.as_str()) {
             config.embedding_model = v.to_string();
         }
+        // Channel config fields (Task 3.5)
+        if let Some(v) = obj.get("telegram_dm_policy").and_then(|v| v.as_str()) {
+            config.telegram_dm_policy = v.to_string();
+        }
+        if let Some(v) = obj
+            .get("telegram_polling_timeout_secs")
+            .and_then(|v| v.as_u64())
+        {
+            config.telegram_polling_timeout_secs = v as u32;
+        }
+        if let Some(v) = obj
+            .get("telegram_require_group_mention")
+            .and_then(|v| v.as_bool())
+        {
+            config.telegram_require_group_mention = v;
+        }
+        if let Some(v) = obj
+            .get("telegram_retry_min_ms")
+            .and_then(|v| v.as_u64())
+        {
+            config.telegram_retry_min_ms = v;
+        }
+        if let Some(v) = obj
+            .get("telegram_retry_max_ms")
+            .and_then(|v| v.as_u64())
+        {
+            config.telegram_retry_max_ms = v;
+        }
+        if let Some(v) = obj
+            .get("slack_allowed_channel_ids")
+            .and_then(|v| v.as_array())
+        {
+            config.slack_allowed_channel_ids = v
+                .iter()
+                .filter_map(|x| x.as_str().map(|s| s.to_string()))
+                .collect();
+        }
+        if let Some(v) = obj
+            .get("discord_allowed_guild_ids")
+            .and_then(|v| v.as_array())
+        {
+            config.discord_allowed_guild_ids = v
+                .iter()
+                .filter_map(|x| x.as_u64())
+                .collect();
+        }
+        if let Some(v) = obj
+            .get("discord_allowed_channel_ids")
+            .and_then(|v| v.as_array())
+        {
+            config.discord_allowed_channel_ids = v
+                .iter()
+                .filter_map(|x| x.as_u64())
+                .collect();
+        }
     }
 
+    // Validate before saving
+    config.validate();
+
     crate::config::save_config(&state.config_path, &config)?;
+
+    // Swap the runtime config so all readers see the update immediately
+    state.config.store(Arc::new(config));
 
     tracing::info!("Config updated and persisted to {:?}", state.config_path);
 
@@ -189,13 +253,14 @@ mod tests {
         let (dir, base_state) = crate::gateway::handlers::tests::test_state().await;
         // Override config to set a non-None auth token for redaction tests
         let mut config = AppConfig {
-            gateway_cors_origins: base_state.config.gateway_cors_origins.clone(),
+            gateway_cors_origins: base_state.config.load().gateway_cors_origins.clone(),
             ..Default::default()
         };
         config.gateway_auth_token = Some("super_secret_token".into());
         let state = Arc::new(AppState {
-            config: Arc::new(config),
+            config: Arc::new(arc_swap::ArcSwap::from_pointee(config)),
             config_path: base_state.config_path.clone(),
+            config_write_lock: tokio::sync::Mutex::new(()),
             db: base_state.db.clone(),
             event_bus: base_state.event_bus.clone(),
             memory: base_state.memory.clone(),

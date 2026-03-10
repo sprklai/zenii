@@ -38,6 +38,8 @@ use crate::gateway::state::AppState;
 /// Initialized services bundle for use without the gateway feature.
 pub struct Services {
     pub config: Arc<AppConfig>,
+    /// Shared ArcSwap config for runtime hot-swapping (ConfigTool + AppState share this).
+    pub config_swap: Arc<arc_swap::ArcSwap<AppConfig>>,
     pub config_path: PathBuf,
     pub db: DbPool,
     pub event_bus: Arc<TokioBroadcastBus>,
@@ -251,9 +253,12 @@ pub async fn init_services(config: AppConfig) -> Result<Services> {
         memory.clone(),
     )))?;
 
+    // Create shared ArcSwap config for runtime hot-swapping
+    let config_swap = Arc::new(arc_swap::ArcSwap::from(config.clone()));
+
     // Register ConfigTool
     tool_registry.register(Arc::new(crate::tools::config_tool::ConfigTool::new(
-        config.clone(),
+        config_swap.clone(),
         crate::config::default_config_path(),
         context_injection_enabled.clone(),
         self_evolution_enabled.clone(),
@@ -531,6 +536,7 @@ pub async fn init_services(config: AppConfig) -> Result<Services> {
 
     Ok(Services {
         config,
+        config_swap,
         config_path: crate::config::default_config_path(),
         db: pool,
         event_bus,
@@ -572,8 +578,9 @@ pub async fn init_services(config: AppConfig) -> Result<Services> {
 impl From<Services> for AppState {
     fn from(s: Services) -> Self {
         Self {
-            config: s.config,
+            config: s.config_swap,
             config_path: s.config_path,
+            config_write_lock: tokio::sync::Mutex::new(()),
             db: s.db,
             event_bus: s.event_bus,
             memory: s.memory,

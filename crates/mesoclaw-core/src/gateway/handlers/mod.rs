@@ -78,8 +78,9 @@ pub(crate) mod tests {
         ));
 
         let state = Arc::new(AppState {
-            config,
+            config: Arc::new(arc_swap::ArcSwap::from(config)),
             config_path: dir.path().join("config.toml"),
+            config_write_lock: tokio::sync::Mutex::new(()),
             db: pool.clone(),
             event_bus: Arc::new(crate::event_bus::TokioBroadcastBus::new(16)),
             memory,

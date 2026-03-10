@@ -201,7 +201,7 @@ async fn handle_ws(mut socket: WebSocket, state: Arc<AppState>) {
             .context_injection_enabled
             .load(std::sync::atomic::Ordering::Relaxed);
         let context_engine =
-            ContextEngine::new(state.db.clone(), state.config.clone(), ctx_enabled);
+            ContextEngine::new(state.db.clone(), state.config.load_full(), ctx_enabled);
         let (message_count, last_message_at, summary) = if let Some(ref sid) = request.session_id {
             state
                 .session_manager

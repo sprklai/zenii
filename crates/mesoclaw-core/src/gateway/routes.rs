@@ -12,7 +12,7 @@ use super::state::AppState;
 
 /// Build the complete axum Router with all routes, middleware, and state.
 pub fn build_router(state: Arc<AppState>) -> Router {
-    let cors = build_cors(&state.config.gateway_cors_origins);
+    let cors = build_cors(&state.config.load().gateway_cors_origins);
 
     Router::new()
         // System (no auth for health)
@@ -199,7 +199,7 @@ pub fn build_router(state: Arc<AppState>) -> Router {
         .route("/ws/notifications", get(handlers::ws::ws_notifications))
         // Auth middleware
         .layer(middleware::from_fn_with_state(
-            state.config.gateway_auth_token.clone(),
+            state.config.load().gateway_auth_token.clone(),
             auth_middleware,
         ))
         // CORS

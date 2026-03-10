@@ -243,7 +243,7 @@ impl Default for AppConfig {
             context_max_memory_results: 5,
             context_auto_extract: true,
             context_extract_interval: 3,
-            context_summary_model: String::new(),
+            context_summary_model: "gpt-4o-mini".into(),
 
             // Scheduler
             scheduler_tick_interval_secs: 1,
@@ -278,6 +278,14 @@ impl Default for AppConfig {
             learning_archive_after_days: 30,
             skill_proposal_expiry_days: 7,
         }
+    }
+}
+
+impl AppConfig {
+    /// Validate and clamp config values to acceptable ranges.
+    /// Call this after loading config or before saving.
+    pub fn validate(&mut self) {
+        self.learning_min_confidence = self.learning_min_confidence.clamp(0.0, 1.0);
     }
 }
 
@@ -489,5 +497,25 @@ mod tests {
         assert!((config.learning_archive_threshold - 0.5).abs() < f64::EPSILON);
         assert_eq!(config.learning_archive_after_days, 14);
         assert_eq!(config.skill_proposal_expiry_days, 3);
+    }
+
+    // WS-3.6a — context_summary_model has default value
+    #[test]
+    fn context_summary_model_has_default() {
+        let config = AppConfig::default();
+        assert!(!config.context_summary_model.is_empty());
+        assert_eq!(config.context_summary_model, "gpt-4o-mini");
+    }
+
+    // WS-3.6b — learning_min_confidence clamped to [0.0, 1.0]
+    #[test]
+    fn learning_min_confidence_clamped() {
+        let mut config = AppConfig::default();
+        config.learning_min_confidence = 1.5;
+        config.validate();
+        assert!(config.learning_min_confidence <= 1.0);
+        config.learning_min_confidence = -0.5;
+        config.validate();
+        assert!(config.learning_min_confidence >= 0.0);
     }
 }

@@ -16,6 +16,7 @@ chrono = { workspace = true }
 uuid = { workspace = true }
 dashmap = { workspace = true }
 parking_lot = { workspace = true }
+arc-swap = { workspace = true }
 rusqlite = { workspace = true }
 directories = { workspace = true }
 

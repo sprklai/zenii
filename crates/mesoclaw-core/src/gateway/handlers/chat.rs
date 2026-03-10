@@ -37,7 +37,7 @@ pub async fn chat(
     let ctx_enabled = state
         .context_injection_enabled
         .load(std::sync::atomic::Ordering::Relaxed);
-    let context_engine = ContextEngine::new(state.db.clone(), state.config.clone(), ctx_enabled);
+    let context_engine = ContextEngine::new(state.db.clone(), state.config.load_full(), ctx_enabled);
     let (message_count, last_message_at, summary) = if let Some(ref sid) = req.session_id {
         state
             .session_manager
@@ -74,7 +74,10 @@ pub async fn chat(
         let _ = state
             .session_manager
             .append_message(sid, "user", &req.prompt)
-            .await;
+            .await
+            .inspect_err(|e| {
+                tracing::warn!("Failed to persist user message for session {sid}: {e}");
+            });
     }
 
     // Use reasoning engine for multi-turn continuity with autonomous reasoning
@@ -97,7 +100,10 @@ pub async fn chat(
         let _ = state
             .session_manager
             .append_message(sid, "assistant", &response)
-            .await;
+            .await
+            .inspect_err(|e| {
+                tracing::warn!("Failed to persist assistant message for session {sid}: {e}");
+            });
     }
 
     Ok(Json(ChatResponse {
