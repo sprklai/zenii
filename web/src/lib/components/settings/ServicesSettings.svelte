@@ -6,7 +6,6 @@
 	import { Skeleton } from '$lib/components/ui/skeleton';
 	import { apiGet, apiPost, apiDelete } from '$lib/api/client';
 	import { onMount } from 'svelte';
-	import { goto } from '$app/navigation';
 
 	interface ServiceDef {
 		id: string;
@@ -128,136 +127,129 @@
 	}
 </script>
 
-<div class="max-w-2xl mx-auto space-y-6">
-	<div class="flex items-center justify-between">
-		<div class="flex items-center gap-3">
-			<Button variant="ghost" size="sm" onclick={() => goto('/settings')}>
-				&larr; Back
-			</Button>
-			<h1 class="text-2xl font-bold">Services</h1>
-		</div>
-		<Button size="sm" variant="outline" onclick={() => (showAddService = !showAddService)}>
-			{showAddService ? 'Cancel' : '+ Add Service'}
-		</Button>
-	</div>
+<div class="flex items-center justify-between mb-4">
+	<h2 class="text-lg font-semibold">Services</h2>
+	<Button size="sm" variant="outline" onclick={() => (showAddService = !showAddService)}>
+		{showAddService ? 'Cancel' : '+ Add Service'}
+	</Button>
+</div>
 
-	{#if showAddService}
-		<Card.Root>
-			<Card.Header>
-				<Card.Title>Add Custom Service</Card.Title>
-			</Card.Header>
-			<Card.Content class="space-y-3">
-				<div class="grid grid-cols-2 gap-3">
-					<div class="space-y-1">
-						<label class="text-sm font-medium" for="new-svc-id">Service ID</label>
-						<Input id="new-svc-id" placeholder="my-service" bind:value={newService.id} />
-					</div>
-					<div class="space-y-1">
-						<label class="text-sm font-medium" for="new-svc-name">Display Name</label>
-						<Input id="new-svc-name" placeholder="My Service" bind:value={newService.name} />
-					</div>
+{#if showAddService}
+	<Card.Root>
+		<Card.Header>
+			<Card.Title>Add Custom Service</Card.Title>
+		</Card.Header>
+		<Card.Content class="space-y-3">
+			<div class="grid grid-cols-2 gap-3">
+				<div class="space-y-1">
+					<label class="text-sm font-medium" for="new-svc-id">Service ID</label>
+					<Input id="new-svc-id" placeholder="my-service" bind:value={newService.id} />
 				</div>
 				<div class="space-y-1">
-					<label class="text-sm font-medium" for="new-svc-type">Type / Description</label>
-					<Input id="new-svc-type" placeholder="Web Search API" bind:value={newService.type} />
+					<label class="text-sm font-medium" for="new-svc-name">Display Name</label>
+					<Input id="new-svc-name" placeholder="My Service" bind:value={newService.name} />
 				</div>
-				<Button
-					size="sm"
-					disabled={!newService.id.trim() || !newService.name.trim() || !newService.type.trim()}
-					onclick={addService}
+			</div>
+			<div class="space-y-1">
+				<label class="text-sm font-medium" for="new-svc-type">Type / Description</label>
+				<Input id="new-svc-type" placeholder="Web Search API" bind:value={newService.type} />
+			</div>
+			<Button
+				size="sm"
+				disabled={!newService.id.trim() || !newService.name.trim() || !newService.type.trim()}
+				onclick={addService}
+			>
+				Add Service
+			</Button>
+		</Card.Content>
+	</Card.Root>
+{/if}
+
+{#if loading}
+	<div class="space-y-2">
+		<Skeleton class="h-16 w-full" />
+		<Skeleton class="h-16 w-full" />
+		<Skeleton class="h-16 w-full" />
+	</div>
+{:else}
+	<div class="space-y-2">
+		{#each allServices() as service (service.id)}
+			{@const configured = isConfigured(service.id)}
+			<Card.Root>
+				<button
+					class="w-full text-left"
+					onclick={() => toggle(service.id)}
 				>
-					Add Service
-				</Button>
-			</Card.Content>
-		</Card.Root>
-	{/if}
-
-	{#if loading}
-		<div class="space-y-2">
-			<Skeleton class="h-16 w-full" />
-			<Skeleton class="h-16 w-full" />
-			<Skeleton class="h-16 w-full" />
-		</div>
-	{:else}
-		<div class="space-y-2">
-			{#each allServices() as service (service.id)}
-				{@const configured = isConfigured(service.id)}
-				<Card.Root>
-					<button
-						class="w-full text-left"
-						onclick={() => toggle(service.id)}
-					>
-						<Card.Header class="py-3">
-							<div class="flex items-center justify-between">
-								<div class="flex items-center gap-2">
-									<Card.Title class="text-base">{service.name}</Card.Title>
-									<Badge variant="outline">{service.type}</Badge>
-									<Badge variant={configured ? 'default' : 'secondary'}>
-										{configured ? 'Configured' : 'Not configured'}
-									</Badge>
-								</div>
-								<span class="text-xs text-muted-foreground">
-									{expandedId === service.id ? '▲' : '▼'}
-								</span>
+					<Card.Header class="py-3">
+						<div class="flex items-center justify-between">
+							<div class="flex items-center gap-2">
+								<Card.Title class="text-base">{service.name}</Card.Title>
+								<Badge variant="outline">{service.type}</Badge>
+								<Badge variant={configured ? 'default' : 'secondary'}>
+									{configured ? 'Configured' : 'Not configured'}
+								</Badge>
 							</div>
-						</Card.Header>
-					</button>
+							<span class="text-xs text-muted-foreground">
+								{expandedId === service.id ? '▲' : '▼'}
+							</span>
+						</div>
+					</Card.Header>
+				</button>
 
-					{#if expandedId === service.id}
-						<Card.Content class="pt-0 space-y-4">
-							{#if service.isCustom}
-								<div class="flex justify-end">
+				{#if expandedId === service.id}
+					<Card.Content class="pt-0 space-y-4">
+						{#if service.isCustom}
+							<div class="flex justify-end">
+								<Button
+									variant="destructive"
+									size="sm"
+									onclick={() => removeService(service.id)}
+								>
+									Remove Service
+								</Button>
+							</div>
+						{/if}
+
+						<div class="space-y-2">
+							<label class="text-sm font-medium" for="key-{service.id}">API Key</label>
+							<div class="flex gap-2">
+								<Input
+									id="key-{service.id}"
+									type={showKey[service.id] ? 'text' : 'password'}
+									placeholder={configured ? '••••••••  (key is set)' : 'Enter API key...'}
+									bind:value={apiKeyInputs[service.id]}
+								/>
+								<Button
+									variant="ghost"
+									size="sm"
+									onclick={() => (showKey[service.id] = !showKey[service.id])}
+								>
+									{showKey[service.id] ? 'Hide' : 'Show'}
+								</Button>
+							</div>
+							<div class="flex gap-2">
+								<Button
+									size="sm"
+									disabled={!apiKeyInputs[service.id]?.trim() || saving[service.id]}
+									onclick={() => saveKey(service)}
+								>
+									{saving[service.id] ? 'Saving...' : 'Save Key'}
+								</Button>
+								{#if configured}
 									<Button
 										variant="destructive"
 										size="sm"
-										onclick={() => removeService(service.id)}
+										disabled={saving[service.id]}
+										onclick={() => removeKey(service)}
 									>
-										Remove Service
+										Remove Key
 									</Button>
-								</div>
-							{/if}
-
-							<div class="space-y-2">
-								<label class="text-sm font-medium" for="key-{service.id}">API Key</label>
-								<div class="flex gap-2">
-									<Input
-										id="key-{service.id}"
-										type={showKey[service.id] ? 'text' : 'password'}
-										placeholder={configured ? '••••••••  (key is set)' : 'Enter API key...'}
-										bind:value={apiKeyInputs[service.id]}
-									/>
-									<Button
-										variant="ghost"
-										size="sm"
-										onclick={() => (showKey[service.id] = !showKey[service.id])}
-									>
-										{showKey[service.id] ? 'Hide' : 'Show'}
-									</Button>
-								</div>
-								<div class="flex gap-2">
-									<Button
-										size="sm"
-										disabled={!apiKeyInputs[service.id]?.trim() || saving[service.id]}
-										onclick={() => saveKey(service)}
-									>
-										{saving[service.id] ? 'Saving...' : 'Save Key'}
-									</Button>
-									{#if configured}
-										<Button
-											variant="destructive"
-											size="sm"
-											disabled={saving[service.id]}
-											onclick={() => removeKey(service)}
-										>
-											Remove Key
-										</Button>
-									{/if}
-								</div>
+								{/if}
 							</div>
-						</Card.Content>
-					{/if}
-				</Card.Root>
-			{/each}
-		</div>
-	{/if}
-</div>
+						</div>
+					</Card.Content>
+				{/if}
+			</Card.Root>
+		{/each}
+	</div>
+{/if}

@@ -39,6 +39,9 @@ crates/mesoclaw-desktop/gen/
 # Test databases
 *.test.db
 
+# Embedding model cache
+.fastembed_cache/
+
 # Claude local settings
 .claude/settings.local.json
 

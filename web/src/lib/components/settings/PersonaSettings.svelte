@@ -7,7 +7,6 @@
 	import { Badge } from '$lib/components/ui/badge';
 	import { Skeleton } from '$lib/components/ui/skeleton';
 	import { Separator } from '$lib/components/ui/separator';
-	import { goto } from '$app/navigation';
 	import RefreshCw from '@lucide/svelte/icons/refresh-cw';
 	import Plus from '@lucide/svelte/icons/plus';
 	import Pencil from '@lucide/svelte/icons/pencil';
@@ -92,86 +91,77 @@
 	}
 </script>
 
-<div class="max-w-2xl mx-auto space-y-6">
-	<div class="flex items-center gap-3">
-		<Button variant="ghost" size="sm" onclick={() => goto('/settings')}>
-			&larr; Back
-		</Button>
-		<h1 class="text-2xl font-bold">Persona & Skills</h1>
+{#if loading}
+	<div class="space-y-2">
+		<Skeleton class="h-20 w-full" />
+		<Skeleton class="h-20 w-full" />
 	</div>
-
-	{#if loading}
-		<div class="space-y-2">
-			<Skeleton class="h-20 w-full" />
-			<Skeleton class="h-20 w-full" />
-		</div>
-	{:else}
-		<Card.Root>
-			<Card.Header>
-				<div class="flex items-center justify-between">
-					<Card.Title>Identity Files</Card.Title>
-					<Button variant="ghost" size="icon" onclick={handleReloadIdentity}>
-						<RefreshCw class="h-4 w-4" />
+{:else}
+	<Card.Root>
+		<Card.Header>
+			<div class="flex items-center justify-between">
+				<Card.Title>Identity Files</Card.Title>
+				<Button variant="ghost" size="icon" onclick={handleReloadIdentity}>
+					<RefreshCw class="h-4 w-4" />
+				</Button>
+			</div>
+		</Card.Header>
+		<Card.Content class="space-y-2">
+			{#each identityFiles as file (file.name)}
+				<div class="flex items-center justify-between p-2 rounded-lg bg-muted">
+					<div>
+						<span class="font-medium">{file.name}</span>
+						{#if file.is_default}
+							<Badge variant="secondary" class="ml-2">default</Badge>
+						{/if}
+					</div>
+					<Button variant="ghost" size="icon" class="h-7 w-7" onclick={() => handleEditFile(file.name)}>
+						<Pencil class="h-3.5 w-3.5" />
 					</Button>
 				</div>
-			</Card.Header>
-			<Card.Content class="space-y-2">
-				{#each identityFiles as file (file.name)}
-					<div class="flex items-center justify-between p-2 rounded-lg bg-muted">
-						<div>
-							<span class="font-medium">{file.name}</span>
-							{#if file.is_default}
-								<Badge variant="secondary" class="ml-2">default</Badge>
-							{/if}
-						</div>
-						<Button variant="ghost" size="icon" class="h-7 w-7" onclick={() => handleEditFile(file.name)}>
-							<Pencil class="h-3.5 w-3.5" />
-						</Button>
-					</div>
-				{/each}
-			</Card.Content>
-		</Card.Root>
+			{/each}
+		</Card.Content>
+	</Card.Root>
 
-		<Separator />
+	<Separator />
 
-		<Card.Root>
-			<Card.Header>
-				<div class="flex items-center justify-between">
-					<Card.Title>Skills</Card.Title>
-					<div class="flex gap-1">
-						<Button variant="ghost" size="icon" onclick={handleReloadSkills}>
-							<RefreshCw class="h-4 w-4" />
-						</Button>
-						<Button variant="ghost" size="icon" onclick={() => (addSkillOpen = true)}>
-							<Plus class="h-4 w-4" />
-						</Button>
-					</div>
+	<Card.Root>
+		<Card.Header>
+			<div class="flex items-center justify-between">
+				<Card.Title>Skills</Card.Title>
+				<div class="flex gap-1">
+					<Button variant="ghost" size="icon" onclick={handleReloadSkills}>
+						<RefreshCw class="h-4 w-4" />
+					</Button>
+					<Button variant="ghost" size="icon" onclick={() => (addSkillOpen = true)}>
+						<Plus class="h-4 w-4" />
+					</Button>
 				</div>
-			</Card.Header>
-			<Card.Content class="space-y-2">
-				{#each skills as skill (skill.id)}
-					<div class="flex items-center justify-between p-2 rounded-lg bg-muted">
-						<div>
-							<span class="font-medium">{skill.id}</span>
-							<Badge variant="secondary" class="ml-2">{skill.category}</Badge>
-						</div>
-						<Button
-							variant="ghost"
-							size="icon"
-							class="h-7 w-7 text-destructive"
-							onclick={() => handleDeleteSkill(skill.id)}
-						>
-							<Trash2 class="h-3.5 w-3.5" />
-						</Button>
+			</div>
+		</Card.Header>
+		<Card.Content class="space-y-2">
+			{#each skills as skill (skill.id)}
+				<div class="flex items-center justify-between p-2 rounded-lg bg-muted">
+					<div>
+						<span class="font-medium">{skill.id}</span>
+						<Badge variant="secondary" class="ml-2">{skill.category}</Badge>
 					</div>
-				{/each}
-				{#if skills.length === 0}
-					<p class="text-muted-foreground text-sm">No skills configured</p>
-				{/if}
-			</Card.Content>
-		</Card.Root>
-	{/if}
-</div>
+					<Button
+						variant="ghost"
+						size="icon"
+						class="h-7 w-7 text-destructive"
+						onclick={() => handleDeleteSkill(skill.id)}
+					>
+						<Trash2 class="h-3.5 w-3.5" />
+					</Button>
+				</div>
+			{/each}
+			{#if skills.length === 0}
+				<p class="text-muted-foreground text-sm">No skills configured</p>
+			{/if}
+		</Card.Content>
+	</Card.Root>
+{/if}
 
 <Dialog.Root open={!!editingFile} onOpenChange={(open) => { if (!open) editingFile = null; }}>
 	<Dialog.Content class="sm:max-w-lg">

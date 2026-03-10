@@ -1,148 +1,97 @@
 <script lang="ts">
-	import { Button } from '$lib/components/ui/button';
-	import { Input } from '$lib/components/ui/input';
-	import * as Card from '$lib/components/ui/card';
-	import * as Select from '$lib/components/ui/select';
-	import { Skeleton } from '$lib/components/ui/skeleton';
-	import { Switch } from '$lib/components/ui/switch';
-	import { configStore } from '$lib/stores/config.svelte';
-	import { getBaseUrl, setBaseUrl, getToken, setToken } from '$lib/api/client';
+	import SettingsIcon from '@lucide/svelte/icons/settings';
+	import Building2 from '@lucide/svelte/icons/building-2';
+	import User from '@lucide/svelte/icons/user';
+	import MessageSquare from '@lucide/svelte/icons/message-square';
+	import KeyRound from '@lucide/svelte/icons/key-round';
+	import Brain from '@lucide/svelte/icons/brain';
+	import GeneralSettings from '$lib/components/settings/GeneralSettings.svelte';
+	import ProvidersSettings from '$lib/components/settings/ProvidersSettings.svelte';
+	import PersonaSettings from '$lib/components/settings/PersonaSettings.svelte';
+	import ChannelsSettings from '$lib/components/settings/ChannelsSettings.svelte';
+	import ServicesSettings from '$lib/components/settings/ServicesSettings.svelte';
+	import EmbeddingsSettings from '$lib/components/settings/EmbeddingsSettings.svelte';
 	import { onMount } from 'svelte';
-	import { goto } from '$app/navigation';
 
-	let baseUrl = $state(getBaseUrl());
-	let token = $state(getToken() ?? '');
+	const tabs = [
+		{ id: 'general', label: 'General', icon: SettingsIcon },
+		{ id: 'providers', label: 'Providers', icon: Building2 },
+		{ id: 'persona', label: 'Persona', icon: User },
+		{ id: 'channels', label: 'Channels', icon: MessageSquare },
+		{ id: 'services', label: 'Services', icon: KeyRound },
+		{ id: 'embeddings', label: 'Embeddings', icon: Brain },
+	];
+
+	let activeTab = $state('general');
+
+	function getHashTab(): string {
+		const hash = window.location.hash.slice(1);
+		return tabs.some((t) => t.id === hash) ? hash : 'general';
+	}
+
+	function setTab(id: string) {
+		window.location.hash = id;
+		activeTab = id;
+	}
 
 	onMount(() => {
-		configStore.load();
+		activeTab = getHashTab();
 	});
 
-	function handleSaveConnection() {
-		setBaseUrl(baseUrl);
-		setToken(token);
-	}
-
-	async function toggleConfig(key: string, value: boolean) {
-		try {
-			await configStore.update({ [key]: value });
-			await configStore.load();
-		} catch (e) {
-			console.error(`[Settings] Failed to update ${key}:`, e);
-			await configStore.load();
+	$effect(() => {
+		function onHashChange() {
+			activeTab = getHashTab();
 		}
-	}
-
-	async function updateStrategy(value: string) {
-		try {
-			await configStore.update({ context_strategy: value });
-			await configStore.load();
-		} catch (e) {
-			console.error('[Settings] Failed to update context_strategy:', e);
-			await configStore.load();
-		}
-	}
+		window.addEventListener('hashchange', onHashChange);
+		return () => window.removeEventListener('hashchange', onHashChange);
+	});
 </script>
 
-<div class="max-w-2xl mx-auto space-y-6">
-	<h1 class="text-2xl font-bold">Settings</h1>
+<div class="flex flex-col md:flex-row gap-6 max-w-4xl mx-auto">
+	<!-- Desktop sidebar -->
+	<nav class="hidden md:flex flex-col w-48 shrink-0 space-y-1">
+		{#each tabs as tab (tab.id)}
+			<button
+				class="flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors text-left
+					{activeTab === tab.id ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}"
+				onclick={() => setTab(tab.id)}
+			>
+				<tab.icon class="h-4 w-4" />
+				{tab.label}
+			</button>
+		{/each}
+	</nav>
 
-	<Card.Root>
-		<Card.Header>
-			<Card.Title>Connection</Card.Title>
-			<Card.Description>Gateway connection settings</Card.Description>
-		</Card.Header>
-		<Card.Content class="space-y-3">
-			<div class="space-y-1">
-				<label class="text-sm font-medium" for="base-url">Gateway URL</label>
-				<Input id="base-url" bind:value={baseUrl} placeholder="http://127.0.0.1:18981" />
-			</div>
-			<div class="space-y-1">
-				<label class="text-sm font-medium" for="token">Auth Token</label>
-				<Input id="token" type="password" bind:value={token} placeholder="Bearer token" />
-			</div>
-			<Button onclick={handleSaveConnection}>Save Connection</Button>
-		</Card.Content>
-	</Card.Root>
-
-	{#if !configStore.loading && Object.keys(configStore.config).length > 0}
-		<Card.Root>
-			<Card.Header>
-				<Card.Title>Agent Features</Card.Title>
-				<Card.Description>Toggle context injection and self-evolution at runtime</Card.Description>
-			</Card.Header>
-			<Card.Content class="space-y-4">
-				<div class="flex items-center justify-between">
-					<div>
-						<p class="text-sm font-medium">Context Injection</p>
-						<p class="text-xs text-muted-foreground">Rich environment and identity context in agent preamble</p>
-					</div>
-					<Switch
-						checked={configStore.config.context_injection_enabled === true}
-						onCheckedChange={(v) => toggleConfig('context_injection_enabled', v)}
-					/>
-				</div>
-				<div class="flex items-center justify-between">
-					<div>
-						<p class="text-sm font-medium">Self-Evolution</p>
-						<p class="text-xs text-muted-foreground">Agent can learn preferences and propose skill changes</p>
-					</div>
-					<Switch
-						checked={configStore.config.self_evolution_enabled === true}
-						onCheckedChange={(v) => toggleConfig('self_evolution_enabled', v)}
-					/>
-				</div>
-				<div class="flex items-center justify-between">
-					<div>
-						<p class="text-sm font-medium">Context Strategy</p>
-						<p class="text-xs text-muted-foreground">Controls how much conversation history and memory is injected</p>
-					</div>
-					<Select.Root
-						type="single"
-						value={String(configStore.config.context_strategy ?? 'balanced')}
-						onValueChange={(v) => { if (v) updateStrategy(v); }}
-					>
-						<Select.Trigger class="w-[140px]">
-							{String(configStore.config.context_strategy ?? 'balanced')}
-						</Select.Trigger>
-						<Select.Content>
-							<Select.Item value="minimal">Minimal</Select.Item>
-							<Select.Item value="balanced">Balanced</Select.Item>
-							<Select.Item value="full">Full</Select.Item>
-						</Select.Content>
-					</Select.Root>
-				</div>
-			</Card.Content>
-		</Card.Root>
-	{/if}
-
-	<div class="flex gap-2">
-		<Button variant="outline" onclick={() => goto('/settings/providers')}>
-			Providers
-		</Button>
-		<Button variant="outline" onclick={() => goto('/settings/services')}>
-			Services
-		</Button>
-		<Button variant="outline" onclick={() => goto('/settings/persona')}>
-			Persona & Skills
-		</Button>
-		<Button variant="outline" onclick={() => goto('/settings/channels')}>
-			Channels
-		</Button>
-		<Button variant="outline" onclick={() => goto('/settings/embeddings')}>
-			Embeddings
-		</Button>
+	<!-- Mobile horizontal tabs -->
+	<div class="md:hidden overflow-x-auto flex gap-1 border-b pb-2">
+		{#each tabs as tab (tab.id)}
+			<button
+				class="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium whitespace-nowrap transition-colors
+					{activeTab === tab.id ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:bg-muted'}"
+				onclick={() => setTab(tab.id)}
+			>
+				<tab.icon class="h-3.5 w-3.5" />
+				{tab.label}
+			</button>
+		{/each}
 	</div>
 
-	{#if configStore.loading}
-		<Skeleton class="h-40 w-full" />
-	{:else if Object.keys(configStore.config).length > 0}
-		<Card.Root>
-			<Card.Header>
-				<Card.Title>Current Configuration</Card.Title>
-			</Card.Header>
-			<Card.Content>
-				<pre class="text-xs bg-muted rounded-lg p-3 overflow-auto max-h-80">{JSON.stringify(configStore.config, null, 2)}</pre>
-			</Card.Content>
-		</Card.Root>
-	{/if}
+	<!-- Content area -->
+	<div class="flex-1 min-w-0 space-y-6">
+		<h1 class="text-2xl font-bold">{tabs.find((t) => t.id === activeTab)?.label ?? 'Settings'}</h1>
+
+		{#if activeTab === 'general'}
+			<GeneralSettings />
+		{:else if activeTab === 'providers'}
+			<ProvidersSettings />
+		{:else if activeTab === 'persona'}
+			<PersonaSettings />
+		{:else if activeTab === 'channels'}
+			<ChannelsSettings />
+		{:else if activeTab === 'services'}
+			<ServicesSettings />
+		{:else if activeTab === 'embeddings'}
+			<EmbeddingsSettings />
+		{/if}
+	</div>
 </div>

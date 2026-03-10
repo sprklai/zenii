@@ -3,7 +3,7 @@ pub mod fmt;
 
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU8, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 
 use async_trait::async_trait;
 use teloxide::Bot;
@@ -38,6 +38,8 @@ pub struct TelegramChannel {
     bot: tokio::sync::OnceCell<Bot>,
     shutdown_tx: watch::Sender<bool>,
     shutdown_rx: watch::Receiver<bool>,
+    /// Prevents multiple `listen()` tasks from running simultaneously.
+    listening: AtomicBool,
     /// Maps chat_id -> status message ID for active agent processing.
     status_messages: Arc<tokio::sync::Mutex<HashMap<i64, MessageId>>>,
     /// Maps chat_id -> typing refresh abort handle.
@@ -60,6 +62,7 @@ impl TelegramChannel {
             bot: tokio::sync::OnceCell::new(),
             shutdown_tx,
             shutdown_rx,
+            listening: AtomicBool::new(false),
             status_messages: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
             typing_handles: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
         }
@@ -230,10 +233,18 @@ impl ChannelLifecycle for TelegramChannel {
 #[async_trait]
 impl Channel for TelegramChannel {
     async fn listen(&self, tx: mpsc::Sender<ChannelMessage>) -> Result<()> {
+        // Prevent duplicate listen tasks
+        if self.listening.swap(true, Ordering::SeqCst) {
+            return Err(MesoError::Channel(
+                "telegram: listen() already running".into(),
+            ));
+        }
+
         let bot = self
             .bot
             .get()
             .ok_or_else(|| {
+                self.listening.store(false, Ordering::SeqCst);
                 MesoError::Channel("telegram: not connected, call connect() first".into())
             })?
             .clone();
@@ -325,6 +336,7 @@ impl Channel for TelegramChannel {
             }
         }
 
+        self.listening.store(false, Ordering::SeqCst);
         info!("Telegram listen loop stopped");
         Ok(())
     }

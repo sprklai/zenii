@@ -35,18 +35,29 @@ pub struct BootContext {
     pub downloads_path: Option<String>,
     pub data_dir: Option<String>,
     pub working_dir: Option<String>,
+    /// User-configured IANA timezone (e.g., "America/New_York"), if set.
+    pub user_timezone: Option<String>,
 }
 
 impl BootContext {
     /// Compute boot context from the current system.
     pub fn from_system() -> Self {
+        Self::from_system_with_config(None, None)
+    }
+
+    /// Compute boot context with optional user overrides from config.
+    pub fn from_system_with_config(
+        user_timezone: Option<&str>,
+        user_location: Option<&str>,
+    ) -> Self {
         let os = format!("{} {}", std::env::consts::OS, os_version());
         let arch = std::env::consts::ARCH.to_string();
         let hostname = sysinfo::System::host_name().unwrap_or_else(|| "unknown".into());
         let locale = std::env::var("LANG")
             .or_else(|_| std::env::var("LC_ALL"))
             .unwrap_or_else(|_| "en_US.UTF-8".into());
-        let region = infer_region_from_timezone();
+        let region = infer_region_from_timezone_with_config(user_location);
+        let user_timezone = user_timezone.map(|s| s.to_string());
 
         let home_dir = std::env::var("HOME")
             .or_else(|_| std::env::var("USERPROFILE"))
@@ -94,6 +105,7 @@ impl BootContext {
             downloads_path,
             data_dir,
             working_dir,
+            user_timezone,
         }
     }
 }
@@ -370,15 +382,25 @@ impl ContextEngine {
         let tz_name = now.format("%Z").to_string();
         let tz_offset = now.format("%:z").to_string();
 
-        format!(
-            "Date: {} | Day: {} | Timezone: {} (UTC{}) | Model: {} | Session: {}",
+        let mut line = format!(
+            "Date: {} | Day: {} | Timezone: {} (UTC{})",
             now.format("%Y-%m-%dT%H:%M:%S"),
             now.format("%A"),
             tz_name,
             tz_offset,
+        );
+
+        if let Some(ref iana_tz) = self.config.user_timezone {
+            line.push_str(&format!(" | IANA: {iana_tz}"));
+        }
+
+        line.push_str(&format!(
+            " | Model: {} | Session: {}",
             model_display,
             session_id.unwrap_or("new session"),
-        )
+        ));
+
+        line
     }
 
     /// Get a cached summary from the database.
@@ -863,38 +885,65 @@ fn os_version() -> String {
     System::long_os_version().unwrap_or_else(|| System::os_version().unwrap_or_default())
 }
 
-fn infer_region_from_timezone() -> String {
-    let tz = std::env::var("TZ").unwrap_or_default();
-    if tz.contains("America/New_York")
-        || tz.contains("America/Detroit")
-        || tz.contains("US/Eastern")
+fn infer_region_from_timezone_with_config(user_location: Option<&str>) -> String {
+    // 0. User override wins (explicit config)
+    if let Some(location) = user_location
+        && !location.is_empty()
     {
-        "Eastern US".into()
-    } else if tz.contains("America/Chicago") || tz.contains("US/Central") {
-        "Central US".into()
-    } else if tz.contains("America/Denver") || tz.contains("US/Mountain") {
-        "Mountain US".into()
-    } else if tz.contains("America/Los_Angeles") || tz.contains("US/Pacific") {
-        "Pacific US".into()
-    } else if tz.contains("Europe/") {
-        "Europe".into()
-    } else if tz.contains("Asia/") {
-        "Asia".into()
-    } else {
-        // Try to infer from chrono offset
-        let offset = chrono::Local::now().offset().local_minus_utc() / 3600;
-        match offset {
-            -5 => "Eastern US".into(),
-            -6 => "Central US".into(),
-            -7 => "Mountain US".into(),
-            -8 => "Pacific US".into(),
-            0 => "UTC/UK".into(),
-            1 => "Central Europe".into(),
-            5..=6 => "South Asia".into(),
-            8 => "East Asia".into(),
-            9 => "Japan/Korea".into(),
-            _ => format!("UTC{:+}", offset),
+        return location.to_string();
+    }
+
+    // 1. TZ env var (named timezone)
+    let tz = std::env::var("TZ").unwrap_or_default();
+    if !tz.is_empty() {
+        if tz.contains("America/New_York")
+            || tz.contains("America/Detroit")
+            || tz.contains("US/Eastern")
+        {
+            return "Eastern US".into();
+        } else if tz.contains("America/Chicago") || tz.contains("US/Central") {
+            return "Central US".into();
+        } else if tz.contains("America/Denver") || tz.contains("US/Mountain") {
+            return "Mountain US".into();
+        } else if tz.contains("America/Los_Angeles") || tz.contains("US/Pacific") {
+            return "Pacific US".into();
+        } else if tz.contains("Europe/") {
+            return "Europe".into();
+        } else if tz.contains("Asia/") {
+            return "Asia".into();
         }
+    }
+
+    // 2. Abbreviation-first (handles DST correctly: EDT=-4 != CST which is also -6)
+    let now = chrono::Local::now();
+    let tz_abbrev = now.format("%Z").to_string();
+    match tz_abbrev.as_str() {
+        "EST" | "EDT" => return "Eastern US".into(),
+        "CST" | "CDT" => return "Central US".into(),
+        "MST" | "MDT" => return "Mountain US".into(),
+        "PST" | "PDT" => return "Pacific US".into(),
+        "GMT" | "UTC" | "WET" => return "UTC/UK".into(),
+        "CET" | "CEST" => return "Central Europe".into(),
+        "IST" => return "South Asia".into(),
+        "JST" => return "Japan/Korea".into(),
+        "KST" => return "Japan/Korea".into(),
+        "AEST" | "AEDT" => return "Australia East".into(),
+        _ => {}
+    }
+
+    // 3. Offset fallback (last resort)
+    let offset = now.offset().local_minus_utc() / 3600;
+    match offset {
+        -5 => "Eastern US".into(),
+        -6 => "Central US".into(),
+        -7 => "Mountain US".into(),
+        -8 => "Pacific US".into(),
+        0 => "UTC/UK".into(),
+        1 => "Central Europe".into(),
+        5..=6 => "South Asia".into(),
+        8 => "East Asia".into(),
+        9 => "Japan/Korea".into(),
+        _ => format!("UTC{:+}", offset),
     }
 }
 
@@ -914,6 +963,57 @@ mod tests {
         let config = std::sync::Arc::new(AppConfig::default());
         let engine = ContextEngine::new(pool, config, true);
         (dir, engine)
+    }
+
+    // ENV.3 — infer_region_from_timezone returns non-empty string
+    #[test]
+    fn infer_region_returns_non_empty() {
+        let region = infer_region_from_timezone_with_config(None);
+        assert!(!region.is_empty(), "region should not be empty");
+    }
+
+    // ENV.4 — user_location override wins
+    #[test]
+    fn infer_region_user_override_wins() {
+        let region = infer_region_from_timezone_with_config(Some("Custom Location, Mars"));
+        assert_eq!(region, "Custom Location, Mars");
+    }
+
+    // ENV.5 — empty user_location falls through to detection
+    #[test]
+    fn infer_region_empty_override_falls_through() {
+        let region = infer_region_from_timezone_with_config(Some(""));
+        assert!(!region.is_empty(), "should fall through to detection");
+        assert_ne!(region, "");
+    }
+
+    // ENV.6 — BootContext with config overrides
+    #[test]
+    fn boot_context_with_user_location() {
+        let boot =
+            BootContext::from_system_with_config(Some("America/New_York"), Some("New York, US"));
+        assert_eq!(boot.region, "New York, US");
+        assert_eq!(boot.user_timezone.as_deref(), Some("America/New_York"));
+    }
+
+    // ENV.7 — dynamic_runtime includes IANA when set
+    #[tokio::test]
+    async fn dynamic_runtime_includes_iana_timezone() {
+        let dir = TempDir::new().unwrap();
+        let db_path = dir.path().join("test.db");
+        let pool = db::init_pool(&db_path).unwrap();
+        db::with_db(&pool, db::run_migrations).await.unwrap();
+
+        let mut config = AppConfig::default();
+        config.user_timezone = Some("America/New_York".into());
+        let config = std::sync::Arc::new(config);
+        let engine = ContextEngine::new(pool, config, true);
+
+        let runtime = engine.dynamic_runtime("gpt-4o", None);
+        assert!(
+            runtime.contains("IANA: America/New_York"),
+            "should contain IANA timezone: {runtime}"
+        );
     }
 
     // 15.3.1 — compose returns fallback when disabled

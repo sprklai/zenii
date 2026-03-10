@@ -81,7 +81,14 @@ impl Tool for SystemInfoTool {
                     .to_string(),
                 ))
             }
-            "time" => Ok(ToolResult::ok(chrono::Utc::now().to_rfc3339())),
+            "time" => {
+                let now = chrono::Local::now();
+                Ok(ToolResult::ok(format!(
+                    "{} ({})",
+                    now.format("%Y-%m-%dT%H:%M:%S%:z"),
+                    now.format("%Z"),
+                )))
+            }
             "env" => {
                 let env_var = args.get("key").and_then(|v| v.as_str()).unwrap_or("PATH");
                 Ok(ToolResult::ok(std::env::var(env_var).unwrap_or_default()))
@@ -146,6 +153,33 @@ mod tests {
         let tool = SystemInfoTool::new();
         let result = tool.execute(serde_json::json!({})).await;
         assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn time_returns_local_with_timezone() {
+        let tool = SystemInfoTool::new();
+        let result = tool
+            .execute(serde_json::json!({"action": "time"}))
+            .await
+            .unwrap();
+        assert!(result.success);
+        // Must contain timezone offset (e.g., -04:00), not end with Z (UTC)
+        assert!(
+            !result.output.ends_with('Z'),
+            "should not be UTC: {}",
+            result.output
+        );
+        assert!(
+            result.output.contains('+') || result.output.contains('-'),
+            "should contain offset: {}",
+            result.output
+        );
+        // Must contain timezone abbreviation in parentheses
+        assert!(
+            result.output.contains('(') && result.output.contains(')'),
+            "should contain tz abbreviation: {}",
+            result.output
+        );
     }
 
     #[tokio::test]

@@ -1,13 +1,13 @@
 # MesoClaw TODO Tracker
 
 > Auto-maintained list of all TODO, MOCK, FIX, and STUB items in the codebase.
-> Last updated: 2026-03-09 (Phase 8.11 Autonomous Reasoning complete)
+> Last updated: 2026-03-09 (Phase 8.11 Semantic Memory complete)
 
 ## Summary
 
 | Type | Open | Done | Total |
 |------|------|------|-------|
-| TODO | 12 | 22 | 34 |
+| TODO | 23 | 25 | 48 |
 | STUB | 3 | 11 | 14 |
 | MOCK | 0 | 0 | 0 |
 | FIX | 0 | 0 | 0 |
@@ -30,6 +30,17 @@
 | [ ] | TODO | tests/phase8.11_autonomous_reasoning.md | M18.1 | Manual test: Telegram desktop file discovery — requires live Telegram bot token | Phase 8.11 |
 | [ ] | TODO | tests/phase8.11_autonomous_reasoning.md | M18.2 | Manual test: CLI downloads folder query — requires configured API key | Phase 8.11 |
 | [ ] | TODO | tests/phase8.11_autonomous_reasoning.md | M18.3-5 | Manual tests: Continuation nudge, max limit, cross-interface — requires live LLM interaction | Phase 8.11 |
+| [ ] | TODO | tests/phase8.11_semantic_memory.md | M18.1 | Manual test: Local embedding activation — `mesoclaw embedding activate local`, verify model downloads | Phase 8.11 SM |
+| [ ] | TODO | tests/phase8.11_semantic_memory.md | M18.2 | Manual test: Semantic recall quality — store memories, recall with semantic query, verify vector scores | Phase 8.11 SM |
+| [ ] | TODO | tests/phase8.11_semantic_memory.md | M18.3 | Manual test: OpenAI embedding activation — requires `api_key:openai` in keyring or OPENAI_API_KEY env | Phase 8.11 SM |
+| [ ] | TODO | tests/phase8.11_semantic_memory.md | M18.4 | Manual test: Embedding status endpoint — `curl /embeddings/status` | Phase 8.11 SM |
+| [ ] | TODO | tests/phase8.11_semantic_memory.md | M18.5 | Manual test: Graceful degradation — deactivate embeddings, verify FTS5-only recall | Phase 8.11 SM |
+| [ ] | TODO | tests/phase8.11_semantic_memory.md | M18.6 | Manual test: Desktop settings — provider selection UI | Phase 8.11 SM |
+| [ ] | TODO | tests/phase8.11_semantic_memory.md | M18.7 | Manual test: Desktop settings — model download progress | Phase 8.11 SM |
+| [ ] | TODO | tests/phase8.11_semantic_memory.md | M18.8 | Manual test: Desktop settings — OpenAI config with key warning | Phase 8.11 SM |
+| [ ] | TODO | tests/phase8.11_semantic_memory.md | M18.9 | Manual test: Desktop settings — deactivate provider | Phase 8.11 SM |
+| [ ] | TODO | tests/phase8.11_semantic_memory.md | M18.10 | Manual test: CLI test embed — `mesoclaw embedding test` | Phase 8.11 SM |
+| [ ] | TODO | tests/phase8.11_semantic_memory.md | M18.11 | Manual test: Re-index memories — switch provider, run `mesoclaw embedding reindex` | Phase 8.11 SM |
 
 ---
 
@@ -68,6 +79,9 @@
 | [x] | TODO | crates/mesoclaw-core/src/config/schema.rs | agent_max_continuations + agent_reasoning_guidance config fields | Phase 8.11 |
 | [x] | TODO | crates/mesoclaw-core/src/gateway/ | All 4 call sites swapped to reasoning_engine.chat() (chat, ws, router, scheduler) | Phase 8.11 |
 | [x] | TODO | crates/mesoclaw-core/src/boot.rs | ReasoningEngine initialization with ContinuationStrategy wired into Services + AppState | Phase 8.11 |
+| [x] | TODO | crates/mesoclaw-core/src/memory/openai_embeddings.rs | OpenAI embedding provider — reqwest-based /v1/embeddings with key resolution | Phase 8.11 SM |
+| [x] | TODO | crates/mesoclaw-core/src/memory/local_embeddings.rs | FastEmbed local provider — feature-gated ONNX embedding with lazy model download | Phase 8.11 SM |
+| [x] | TODO | crates/mesoclaw-core/src/boot.rs | Switch from InMemoryStore to SqliteMemoryStore with optional vector support | Phase 8.11 SM |
 
 ---
 
@@ -77,8 +91,9 @@
 - `mesoclaw-tui` crate is a stub — deferred to Future Release (FR-1)
 - Phase 1-7 completed: full Rust workspace + Svelte frontend + Tauri desktop
 - Phase 8 fully complete (15.1, 15.2, 15.3, 15.3b, 15.5, 16, 8.6.1, 8.7, 8.8, 8.9, 8.10)
-- Phase 8.11 automated tests complete: 20 new tests (868 total workspace), 0 clippy warnings
-- Phase 8.11 manual tests (M18.1-M18.5) pending — require live API keys/bot tokens
+- Phase 8.11 Autonomous Reasoning: 20 tests, manual tests (M18.1-M18.5) pending — require live API keys/bot tokens
+- Phase 8.11 Semantic Memory: 24 new automated tests (873 Rust + 37 JS = 910 total), 0 clippy warnings
+- Phase 8.11 SM manual tests (M18.1-M18.11) pending — require live daemon + API keys
 - Stages 9-15 complete: build, CI/CD, quality, docs, licensing
 - Per "No magic numbers" rule: all tunables in AppConfig (46+ fields including agent_max_continuations)
 - Only remaining work: TUI (FR-1) and Mobile (FR-2) — explicitly deferred to future release

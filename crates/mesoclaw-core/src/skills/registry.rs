@@ -176,9 +176,10 @@ mod tests {
             .build()
             .unwrap();
         let list = rt.block_on(registry.list());
-        assert_eq!(list.len(), 2);
+        assert_eq!(list.len(), 3);
         assert!(list.iter().any(|s| s.id == "system-prompt"));
         assert!(list.iter().any(|s| s.id == "summarize"));
+        assert!(list.iter().any(|s| s.id == "environment-awareness"));
     }
 
     #[test]
@@ -195,7 +196,7 @@ mod tests {
             .build()
             .unwrap();
         let list = rt.block_on(registry.list());
-        assert_eq!(list.len(), 3); // 2 bundled + 1 user
+        assert_eq!(list.len(), 4); // 3 bundled + 1 user
         assert!(list.iter().any(|s| s.id == "custom"));
     }
 
@@ -238,7 +239,7 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let registry = SkillRegistry::new(dir.path(), 100_000).unwrap();
         let list = registry.list().await;
-        assert_eq!(list.len(), 2);
+        assert_eq!(list.len(), 3);
     }
 
     #[tokio::test]
@@ -268,7 +269,7 @@ mod tests {
 
         // Verify in registry
         let list = registry.list().await;
-        assert_eq!(list.len(), 3);
+        assert_eq!(list.len(), 4);
     }
 
     #[tokio::test]
@@ -338,7 +339,7 @@ mod tests {
 
         registry.reload().await.unwrap();
         let list = registry.list().await;
-        assert_eq!(list.len(), 3);
+        assert_eq!(list.len(), 4);
         assert!(list.iter().any(|s| s.id == "new-on-disk"));
     }
 }

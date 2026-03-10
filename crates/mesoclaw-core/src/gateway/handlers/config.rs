@@ -143,6 +143,21 @@ pub async fn update_config(
                 }
             }
         }
+        if let Some(v) = obj.get("embedding_provider").and_then(|v| v.as_str()) {
+            match v {
+                "none" | "local" | "openai" => {
+                    config.embedding_provider = v.to_string();
+                }
+                _ => {
+                    return Err(crate::MesoError::Validation(format!(
+                        "invalid embedding_provider '{v}': expected none, local, or openai"
+                    )));
+                }
+            }
+        }
+        if let Some(v) = obj.get("embedding_model").and_then(|v| v.as_str()) {
+            config.embedding_model = v.to_string();
+        }
     }
 
     crate::config::save_config(&state.config_path, &config)?;

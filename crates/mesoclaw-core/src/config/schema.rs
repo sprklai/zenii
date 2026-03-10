@@ -126,6 +126,12 @@ pub struct AppConfig {
     pub embedding_model: String,
     pub embedding_download_dir: Option<String>,
 
+    // Environment overrides
+    /// User's IANA timezone (e.g., "America/New_York"). Auto-detected if not set.
+    pub user_timezone: Option<String>,
+    /// User's location/region description (e.g., "New York, US"). Used for context injection.
+    pub user_location: Option<String>,
+
     // Phase 8: Self-Evolution
     pub self_evolution_enabled: bool,
     pub learning_archive_threshold: f64,
@@ -257,6 +263,10 @@ impl Default for AppConfig {
             embedding_provider: "none".into(),
             embedding_model: "bge-small-en-v1.5".into(),
             embedding_download_dir: None,
+
+            // Environment overrides
+            user_timezone: None,
+            user_location: None,
 
             // Self-Evolution
             self_evolution_enabled: true,
@@ -394,6 +404,26 @@ mod tests {
         assert!((config.learning_archive_threshold - 0.3).abs() < f64::EPSILON);
         assert_eq!(config.learning_archive_after_days, 30);
         assert_eq!(config.skill_proposal_expiry_days, 7);
+    }
+
+    // ENV.1 — user_timezone and user_location default to None
+    #[test]
+    fn default_user_timezone_and_location() {
+        let config = AppConfig::default();
+        assert!(config.user_timezone.is_none());
+        assert!(config.user_location.is_none());
+    }
+
+    // ENV.2 — user_timezone and user_location from TOML
+    #[test]
+    fn user_timezone_and_location_from_toml() {
+        let toml_str = r#"
+            user_timezone = "America/New_York"
+            user_location = "New York, US"
+        "#;
+        let config: AppConfig = toml::from_str(toml_str).unwrap();
+        assert_eq!(config.user_timezone.as_deref(), Some("America/New_York"));
+        assert_eq!(config.user_location.as_deref(), Some("New York, US"));
     }
 
     // 18.10 — default embedding_provider is "none"

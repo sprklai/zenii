@@ -1,0 +1,363 @@
+<script lang="ts">
+	import * as Card from '$lib/components/ui/card';
+	import { Badge } from '$lib/components/ui/badge';
+	import { Button } from '$lib/components/ui/button';
+	import { Input } from '$lib/components/ui/input';
+	import { Skeleton } from '$lib/components/ui/skeleton';
+	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
+	import { providersStore, type ProviderWithKeyStatus } from '$lib/stores/providers.svelte';
+	import { onMount } from 'svelte';
+
+	let expandedId = $state<string | null>(null);
+	let apiKeyInputs = $state<Record<string, string>>({});
+	let showKey = $state<Record<string, boolean>>({});
+	let saving = $state<Record<string, boolean>>({});
+	let newModelInputs = $state<Record<string, string>>({});
+	let addingModel = $state<Record<string, boolean>>({});
+	let testing = $state<Record<string, boolean>>({});
+	let testResult = $state<Record<string, { success: boolean; message: string; latency_ms?: number } | null>>({});
+	let showAddProvider = $state(false);
+	let newProvider = $state({ id: '', name: '', baseUrl: '', requiresApiKey: true });
+	let addingProvider = $state(false);
+	let deletingProvider = $state<Record<string, boolean>>({});
+	let confirmOpen = $state(false);
+	let deleteAction = $state<{ type: 'key' | 'provider' | 'model'; id: string; extra?: string } | null>(null);
+
+	onMount(() => {
+		providersStore.load();
+	});
+
+	function toggle(id: string) {
+		expandedId = expandedId === id ? null : id;
+	}
+
+	async function saveKey(provider: ProviderWithKeyStatus) {
+		const value = apiKeyInputs[provider.id];
+		if (!value?.trim()) return;
+		saving[provider.id] = true;
+		try {
+			await providersStore.setApiKey(provider.id, value.trim());
+			apiKeyInputs[provider.id] = '';
+		} finally {
+			saving[provider.id] = false;
+		}
+	}
+
+	async function testConnection(provider: ProviderWithKeyStatus) {
+		testing[provider.id] = true;
+		testResult[provider.id] = null;
+		try {
+			testResult[provider.id] = await providersStore.testConnection(provider.id);
+		} catch (e) {
+			testResult[provider.id] = { success: false, message: String(e) };
+		} finally {
+			testing[provider.id] = false;
+		}
+	}
+
+	function removeKey(provider: ProviderWithKeyStatus) {
+		deleteAction = { type: 'key', id: provider.id };
+		confirmOpen = true;
+	}
+
+	async function confirmRemoveKey(providerId: string) {
+		saving[providerId] = true;
+		try {
+			await providersStore.removeApiKey(providerId);
+		} finally {
+			saving[providerId] = false;
+		}
+	}
+
+	async function addModel(providerId: string) {
+		const modelId = newModelInputs[providerId];
+		if (!modelId?.trim()) return;
+		addingModel[providerId] = true;
+		try {
+			await providersStore.addModel(providerId, modelId.trim());
+			newModelInputs[providerId] = '';
+		} finally {
+			addingModel[providerId] = false;
+		}
+	}
+
+	function deleteModel(providerId: string, modelId: string) {
+		deleteAction = { type: 'model', id: providerId, extra: modelId };
+		confirmOpen = true;
+	}
+
+	async function confirmDeleteModel(providerId: string, modelId: string) {
+		addingModel[providerId] = true;
+		try {
+			await providersStore.deleteModel(providerId, modelId);
+		} finally {
+			addingModel[providerId] = false;
+		}
+	}
+
+	async function addProvider() {
+		if (!newProvider.id.trim() || !newProvider.name.trim() || !newProvider.baseUrl.trim()) return;
+		addingProvider = true;
+		try {
+			await providersStore.addProvider(
+				newProvider.id.trim(),
+				newProvider.name.trim(),
+				newProvider.baseUrl.trim(),
+				newProvider.requiresApiKey,
+			);
+			newProvider = { id: '', name: '', baseUrl: '', requiresApiKey: true };
+			showAddProvider = false;
+		} finally {
+			addingProvider = false;
+		}
+	}
+
+	function deleteProvider(id: string) {
+		deleteAction = { type: 'provider', id };
+		confirmOpen = true;
+	}
+
+	async function confirmDeleteProvider(id: string) {
+		deletingProvider[id] = true;
+		try {
+			await providersStore.deleteProvider(id);
+			if (expandedId === id) expandedId = null;
+		} finally {
+			deletingProvider[id] = false;
+		}
+	}
+
+	async function confirmDelete() {
+		if (!deleteAction) return;
+		const action = deleteAction;
+		if (action.type === 'key') await confirmRemoveKey(action.id);
+		else if (action.type === 'provider') await confirmDeleteProvider(action.id);
+		else if (action.type === 'model' && action.extra) await confirmDeleteModel(action.id, action.extra);
+	}
+
+	function confirmTitle(): string {
+		if (!deleteAction) return '';
+		if (deleteAction.type === 'key') return 'Remove API key?';
+		if (deleteAction.type === 'provider') return 'Delete provider?';
+		return 'Delete model?';
+	}
+
+	function confirmDescription(): string {
+		if (!deleteAction) return '';
+		if (deleteAction.type === 'key') return 'This will remove the stored API key for this provider.';
+		if (deleteAction.type === 'provider') return 'This will permanently delete this provider and all its models.';
+		return 'This will remove this custom model from the provider.';
+	}
+
+	function statusBadge(provider: ProviderWithKeyStatus): { label: string; variant: 'default' | 'secondary' | 'outline' | 'destructive' } {
+		if (!provider.requires_api_key) return { label: 'Local', variant: 'outline' };
+		if (provider.has_api_key) return { label: 'Configured', variant: 'default' };
+		return { label: 'Not configured', variant: 'secondary' };
+	}
+</script>
+
+<div class="flex items-center justify-between mb-4">
+	<h2 class="text-lg font-semibold">Providers</h2>
+	<Button size="sm" variant="outline" onclick={() => (showAddProvider = !showAddProvider)}>
+		{showAddProvider ? 'Cancel' : '+ Add Provider'}
+	</Button>
+</div>
+
+{#if showAddProvider}
+	<Card.Root>
+		<Card.Header>
+			<Card.Title>Add Custom Provider</Card.Title>
+		</Card.Header>
+		<Card.Content class="space-y-3">
+			<div class="grid grid-cols-2 gap-3">
+				<div class="space-y-1">
+					<label class="text-sm font-medium" for="new-id">Provider ID</label>
+					<Input id="new-id" placeholder="my-gateway" bind:value={newProvider.id} />
+				</div>
+				<div class="space-y-1">
+					<label class="text-sm font-medium" for="new-name">Display Name</label>
+					<Input id="new-name" placeholder="My Gateway" bind:value={newProvider.name} />
+				</div>
+			</div>
+			<div class="space-y-1">
+				<label class="text-sm font-medium" for="new-url">Base URL</label>
+				<Input id="new-url" placeholder="https://my-proxy.com/v1" bind:value={newProvider.baseUrl} />
+			</div>
+			<div class="flex items-center gap-2">
+				<input
+					type="checkbox"
+					id="new-requires-key"
+					bind:checked={newProvider.requiresApiKey}
+					class="rounded"
+				/>
+				<label class="text-sm" for="new-requires-key">Requires API key</label>
+			</div>
+			<Button
+				size="sm"
+				disabled={!newProvider.id.trim() || !newProvider.name.trim() || !newProvider.baseUrl.trim() || addingProvider}
+				onclick={addProvider}
+			>
+				{addingProvider ? 'Adding...' : 'Add Provider'}
+			</Button>
+		</Card.Content>
+	</Card.Root>
+{/if}
+
+{#if providersStore.loading}
+	<div class="space-y-2">
+		<Skeleton class="h-16 w-full" />
+		<Skeleton class="h-16 w-full" />
+		<Skeleton class="h-16 w-full" />
+	</div>
+{:else if providersStore.providers.length === 0}
+	<p class="text-muted-foreground">No providers found. Is the daemon running?</p>
+{:else}
+	<div class="space-y-2">
+		{#each providersStore.providers as provider (provider.id)}
+			{@const status = statusBadge(provider)}
+			<Card.Root>
+				<button
+					class="w-full text-left"
+					onclick={() => toggle(provider.id)}
+				>
+					<Card.Header class="py-3">
+						<div class="flex items-center justify-between">
+							<div class="flex items-center gap-2">
+								<Card.Title class="text-base">{provider.name}</Card.Title>
+								<Badge variant={status.variant}>{status.label}</Badge>
+							</div>
+							<span class="text-xs text-muted-foreground">
+								{expandedId === provider.id ? '▲' : '▼'}
+							</span>
+						</div>
+					</Card.Header>
+				</button>
+
+				{#if expandedId === provider.id}
+					<Card.Content class="pt-0 space-y-4">
+						<div class="flex items-center justify-between">
+							<div class="text-sm text-muted-foreground">
+								<span class="font-medium">Base URL:</span> {provider.base_url}
+							</div>
+							{#if provider.is_user_defined}
+								<Button
+									variant="destructive"
+									size="sm"
+									disabled={deletingProvider[provider.id]}
+									onclick={() => deleteProvider(provider.id)}
+								>
+									{deletingProvider[provider.id] ? 'Deleting...' : 'Delete Provider'}
+								</Button>
+							{/if}
+						</div>
+
+						{#if provider.requires_api_key}
+							<div class="space-y-2">
+								<label class="text-sm font-medium" for="key-{provider.id}">API Key</label>
+								<div class="flex gap-2">
+									<Input
+										id="key-{provider.id}"
+										type={showKey[provider.id] ? 'text' : 'password'}
+										placeholder={provider.has_api_key ? '••••••••  (key is set)' : 'Enter API key...'}
+										bind:value={apiKeyInputs[provider.id]}
+									/>
+									<Button
+										variant="ghost"
+										size="sm"
+										onclick={() => (showKey[provider.id] = !showKey[provider.id])}
+									>
+										{showKey[provider.id] ? 'Hide' : 'Show'}
+									</Button>
+								</div>
+								<div class="flex gap-2">
+									<Button
+										size="sm"
+										disabled={!apiKeyInputs[provider.id]?.trim() || saving[provider.id]}
+										onclick={() => saveKey(provider)}
+									>
+										{saving[provider.id] ? 'Saving...' : 'Save Key'}
+									</Button>
+									{#if provider.has_api_key}
+										<Button
+											variant="destructive"
+											size="sm"
+											disabled={saving[provider.id]}
+											onclick={() => removeKey(provider)}
+										>
+											Remove Key
+										</Button>
+										<Button
+											variant="outline"
+											size="sm"
+											disabled={testing[provider.id]}
+											onclick={() => testConnection(provider)}
+										>
+											{testing[provider.id] ? 'Testing...' : 'Test Connection'}
+										</Button>
+									{/if}
+								</div>
+								{#if testResult[provider.id] != null}
+									{@const result = testResult[provider.id]!}
+									<p class="text-sm {result.success ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}">
+										{#if result.success}
+											Connected{result.latency_ms ? ` — ${result.latency_ms}ms` : ''}
+										{:else}
+											{result.message}
+										{/if}
+									</p>
+								{/if}
+							</div>
+						{:else}
+							<p class="text-sm text-muted-foreground italic">No API key required (local provider)</p>
+						{/if}
+
+						<div class="space-y-2">
+							<span class="text-sm font-medium">Models</span>
+							{#if provider.models.length > 0}
+								<div class="flex flex-wrap gap-1">
+									{#each provider.models as model (model.id)}
+										<Badge variant="outline" class="text-xs flex items-center gap-1">
+											{model.display_name}
+											{#if model.is_custom}
+												<button
+													class="ml-1 text-muted-foreground hover:text-destructive"
+													title="Remove model"
+													onclick={() => deleteModel(provider.id, model.model_id)}
+												>&times;</button>
+											{/if}
+										</Badge>
+									{/each}
+								</div>
+							{:else}
+								<p class="text-xs text-muted-foreground">No models</p>
+							{/if}
+							<div class="flex gap-2">
+								<Input
+									class="h-8 text-sm"
+									placeholder="Add model ID (e.g. gpt-4o-mini)"
+									bind:value={newModelInputs[provider.id]}
+								/>
+								<Button
+									size="sm"
+									variant="outline"
+									disabled={!newModelInputs[provider.id]?.trim() || addingModel[provider.id]}
+									onclick={() => addModel(provider.id)}
+								>
+									{addingModel[provider.id] ? 'Adding...' : 'Add'}
+								</Button>
+							</div>
+						</div>
+					</Card.Content>
+				{/if}
+			</Card.Root>
+		{/each}
+	</div>
+{/if}
+
+<ConfirmDialog
+	bind:open={confirmOpen}
+	title={confirmTitle()}
+	description={confirmDescription()}
+	confirmLabel="Remove"
+	onConfirm={confirmDelete}
+/>

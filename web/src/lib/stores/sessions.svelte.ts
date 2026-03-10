@@ -35,6 +35,14 @@ function createSessionsStore() {
       loading = true;
       try {
         sessions = await apiGet<SessionSummary[]>("/sessions");
+      } catch {
+        // Retry once after 1s — safety net for transient gateway startup timing
+        await new Promise((r) => setTimeout(r, 1000));
+        try {
+          sessions = await apiGet<SessionSummary[]>("/sessions");
+        } catch (e) {
+          console.error("sessionsStore.load failed after retry:", e);
+        }
       } finally {
         loading = false;
       }

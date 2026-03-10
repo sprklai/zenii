@@ -308,7 +308,10 @@ pub async fn init_services(config: AppConfig) -> Result<Services> {
 
     // 11. Boot context
     #[cfg(feature = "ai")]
-    let boot_context = BootContext::from_system();
+    let boot_context = BootContext::from_system_with_config(
+        config.user_timezone.as_deref(),
+        config.user_location.as_deref(),
+    );
     #[cfg(feature = "ai")]
     info!(
         "Boot context: {} {} ({})",
@@ -738,7 +741,7 @@ mod tests {
         let config = test_config(&dir);
         let services = init_services(config).await.unwrap();
         let skills = services.skill_registry.list().await;
-        assert_eq!(skills.len(), 2); // 2 bundled
+        assert_eq!(skills.len(), 3); // 3 bundled
     }
 
     #[tokio::test]
@@ -804,7 +807,7 @@ mod tests {
         let identity = state.soul_loader.get().await;
         assert_eq!(identity.meta.name, "MesoClaw");
         let skills = state.skill_registry.list().await;
-        assert_eq!(skills.len(), 2);
+        assert_eq!(skills.len(), 3);
     }
 
     // 18.12 — Boot with embedding_provider="none" creates SqliteMemoryStore without vector
