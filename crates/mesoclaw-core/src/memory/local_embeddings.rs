@@ -1,4 +1,4 @@
-#![cfg(feature = "local-embeddings")]
+// Module is already feature-gated in memory/mod.rs
 
 use std::sync::Arc;
 

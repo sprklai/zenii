@@ -148,8 +148,17 @@ pub async fn init_services(config: AppConfig) -> Result<Services> {
                         // Initialize VectorIndex
                         let vi_pool = memory_pool.clone();
                         let dim = config.embedding_dim;
+                        // SAFETY: sqlite3_vec_init has the correct signature for sqlite3_auto_extension
+                        #[allow(unsafe_code)]
                         unsafe {
-                            rusqlite::ffi::sqlite3_auto_extension(Some(std::mem::transmute(
+                            rusqlite::ffi::sqlite3_auto_extension(Some(std::mem::transmute::<
+                                *const (),
+                                unsafe extern "C" fn(
+                                    *mut rusqlite::ffi::sqlite3,
+                                    *mut *mut i8,
+                                    *const rusqlite::ffi::sqlite3_api_routines,
+                                ) -> i32,
+                            >(
                                 sqlite_vec::sqlite3_vec_init as *const (),
                             )));
                         }
