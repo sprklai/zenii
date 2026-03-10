@@ -24,6 +24,29 @@ export function setBaseUrl(url: string): void {
   localStorage.setItem(BASE_URL_KEY, url);
 }
 
+export function clearBaseUrl(): void {
+  localStorage.removeItem(BASE_URL_KEY);
+}
+
+/**
+ * Perform a health check without authentication headers.
+ * Used to detect if the daemon requires auth at all.
+ */
+export async function healthCheckNoAuth(): Promise<boolean> {
+  try {
+    const baseUrl = getBaseUrl();
+    const response = await fetch(`${baseUrl}/health`, {
+      method: "GET",
+      headers: { "Content-Type": "application/json" },
+    });
+    if (!response.ok) return false;
+    const data = await response.json();
+    return data.status === "ok";
+  } catch {
+    return false;
+  }
+}
+
 export interface ApiError {
   error_code: string;
   message: string;

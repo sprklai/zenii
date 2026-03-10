@@ -11,23 +11,55 @@ export interface SchedulerNotification {
   timestamp: number;
 }
 
+const MAX_RECONNECT_ATTEMPTS = 10;
+
 class NotificationStore {
   notifications = $state<SchedulerNotification[]>([]);
   ws: WebSocket | null = null;
   connected = $state(false);
+  disconnectedPermanently = $state(false);
 
-  connect(baseUrl: string) {
-    const wsUrl = baseUrl.replace(/^http/, "ws") + "/ws/notifications";
+  private shouldReconnect = true;
+  private reconnectAttempt = 0;
+  private reconnectTimeoutId: ReturnType<typeof setTimeout> | undefined;
+  private currentUrl: string | null = null;
+
+  connect(wsUrl: string) {
+    this.currentUrl = wsUrl;
+    this.shouldReconnect = true;
+    this.disconnectedPermanently = false;
+    this.reconnectAttempt = 0;
+    this.openSocket(wsUrl);
+  }
+
+  private openSocket(wsUrl: string) {
+    this.cleanupSocket();
     this.ws = new WebSocket(wsUrl);
 
     this.ws.onopen = () => {
       this.connected = true;
+      this.reconnectAttempt = 0;
+      this.disconnectedPermanently = false;
     };
 
     this.ws.onclose = () => {
       this.connected = false;
-      // Auto-reconnect after 5 seconds
-      setTimeout(() => this.connect(baseUrl), 5000);
+      this.ws = null;
+
+      if (!this.shouldReconnect) return;
+
+      if (this.reconnectAttempt >= MAX_RECONNECT_ATTEMPTS) {
+        this.disconnectedPermanently = true;
+        return;
+      }
+
+      const delay = Math.min(1000 * Math.pow(2, this.reconnectAttempt), 30000);
+      this.reconnectAttempt++;
+      this.reconnectTimeoutId = setTimeout(() => {
+        if (this.shouldReconnect && this.currentUrl) {
+          this.openSocket(this.currentUrl);
+        }
+      }, delay);
     };
 
     this.ws.onerror = () => {
@@ -87,12 +119,32 @@ class NotificationStore {
     };
   }
 
-  disconnect() {
+  private cleanupSocket() {
     if (this.ws) {
-      this.ws.close();
+      // Remove handlers before closing to prevent onclose from triggering reconnect
+      this.ws.onopen = null;
+      this.ws.onclose = null;
+      this.ws.onerror = null;
+      this.ws.onmessage = null;
+      if (
+        this.ws.readyState === WebSocket.OPEN ||
+        this.ws.readyState === WebSocket.CONNECTING
+      ) {
+        this.ws.close();
+      }
       this.ws = null;
-      this.connected = false;
     }
+  }
+
+  disconnect() {
+    this.shouldReconnect = false;
+    if (this.reconnectTimeoutId !== undefined) {
+      clearTimeout(this.reconnectTimeoutId);
+      this.reconnectTimeoutId = undefined;
+    }
+    this.cleanupSocket();
+    this.connected = false;
+    this.currentUrl = null;
   }
 
   clear() {

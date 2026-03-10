@@ -17,13 +17,20 @@
 	import { page } from '$app/state';
 	import { sessionsStore } from '$lib/stores/sessions.svelte';
 	import { notificationStore } from '$lib/stores/notifications.svelte';
+	import { getBaseUrl, getToken } from '$lib/api/client';
 	import { onMount, onDestroy } from 'svelte';
 
 	let { children } = $props();
 
 	onMount(() => {
 		sessionsStore.load();
-		notificationStore.connect('http://127.0.0.1:18981');
+		const baseUrl = getBaseUrl();
+		const wsBase = baseUrl.replace(/^http/, 'ws');
+		const token = getToken();
+		const wsUrl = token
+			? `${wsBase}/ws/notifications?token=${encodeURIComponent(token)}`
+			: `${wsBase}/ws/notifications`;
+		notificationStore.connect(wsUrl);
 	});
 
 	onDestroy(() => {

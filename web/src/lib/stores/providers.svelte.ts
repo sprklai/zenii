@@ -1,4 +1,4 @@
-import { apiGet, apiPost, apiDelete } from "$lib/api/client";
+import { apiGet, apiPost, apiPut, apiDelete } from "$lib/api/client";
 
 export interface ModelInfo {
   id: string;
@@ -77,6 +77,10 @@ function createProvidersStore() {
         );
     },
 
+    get hasUsableModel(): boolean {
+      return providers.some((p) => p.has_api_key && p.models.length > 0);
+    },
+
     async load() {
       loading = true;
       try {
@@ -106,7 +110,7 @@ function createProvidersStore() {
     },
 
     async setDefault(providerId: string, modelId: string) {
-      await apiPost("/providers/default", {
+      await apiPut("/providers/default", {
         provider_id: providerId,
         model_id: modelId,
       });
@@ -135,7 +139,9 @@ function createProvidersStore() {
     },
 
     async deleteModel(providerId: string, modelId: string) {
-      await apiDelete(`/providers/${providerId}/models/${modelId}`);
+      await apiDelete(
+        `/providers/${encodeURIComponent(providerId)}/models/${encodeURIComponent(modelId)}`,
+      );
       await this.load();
     },
 

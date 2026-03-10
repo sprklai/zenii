@@ -38,10 +38,15 @@
 
 	let { sessionId = undefined }: { sessionId?: string } = $props();
 
+	let providersLoaded = $state(false);
+
 	onMount(async () => {
 		await providersStore.load();
 		await providersStore.loadDefault();
+		providersLoaded = true;
 	});
+
+	const hasUsableModel = $derived(providersStore.hasUsableModel);
 
 	const currentModelLabel = $derived(
 		providersStore.configuredModels.find((m) => m.value === providersStore.selectedModel)
@@ -77,7 +82,7 @@
 
 	async function handleSubmit(message: PromptInputMessage) {
 		const prompt = (message.text ?? '').trim();
-		if (!prompt || messagesStore.streaming) return;
+		if (!prompt || messagesStore.streaming || !hasUsableModel) return;
 
 		let currentSessionId = sessionId;
 		const isFirstMessage = !currentSessionId || messagesStore.messages.length === 0;
@@ -114,7 +119,12 @@
 					}
 				},
 				onError(error) {
-					messagesStore.setError(error);
+					const friendlyError =
+						error.toLowerCase().includes('no agent configured') ||
+						error.toLowerCase().includes('no provider')
+							? 'No AI provider configured. Go to Settings > Providers to set up a provider and model.'
+							: error;
+					messagesStore.setError(friendlyError);
 					messagesStore.finishStream(capturedSessionId);
 					console.error('Chat error:', error);
 				}
@@ -205,8 +215,19 @@
 	</Conversation>
 
 	<div class="p-4">
+		{#if providersLoaded && !hasUsableModel}
+			<div class="rounded-md border border-yellow-300 bg-yellow-50 p-3 text-sm text-yellow-800 dark:border-yellow-700 dark:bg-yellow-950 dark:text-yellow-200">
+				No AI provider configured.
+				<a href="/settings/providers" class="underline font-medium hover:text-yellow-900 dark:hover:text-yellow-100">
+					Set up a provider
+				</a>
+				to start chatting.
+			</div>
+		{/if}
 		<PromptInput onSubmit={handleSubmit}>
-			<PromptInputTextarea placeholder="Send a message..." />
+			<PromptInputTextarea
+				placeholder={hasUsableModel ? 'Send a message...' : 'Configure a provider to start chatting...'}
+			/>
 			<PromptInputToolbar>
 				{#if providersStore.configuredModels.length > 0}
 					<PromptInputModelSelect
@@ -233,7 +254,7 @@
 				<div class="flex-1"></div>
 				<PromptInputSubmit
 					status={messagesStore.streaming ? 'streaming' : 'idle'}
-					disabled={messagesStore.streaming}
+					disabled={messagesStore.streaming || !hasUsableModel}
 				/>
 			</PromptInputToolbar>
 		</PromptInput>
