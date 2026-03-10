@@ -8,15 +8,15 @@ pub trait ChannelFormatter: Send + Sync {
     fn max_length(&self) -> usize;
 }
 
-/// Telegram formatter: MarkdownV2 escaping, 4096 char limit.
+/// Telegram formatter: markdown → HTML conversion, 4096 char limit.
 #[cfg(feature = "channels-telegram")]
 pub struct TelegramFormatter;
 
 #[cfg(feature = "channels-telegram")]
 impl ChannelFormatter for TelegramFormatter {
     fn format(&self, markdown: &str) -> Vec<String> {
-        let escaped = super::telegram::fmt::escape_markdown_v2(markdown);
-        split_message(&escaped, self.max_length())
+        let html = super::telegram::fmt::markdown_to_html(markdown);
+        split_message(&html, self.max_length())
     }
 
     fn max_length(&self) -> usize {
@@ -131,16 +131,14 @@ fn find_split_point(chunk: &str) -> usize {
 mod tests {
     use super::*;
 
-    // CR.13 — TelegramFormatter escapes MarkdownV2 special chars
+    // CR.13 — TelegramFormatter converts markdown to HTML
     #[cfg(feature = "channels-telegram")]
     #[test]
-    fn telegram_escapes_markdown() {
+    fn telegram_converts_to_html() {
         let fmt = TelegramFormatter;
-        let parts = fmt.format("Hello *world*!");
+        let parts = fmt.format("Hello **world**!");
         assert_eq!(parts.len(), 1);
-        // Should escape * and !
-        assert!(parts[0].contains("\\*"));
-        assert!(parts[0].contains("\\!"));
+        assert!(parts[0].contains("<b>world</b>"));
     }
 
     // CR.14 — TelegramFormatter splits messages at 4096 char boundary

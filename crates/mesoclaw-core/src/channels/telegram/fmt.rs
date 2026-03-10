@@ -1,22 +1,83 @@
+use pulldown_cmark::{Event, Options, Parser, Tag, TagEnd};
+
 /// Telegram's maximum message length.
 const TELEGRAM_MAX_LENGTH: usize = 4096;
 
-/// Characters that must be escaped in MarkdownV2 mode.
-/// See: https://core.telegram.org/bots/api#markdownv2-style
-const RESERVED_CHARS: &[char] = &[
-    '_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!',
-];
+/// Escape HTML special characters in text content.
+fn escape_html(text: &str) -> String {
+    text.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+}
 
-/// Escape reserved MarkdownV2 characters in a string.
-pub fn escape_markdown_v2(text: &str) -> String {
-    let mut result = String::with_capacity(text.len() * 2);
-    for ch in text.chars() {
-        if RESERVED_CHARS.contains(&ch) {
-            result.push('\\');
+/// Convert standard Markdown to Telegram-compatible HTML.
+///
+/// Telegram supports: `<b>`, `<i>`, `<code>`, `<pre>`, `<a href="">`,
+/// `<s>`, `<u>`, `<blockquote>`, `<pre><code class="language-X">`.
+pub fn markdown_to_html(markdown: &str) -> String {
+    let options = Options::ENABLE_STRIKETHROUGH | Options::ENABLE_TABLES;
+    let parser = Parser::new_ext(markdown, options);
+
+    let mut html = String::with_capacity(markdown.len());
+
+    for event in parser {
+        match event {
+            Event::Start(tag) => match tag {
+                Tag::Paragraph => {}
+                Tag::Strong => html.push_str("<b>"),
+                Tag::Emphasis => html.push_str("<i>"),
+                Tag::Strikethrough => html.push_str("<s>"),
+                Tag::Link { dest_url, .. } => {
+                    html.push_str("<a href=\"");
+                    html.push_str(&escape_html(&dest_url));
+                    html.push_str("\">");
+                }
+                Tag::CodeBlock(kind) => match kind {
+                    pulldown_cmark::CodeBlockKind::Fenced(lang) if !lang.is_empty() => {
+                        html.push_str("<pre><code class=\"language-");
+                        html.push_str(&escape_html(&lang));
+                        html.push_str("\">");
+                    }
+                    _ => html.push_str("<pre><code>"),
+                },
+                Tag::BlockQuote(_) => html.push_str("<blockquote>"),
+                Tag::List(_) => {}
+                Tag::Item => html.push_str("• "),
+                Tag::Heading { .. } => html.push_str("<b>"),
+                _ => {}
+            },
+            Event::End(tag) => match tag {
+                TagEnd::Paragraph => html.push('\n'),
+                TagEnd::Strong => html.push_str("</b>"),
+                TagEnd::Emphasis => html.push_str("</i>"),
+                TagEnd::Strikethrough => html.push_str("</s>"),
+                TagEnd::Link => html.push_str("</a>"),
+                TagEnd::CodeBlock => {
+                    html.push_str("</code></pre>\n");
+                }
+                TagEnd::BlockQuote(_) => html.push_str("</blockquote>\n"),
+                TagEnd::Item => html.push('\n'),
+                TagEnd::Heading(_) => html.push_str("</b>\n"),
+                _ => {}
+            },
+            Event::Text(text) => {
+                html.push_str(&escape_html(&text));
+            }
+            Event::Code(code) => {
+                html.push_str("<code>");
+                html.push_str(&escape_html(&code));
+                html.push_str("</code>");
+            }
+            Event::SoftBreak => html.push('\n'),
+            Event::HardBreak => html.push('\n'),
+            Event::Rule => html.push_str("\n---\n"),
+            _ => {}
         }
-        result.push(ch);
     }
-    result
+
+    // Trim trailing newlines
+    let trimmed = html.trim_end_matches('\n');
+    trimmed.to_string()
 }
 
 /// Split a message into chunks that fit within Telegram's 4096-char limit.
@@ -77,30 +138,86 @@ mod tests {
     use super::*;
 
     #[test]
-    fn escape_all_reserved() {
-        let input = "_*[]()~`>#+-=|{}.!";
-        let escaped = escape_markdown_v2(input);
-        assert_eq!(
-            escaped,
-            "\\_\\*\\[\\]\\(\\)\\~\\`\\>\\#\\+\\-\\=\\|\\{\\}\\.\\!"
-        );
+    fn html_bold() {
+        let result = markdown_to_html("Hello **world**!");
+        assert!(result.contains("<b>world</b>"));
+        assert!(result.contains("Hello "));
     }
 
     #[test]
-    fn escape_preserves_normal() {
-        let input = "Hello, world! This is a test.";
-        let escaped = escape_markdown_v2(input);
-        // Only '!' and '.' should be escaped
-        assert!(escaped.contains("Hello, world\\!"));
-        assert!(escaped.contains("test\\."));
-        // Letters, spaces, commas are preserved
-        assert!(escaped.contains("Hello"));
-        assert!(escaped.contains("world"));
+    fn html_italic() {
+        let result = markdown_to_html("Hello *world*!");
+        assert!(result.contains("<i>world</i>"));
     }
 
     #[test]
-    fn escape_empty_string() {
-        assert_eq!(escape_markdown_v2(""), "");
+    fn html_inline_code() {
+        let result = markdown_to_html("Use `cargo build` here");
+        assert!(result.contains("<code>cargo build</code>"));
+    }
+
+    #[test]
+    fn html_code_block() {
+        let result = markdown_to_html("```rust\nfn main() {}\n```");
+        assert!(result.contains("<pre><code class=\"language-rust\">"));
+        assert!(result.contains("fn main() {}"));
+        assert!(result.contains("</code></pre>"));
+    }
+
+    #[test]
+    fn html_code_block_no_lang() {
+        let result = markdown_to_html("```\nsome code\n```");
+        assert!(result.contains("<pre><code>"));
+        assert!(result.contains("some code"));
+    }
+
+    #[test]
+    fn html_link() {
+        let result = markdown_to_html("[click](https://example.com)");
+        assert!(result.contains("<a href=\"https://example.com\">click</a>"));
+    }
+
+    #[test]
+    fn html_strikethrough() {
+        let result = markdown_to_html("~~deleted~~");
+        assert!(result.contains("<s>deleted</s>"));
+    }
+
+    #[test]
+    fn html_blockquote() {
+        let result = markdown_to_html("> quoted text");
+        assert!(result.contains("<blockquote>"));
+        assert!(result.contains("quoted text"));
+        assert!(result.contains("</blockquote>"));
+    }
+
+    #[test]
+    fn html_escapes_special_chars() {
+        let result = markdown_to_html("a < b & c > d");
+        assert!(result.contains("&lt;"));
+        assert!(result.contains("&amp;"));
+        assert!(result.contains("&gt;"));
+        // Original chars should not appear unescaped
+        assert!(!result.contains(" < "));
+        assert!(!result.contains(" & "));
+        assert!(!result.contains(" > "));
+    }
+
+    #[test]
+    fn html_heading() {
+        let result = markdown_to_html("# Title");
+        assert!(result.contains("<b>Title</b>"));
+    }
+
+    #[test]
+    fn html_empty_string() {
+        assert_eq!(markdown_to_html(""), "");
+    }
+
+    #[test]
+    fn html_plain_text() {
+        let result = markdown_to_html("Just plain text");
+        assert_eq!(result, "Just plain text");
     }
 
     #[test]
@@ -118,7 +235,6 @@ mod tests {
         let msg = format!("{part1}\n\n{part2}");
         let parts = split_message(&msg);
         assert!(parts.len() >= 2);
-        // First part should split at the paragraph boundary
         assert!(parts[0].len() <= TELEGRAM_MAX_LENGTH);
     }
 
@@ -134,20 +250,17 @@ mod tests {
 
     #[test]
     fn split_at_sentence() {
-        // Create a message with sentences, no newlines, > 4096 chars
         let sentence = "This is a sentence. ";
-        let msg = sentence.repeat(250); // ~5000 chars
+        let msg = sentence.repeat(250);
         let parts = split_message(&msg);
         assert!(parts.len() >= 2);
-        // Each part should end at a sentence boundary (period)
         assert!(parts[0].ends_with('.'));
     }
 
     #[test]
     fn split_at_word() {
-        // Create a message with only word boundaries, > 4096 chars
         let word = "word ";
-        let msg = word.repeat(1000); // 5000 chars
+        let msg = word.repeat(1000);
         let parts = split_message(&msg);
         assert!(parts.len() >= 2);
         assert!(parts[0].len() <= TELEGRAM_MAX_LENGTH);
@@ -155,7 +268,6 @@ mod tests {
 
     #[test]
     fn force_split_max() {
-        // Single continuous string with no split points
         let msg = "x".repeat(5000);
         let parts = split_message(&msg);
         assert!(parts.len() >= 2);
@@ -168,11 +280,7 @@ mod tests {
         let part2 = "b".repeat(3000);
         let original = format!("{part1}\n\n{part2}");
         let parts = split_message(&original);
-
-        // Concatenating all parts should reproduce the original
-        // (minus any trimmed whitespace between parts)
         let reconstructed: String = parts.join("");
-        // All content should be present
         assert!(reconstructed.contains(&part1));
         assert!(reconstructed.contains(&part2));
     }

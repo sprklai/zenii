@@ -1,10 +1,12 @@
 use std::sync::Arc;
 
-use tokio::sync::{mpsc, watch};
+use tokio::sync::{broadcast, mpsc, watch};
 use tracing::{info, warn};
 
 #[cfg(feature = "gateway")]
 use crate::gateway::state::AppState;
+
+use crate::ai::adapter::{ToolCallEvent, ToolCallPhase};
 
 use super::format::formatter_for;
 use super::message::ChannelMessage;
@@ -108,8 +110,10 @@ impl ChannelRouter {
     /// Handle a single incoming channel message through the full pipeline.
     async fn handle_message(message: ChannelMessage, state: &Arc<AppState>) {
         let channel_name = message.channel.clone();
-        let sender = message.sender.clone();
         let reply_metadata = message.metadata.clone();
+
+        // Extract chat_id for lifecycle hooks (channels need chat_id, not username)
+        let recipient = reply_metadata.get("chat_id").cloned();
 
         // 1. Resolve or create session
         let session_map = ChannelSessionMap::new(state.session_manager.clone());
@@ -144,70 +148,88 @@ impl ChannelRouter {
 
         // 5. Call lifecycle hook: on_agent_start
         if let Some(channel) = state.channel_registry.get_channel(&channel_name) {
-            channel.on_agent_start(sender.as_deref()).await;
+            channel.on_agent_start(recipient.as_deref()).await;
         }
 
-        // 6. Resolve agent with channel preamble
-        let agent = match crate::ai::resolve_agent(None, state, None, Some(system_context)).await {
-            Ok(a) => a,
-            Err(e) => {
-                warn!("ChannelRouter: failed to resolve agent for {channel_name}: {e}");
-                // Call lifecycle hook: on_agent_complete
-                if let Some(channel) = state.channel_registry.get_channel(&channel_name) {
-                    channel.on_agent_complete(sender.as_deref()).await;
-                }
-                return;
-            }
-        };
+        // 6. Create tool event channel for broadcasting tool calls to lifecycle hooks
+        let (tool_event_tx, mut tool_event_rx) = broadcast::channel::<ToolCallEvent>(32);
 
-        // 7. Build chat history using existing conversion
+        // 7. Resolve agent WITH tool events
+        let agent =
+            match crate::ai::resolve_agent(None, state, Some(tool_event_tx), Some(system_context))
+                .await
+            {
+                Ok(a) => a,
+                Err(e) => {
+                    warn!("ChannelRouter: failed to resolve agent for {channel_name}: {e}");
+                    if let Some(channel) = state.channel_registry.get_channel(&channel_name) {
+                        channel.on_agent_complete(recipient.as_deref()).await;
+                    }
+                    return;
+                }
+            };
+
+        // 8. Spawn tool event listener that forwards events to channel lifecycle hooks
+        let tool_channel_name = channel_name.clone();
+        let tool_recipient = recipient.clone();
+        let tool_registry = state.channel_registry.clone();
+        let tool_listener = tokio::spawn(async move {
+            while let Ok(event) = tool_event_rx.recv().await {
+                if matches!(event.phase, ToolCallPhase::Started { .. })
+                    && let Some(ch) = tool_registry.get_channel(&tool_channel_name)
+                {
+                    ch.on_tool_use(&event.tool_name, tool_recipient.as_deref())
+                        .await;
+                }
+            }
+        });
+
+        // 9. Build chat history using existing conversion
         let history = match state.session_manager.get_messages(&session_id).await {
             Ok(msgs) => {
-                // Take recent messages, exclude the last one (current prompt)
                 let to_convert = if msgs.len() > 1 {
                     &msgs[..msgs.len() - 1]
                 } else {
                     &[]
                 };
-                // Limit to recent 20
                 let start = to_convert.len().saturating_sub(20);
                 crate::ai::context::convert_session_messages(&to_convert[start..])
             }
             Err(_) => vec![],
         };
 
-        // 8. Run agent chat
-        let prompt = &message.content;
-        let chat_history = history;
-
-        let response = match agent.chat(prompt, chat_history).await {
+        // 10. Run agent chat
+        let response = match agent.chat(&message.content, history).await {
             Ok(r) => r,
             Err(e) => {
                 warn!("ChannelRouter: agent chat failed for {channel_name}: {e}");
-                // Call lifecycle hook: on_agent_complete
+                tool_listener.abort();
                 if let Some(channel) = state.channel_registry.get_channel(&channel_name) {
-                    channel.on_agent_complete(sender.as_deref()).await;
+                    channel.on_agent_complete(recipient.as_deref()).await;
                 }
                 return;
             }
         };
 
-        // 9. Call lifecycle hook: on_agent_complete
+        // 11. Abort tool listener (agent done)
+        tool_listener.abort();
+
+        // 12. Call lifecycle hook: on_agent_complete
         if let Some(channel) = state.channel_registry.get_channel(&channel_name) {
-            channel.on_agent_complete(sender.as_deref()).await;
+            channel.on_agent_complete(recipient.as_deref()).await;
         }
 
-        // 10. Store assistant response
+        // 13. Store assistant response
         let _ = state
             .session_manager
             .append_message(&session_id, "assistant", &response)
             .await;
 
-        // 11. Format response for the channel
+        // 14. Format response for the channel
         let formatter = formatter_for(&channel_name);
         let parts = formatter.format(&response);
 
-        // 12. Send formatted response parts
+        // 15. Send formatted response parts
         for part in parts {
             let reply =
                 ChannelMessage::new(&channel_name, &part).with_metadata(reply_metadata.clone());

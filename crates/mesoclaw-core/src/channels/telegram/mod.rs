@@ -9,11 +9,12 @@ use async_trait::async_trait;
 use teloxide::Bot;
 use teloxide::payloads::{GetUpdatesSetters, SendMessageSetters};
 use teloxide::requests::Requester;
-use teloxide::types::{ChatId, ParseMode, UpdateKind};
+use teloxide::types::{ChatId, MessageId, ParseMode, UpdateKind};
 use tokio::sync::{mpsc, watch};
 use tracing::{debug, error, info, warn};
 
 use crate::Result;
+use crate::config::AppConfig;
 use crate::credential::CredentialStore;
 use crate::error::MesoError;
 
@@ -30,25 +31,37 @@ const STATUS_CONNECTED: u8 = 2;
 /// Telegram channel implementation using teloxide.
 pub struct TelegramChannel {
     config: TelegramConfig,
+    app_config: Arc<AppConfig>,
     display_name: String,
     status: AtomicU8,
     credentials: Arc<dyn CredentialStore>,
     bot: tokio::sync::OnceCell<Bot>,
     shutdown_tx: watch::Sender<bool>,
     shutdown_rx: watch::Receiver<bool>,
+    /// Maps chat_id -> status message ID for active agent processing.
+    status_messages: Arc<tokio::sync::Mutex<HashMap<i64, MessageId>>>,
+    /// Maps chat_id -> typing refresh abort handle.
+    typing_handles: Arc<tokio::sync::Mutex<HashMap<i64, tokio::task::JoinHandle<()>>>>,
 }
 
 impl TelegramChannel {
-    pub fn new(config: TelegramConfig, credentials: Arc<dyn CredentialStore>) -> Self {
+    pub fn new(
+        config: TelegramConfig,
+        credentials: Arc<dyn CredentialStore>,
+        app_config: Arc<AppConfig>,
+    ) -> Self {
         let (shutdown_tx, shutdown_rx) = watch::channel(false);
         Self {
             config,
+            app_config,
             display_name: "telegram".to_string(),
             status: AtomicU8::new(STATUS_DISCONNECTED),
             credentials,
             bot: tokio::sync::OnceCell::new(),
             shutdown_tx,
             shutdown_rx,
+            status_messages: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
+            typing_handles: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
         }
     }
 
@@ -328,30 +341,93 @@ impl Channel for TelegramChannel {
     }
 
     async fn on_agent_start(&self, recipient: Option<&str>) {
-        if let Some(bot) = self.bot.get()
-            && let Some(chat_id_str) = recipient
-            && let Ok(chat_id) = chat_id_str.parse::<i64>()
+        let Some(bot) = self.bot.get() else { return };
+        let Some(chat_id_str) = recipient else { return };
+        let Ok(chat_id) = chat_id_str.parse::<i64>() else {
+            return;
+        };
+
+        // 1. Send initial typing action
+        let _ = bot
+            .send_chat_action(ChatId(chat_id), teloxide::types::ChatAction::Typing)
+            .await;
+
+        // 2. Send status message
+        if let Ok(msg) = bot
+            .send_message(ChatId(chat_id), "Processing your request...")
+            .await
         {
-            let _ = bot
-                .send_chat_action(ChatId(chat_id), teloxide::types::ChatAction::Typing)
-                .await;
+            let mut status = self.status_messages.lock().await;
+            status.insert(chat_id, msg.id);
+        }
+
+        // 3. Spawn background typing refresh loop
+        let refresh_secs = self.app_config.telegram_status_refresh_secs;
+        let bot_clone = bot.clone();
+        let status_messages = self.status_messages.clone();
+        let handle = tokio::spawn(async move {
+            let interval = std::time::Duration::from_secs(refresh_secs.into());
+            loop {
+                tokio::time::sleep(interval).await;
+                // Stop if status message was removed (agent completed)
+                let status = status_messages.lock().await;
+                if !status.contains_key(&chat_id) {
+                    break;
+                }
+                drop(status);
+                let _ = bot_clone
+                    .send_chat_action(ChatId(chat_id), teloxide::types::ChatAction::Typing)
+                    .await;
+            }
+        });
+
+        let mut handles = self.typing_handles.lock().await;
+        handles.insert(chat_id, handle);
+    }
+
+    async fn on_tool_use(&self, tool_name: &str, recipient: Option<&str>) {
+        if !self.app_config.telegram_show_tool_status {
+            return;
+        }
+        let Some(bot) = self.bot.get() else { return };
+        let Some(chat_id_str) = recipient else { return };
+        let Ok(chat_id) = chat_id_str.parse::<i64>() else {
+            return;
+        };
+
+        // Edit status message to show current tool
+        let status = self.status_messages.lock().await;
+        if let Some(&msg_id) = status.get(&chat_id) {
+            let text = format!("Running: {tool_name}...");
+            let _ = bot.edit_message_text(ChatId(chat_id), msg_id, text).await;
         }
     }
 
-    async fn on_tool_use(&self, _tool_name: &str, recipient: Option<&str>) {
-        // Refresh typing indicator (expires after ~5s)
-        if let Some(bot) = self.bot.get()
-            && let Some(chat_id_str) = recipient
-            && let Ok(chat_id) = chat_id_str.parse::<i64>()
-        {
-            let _ = bot
-                .send_chat_action(ChatId(chat_id), teloxide::types::ChatAction::Typing)
-                .await;
-        }
-    }
+    async fn on_agent_complete(&self, recipient: Option<&str>) {
+        let Some(bot) = self.bot.get() else { return };
+        let Some(chat_id_str) = recipient else { return };
+        let Ok(chat_id) = chat_id_str.parse::<i64>() else {
+            return;
+        };
 
-    async fn on_agent_complete(&self, _recipient: Option<&str>) {
-        // Typing stops automatically when a message is sent, no-op
+        // 1. Remove from status_messages (stops typing loop)
+        let msg_id = {
+            let mut status = self.status_messages.lock().await;
+            status.remove(&chat_id)
+        };
+
+        // 2. Abort typing refresh handle
+        {
+            let mut handles = self.typing_handles.lock().await;
+            if let Some(handle) = handles.remove(&chat_id) {
+                handle.abort();
+            }
+        }
+
+        // 3. Delete status message
+        if let Some(msg_id) = msg_id {
+            let _ = bot.delete_message(ChatId(chat_id), msg_id).await;
+        }
     }
 }
 
@@ -401,6 +477,10 @@ mod tests {
         Arc::new(InMemoryCredentialStore::new())
     }
 
+    fn test_app_config() -> Arc<AppConfig> {
+        Arc::new(AppConfig::default())
+    }
+
     fn test_config() -> TelegramConfig {
         TelegramConfig {
             allowed_chat_ids: vec![100, 200],
@@ -414,38 +494,39 @@ mod tests {
 
     #[test]
     fn channel_type_telegram() {
-        let ch = TelegramChannel::new(test_config(), test_credentials());
+        let ch = TelegramChannel::new(test_config(), test_credentials(), test_app_config());
         assert_eq!(ch.channel_type(), "telegram");
     }
 
     #[test]
     fn display_name() {
-        let ch = TelegramChannel::new(test_config(), test_credentials()).with_name("my-telegram");
+        let ch = TelegramChannel::new(test_config(), test_credentials(), test_app_config())
+            .with_name("my-telegram");
         assert_eq!(ch.display_name(), "my-telegram");
     }
 
     #[test]
     fn initial_status_disconnected() {
-        let ch = TelegramChannel::new(test_config(), test_credentials());
+        let ch = TelegramChannel::new(test_config(), test_credentials(), test_app_config());
         assert_eq!(ch.status(), ChannelStatus::Disconnected);
     }
 
     #[test]
     fn create_sender() {
-        let ch = TelegramChannel::new(test_config(), test_credentials());
+        let ch = TelegramChannel::new(test_config(), test_credentials(), test_app_config());
         let sender = ch.create_sender();
         assert_eq!(sender.channel_type(), "telegram");
     }
 
     #[test]
     fn allowlist_blocks_unknown() {
-        let ch = TelegramChannel::new(test_config(), test_credentials());
+        let ch = TelegramChannel::new(test_config(), test_credentials(), test_app_config());
         assert!(!ch.is_chat_allowed(999));
     }
 
     #[test]
     fn allowlist_permits_known() {
-        let ch = TelegramChannel::new(test_config(), test_credentials());
+        let ch = TelegramChannel::new(test_config(), test_credentials(), test_app_config());
         assert!(ch.is_chat_allowed(100));
         assert!(ch.is_chat_allowed(200));
     }
@@ -454,7 +535,7 @@ mod tests {
     fn open_policy_allows_all() {
         let mut cfg = test_config();
         cfg.dm_policy = DmPolicy::Open;
-        let ch = TelegramChannel::new(cfg, test_credentials());
+        let ch = TelegramChannel::new(cfg, test_credentials(), test_app_config());
         assert!(ch.is_chat_allowed(999));
         assert!(ch.is_chat_allowed(0));
     }
@@ -463,14 +544,14 @@ mod tests {
     fn disabled_policy_blocks_all() {
         let mut cfg = test_config();
         cfg.dm_policy = DmPolicy::Disabled;
-        let ch = TelegramChannel::new(cfg, test_credentials());
+        let ch = TelegramChannel::new(cfg, test_credentials(), test_app_config());
         assert!(!ch.is_chat_allowed(100)); // even allowed IDs
         assert!(!ch.is_chat_allowed(999));
     }
 
     #[test]
     fn group_mention_filter() {
-        let ch = TelegramChannel::new(test_config(), test_credentials());
+        let ch = TelegramChannel::new(test_config(), test_credentials(), test_app_config());
 
         // DM (positive chat_id) always processed
         assert!(ch.should_process_group_message("hello", 100));
@@ -487,7 +568,7 @@ mod tests {
         // Group without require_group_mention — always allowed
         let mut cfg = test_config();
         cfg.require_group_mention = false;
-        let ch2 = TelegramChannel::new(cfg, test_credentials());
+        let ch2 = TelegramChannel::new(cfg, test_credentials(), test_app_config());
         assert!(ch2.should_process_group_message("hello", -100));
     }
 
@@ -515,28 +596,28 @@ mod tests {
     // 8.8.1 — Telegram on_agent_start does not panic
     #[tokio::test]
     async fn telegram_on_agent_start() {
-        let ch = TelegramChannel::new(test_config(), test_credentials());
+        let ch = TelegramChannel::new(test_config(), test_credentials(), test_app_config());
         ch.on_agent_start(Some("user1")).await;
     }
 
     // 8.8.2 — Telegram on_tool_use does not panic
     #[tokio::test]
     async fn telegram_on_tool_use() {
-        let ch = TelegramChannel::new(test_config(), test_credentials());
+        let ch = TelegramChannel::new(test_config(), test_credentials(), test_app_config());
         ch.on_tool_use("web_search", Some("user1")).await;
     }
 
     // 8.8.3 — Telegram on_agent_complete does not panic
     #[tokio::test]
     async fn telegram_on_agent_complete() {
-        let ch = TelegramChannel::new(test_config(), test_credentials());
+        let ch = TelegramChannel::new(test_config(), test_credentials(), test_app_config());
         ch.on_agent_complete(Some("user1")).await;
     }
 
     // 8.8.4b — Telegram lifecycle hooks work with None recipient
     #[tokio::test]
     async fn telegram_hooks_with_none_recipient() {
-        let ch = TelegramChannel::new(test_config(), test_credentials());
+        let ch = TelegramChannel::new(test_config(), test_credentials(), test_app_config());
         ch.on_agent_start(None).await;
         ch.on_tool_use("shell", None).await;
         ch.on_agent_complete(None).await;
@@ -545,7 +626,7 @@ mod tests {
     // Connect fails without valid token in credential store
     #[tokio::test]
     async fn connect_fails_without_token() {
-        let ch = TelegramChannel::new(test_config(), test_credentials());
+        let ch = TelegramChannel::new(test_config(), test_credentials(), test_app_config());
         let result = ch.connect().await;
         assert!(result.is_err());
         assert_eq!(ch.status(), ChannelStatus::Disconnected);
@@ -554,7 +635,7 @@ mod tests {
     // Send fails without connection
     #[tokio::test]
     async fn send_fails_without_connection() {
-        let ch = TelegramChannel::new(test_config(), test_credentials());
+        let ch = TelegramChannel::new(test_config(), test_credentials(), test_app_config());
         let msg = ChannelMessage::new("telegram", "test");
         let result = ch.send_message(msg).await;
         assert!(result.is_err());
@@ -563,7 +644,7 @@ mod tests {
     // Listen fails without connection
     #[tokio::test]
     async fn listen_fails_without_connection() {
-        let ch = TelegramChannel::new(test_config(), test_credentials());
+        let ch = TelegramChannel::new(test_config(), test_credentials(), test_app_config());
         let (tx, _rx) = mpsc::channel(10);
         let result = ch.listen(tx).await;
         assert!(result.is_err());
@@ -572,7 +653,7 @@ mod tests {
     // Disconnect sends shutdown signal
     #[tokio::test]
     async fn disconnect_sends_shutdown() {
-        let ch = TelegramChannel::new(test_config(), test_credentials());
+        let ch = TelegramChannel::new(test_config(), test_credentials(), test_app_config());
         ch.disconnect().await.unwrap();
         assert_eq!(ch.status(), ChannelStatus::Disconnected);
         assert!(*ch.shutdown_rx.borrow());

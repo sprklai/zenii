@@ -100,8 +100,10 @@ pub fn escape_mrkdwn(text: &str) -> String {
 }
 
 /// Apply all markdown-to-mrkdwn conversions.
+/// Order: escape special chars → code blocks → bold → italic → links.
 pub fn to_mrkdwn(text: &str) -> String {
-    let text = markdown_to_mrkdwn_code_block(text);
+    let text = escape_mrkdwn(text);
+    let text = markdown_to_mrkdwn_code_block(&text);
     let text = markdown_to_mrkdwn_bold(&text);
     let text = markdown_to_mrkdwn_italic(&text);
     markdown_to_mrkdwn_link(&text)

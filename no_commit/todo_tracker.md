@@ -1,13 +1,13 @@
 # MesoClaw TODO Tracker
 
 > Auto-maintained list of all TODO, MOCK, FIX, and STUB items in the codebase.
-> Last updated: 2026-03-08 (Stages 9-15 complete -- all implementation stages done)
+> Last updated: 2026-03-09 (Phase 8.10 Agent Action Tools complete)
 
 ## Summary
 
 | Type | Open | Done | Total |
 |------|------|------|-------|
-| TODO | 10 | 15 | 25 |
+| TODO | 10 | 20 | 30 |
 | STUB | 3 | 11 | 14 |
 | MOCK | 0 | 0 | 0 |
 | FIX | 0 | 0 | 0 |
@@ -48,6 +48,11 @@
 | [x] | TODO | crates/mesoclaw-core/src/gateway/handlers/ws.rs | - | WS /ws/notifications endpoint implemented — push notifications to clients | Stage 8.6.1 |
 | [x] | TODO | web/src/lib/stores/ | - | notifications.svelte.ts implemented — WS notification store + svelte-sonner toasts | Stage 8.6.1 |
 | [x] | TODO | crates/mesoclaw-desktop/ | - | Desktop OS notifications implemented — tauri-plugin-notification with permission request | Stage 8.6.1 |
+| [x] | TODO | crates/mesoclaw-core/src/tools/memory_tool.rs | - | MemoryTool — agent tool for store/recall/forget memory operations | Phase 8.10 |
+| [x] | TODO | crates/mesoclaw-core/src/tools/config_tool.rs | - | ConfigTool — agent tool for get/update config with whitelist enforcement | Phase 8.10 |
+| [x] | TODO | crates/mesoclaw-core/src/tools/channel_tool.rs | - | ChannelSendTool — agent tool for send/list/status channels (feature-gated) | Phase 8.10 |
+| [x] | TODO | crates/mesoclaw-core/src/tools/scheduler_tool.rs | - | SchedulerTool — agent tool for create/list/delete/toggle/history jobs (feature-gated) | Phase 8.10 |
+| [x] | TODO | crates/mesoclaw-core/src/boot.rs | - | Boot registration of 4 agent action tools (memory, config, channel_send, scheduler) | Phase 8.10 |
 
 ## Notes
 
@@ -77,7 +82,8 @@
 - **Stage 13 complete** — API reference (74 routes, 29 error codes, WS protocol), configuration reference (55+ fields)
 - **Stage 14 complete** — Deployment guide, development guide, Dockerfile, docker-compose.yml
 - **Stage 15 complete** — LICENSE (MIT), CONTRIBUTING.md, CODE_OF_CONDUCT.md, SECURITY.md, CHANGELOG.md, issue/PR templates, README badges
-- **All implementation stages complete** — 654 Rust tests passing, 26 JS tests passing, 0 clippy errors
+- **Phase 8.10 complete** — 4 agent action tools (MemoryTool, ConfigTool, ChannelSendTool, SchedulerTool), 24 new tests, boot registration — 806 total workspace tests, 0 clippy warnings
+- **All implementation stages complete** — 806 Rust tests passing, 26 JS tests passing, 0 clippy errors
 - Per "No magic numbers" rule: all tunable values in AppConfig (44+ fields in schema.rs including Phase 8 context, evolution, and channel_tool_policy settings)
 - tests/phase4_agent_tools.md: tests 4.1-4.4 (tool registry) covered by Phase 5, tests 4.5-4.7 (individual tools) covered by Phase 2, tests 4.8-4.12 + M4.1-M4.3 deferred
 - Only remaining work: TUI (FR-1) and Mobile (FR-2) — explicitly deferred to future release

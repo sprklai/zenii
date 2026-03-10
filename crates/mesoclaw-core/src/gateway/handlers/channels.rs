@@ -116,6 +116,7 @@ pub async fn connect_channel(
             Arc::new(crate::channels::telegram::TelegramChannel::new(
                 tg_config,
                 state.credentials.clone(),
+                state.config.clone(),
             ))
         }
         #[cfg(feature = "channels-slack")]
