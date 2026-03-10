@@ -281,15 +281,21 @@ jobs:
         run: cargo install cross --git https://github.com/cross-rs/cross
 
       - name: Build CLI and daemon
-        run: cross build --profile ci-release -p mesoclaw-cli -p mesoclaw-daemon --features channels,channels-telegram,channels-slack,channels-discord,scheduler,web-dashboard --target ${{ matrix.target }}
+        run: cross build --profile ci-release -p mesoclaw-cli -p mesoclaw-daemon --no-default-features --features gateway,ai,channels,channels-telegram,channels-slack,channels-discord,scheduler,web-dashboard --target ${{ matrix.target }}
+
+      - name: Rename binaries with target label
+        run: |
+          mkdir -p target/${{ matrix.target }}/ci-release/labeled
+          cp target/${{ matrix.target }}/ci-release/mesoclaw target/${{ matrix.target }}/ci-release/labeled/mesoclaw-${{ matrix.label }}
+          cp target/${{ matrix.target }}/ci-release/mesoclaw-daemon target/${{ matrix.target }}/ci-release/labeled/mesoclaw-daemon-${{ matrix.label }}
 
       - name: Upload binaries
         uses: actions/upload-artifact@v7
         with:
           name: embedded-${{ matrix.label }}
           path: |
-            target/${{ matrix.target }}/ci-release/mesoclaw
-            target/${{ matrix.target }}/ci-release/mesoclaw-daemon
+            target/${{ matrix.target }}/ci-release/labeled/mesoclaw-${{ matrix.label }}
+            target/${{ matrix.target }}/ci-release/labeled/mesoclaw-daemon-${{ matrix.label }}
 
   release:
     name: Create Release
@@ -316,6 +322,9 @@ jobs:
           find . -type f \( -name "*.deb" -o -name "*.rpm" -o -name "*.AppImage" \
             -o -name "*.dmg" -o -name "*.msi" -o -name "*.exe" \
             -o -name "mesoclaw" -o -name "mesoclaw-daemon" \
+            -o -name "mesoclaw-arm64" -o -name "mesoclaw-daemon-arm64" \
+            -o -name "mesoclaw-armv7" -o -name "mesoclaw-daemon-armv7" \
+            -o -name "mesoclaw-musl" -o -name "mesoclaw-daemon-musl" \
             -o -name "mesoclaw.exe" -o -name "mesoclaw-daemon.exe" \) \
             -exec sha256sum {} \; > ../SHA256SUMS.txt
           cat ../SHA256SUMS.txt
@@ -345,6 +354,12 @@ jobs:
             artifacts/**/*.exe
             artifacts/**/mesoclaw
             artifacts/**/mesoclaw-daemon
+            artifacts/**/mesoclaw-arm64
+            artifacts/**/mesoclaw-daemon-arm64
+            artifacts/**/mesoclaw-armv7
+            artifacts/**/mesoclaw-daemon-armv7
+            artifacts/**/mesoclaw-musl
+            artifacts/**/mesoclaw-daemon-musl
             SHA256SUMS.txt
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
