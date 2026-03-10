@@ -18,6 +18,10 @@ futures = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 clap_complete = "4"
+openssl = { version = "0.10", features = ["vendored"], optional = true }
+
+[features]
+vendored-openssl = ["dep:openssl"]
 
 [lints]
 workspace = true

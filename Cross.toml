@@ -10,5 +10,5 @@ pre-build = [
 
 [target.x86_64-unknown-linux-musl]
 pre-build = [
-    "DEBIAN_FRONTEND=noninteractive apt-get update && apt-get install --assume-yes -o Dpkg::Options::='--force-confdef' -o Dpkg::Options::='--force-confold' libssl-dev pkg-config musl-tools"
+    "DEBIAN_FRONTEND=noninteractive apt-get update && apt-get install --assume-yes -o Dpkg::Options::='--force-confdef' -o Dpkg::Options::='--force-confold' pkg-config musl-tools perl make"
 ]
