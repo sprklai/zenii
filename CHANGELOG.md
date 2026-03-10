@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.7] - 2026-03-10
+
+### Fixed
+- Security hardening: CORS origins, credential exposure, path traversal, shell injection, error sanitization
+- Concurrency hazards: DashMap guard held across await, scheduler double-start race, mutex poisoning (parking_lot)
+- Channel reliability: UTF-8 safe message splitting, atomic registry operations, session caching
+- First-run UX: AuthGate exponential backoff, chat no-model CTA, WebSocket reconnection
+- Config state integrity: ArcSwap for hot-reload, session ordering, frontend config key alignment
+- Settings truthfulness: hide phantom features (Perplexity, SerpAPI, Matrix), verify channel status
+- Svelte 5 compiler warnings eliminated (19 → 0)
+- FTS5 query escaping for special characters
+- Skills registry duplicate key rejection
+- Release pipeline: macOS code signing bypass, Windows timeout, embedded cross-compilation
+
+### Added
+- All-features CI testing (cargo test + clippy with full feature set)
+- CODEOWNERS for automated review assignment
+- Branch protection ruleset for main
+
+### Changed
+- Desktop devtools disabled by default (opt-in via feature flag)
+- CSP tightened with script-src restriction
+- Embedded builds exclude keyring feature (environment-based credentials)
+
 ## [0.0.6] - 2026-03-10
 
 - Fix embedded cross-compilation by adding Cross.toml with OpenSSL pre-build
@@ -17,13 +41,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.0.4] - 2026-03-10
 
-- v0.0.4
+- Initial multi-platform release pipeline (Linux, macOS, Windows, embedded ARM)
 
 ## [0.0.3] - 2026-03-09
 
-- v0.0.3
+- Frontend build fixes and Tauri desktop integration
 
 ## [0.0.2] - 2026-03-09
+
+- Core library stabilization and test infrastructure
 
 ## [0.0.1] - 2026-03-08
 

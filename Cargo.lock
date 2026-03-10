@@ -3689,7 +3689,7 @@ dependencies = [
 
 [[package]]
 name = "mesoclaw-cli"
-version = "0.0.6"
+version = "0.0.7"
 dependencies = [
  "clap",
  "clap_complete",
@@ -3705,7 +3705,7 @@ dependencies = [
 
 [[package]]
 name = "mesoclaw-core"
-version = "0.0.6"
+version = "0.0.7"
 dependencies = [
  "arc-swap",
  "async-trait",
@@ -3751,7 +3751,7 @@ dependencies = [
 
 [[package]]
 name = "mesoclaw-daemon"
-version = "0.0.6"
+version = "0.0.7"
 dependencies = [
  "clap",
  "mesoclaw-core",
@@ -3762,7 +3762,7 @@ dependencies = [
 
 [[package]]
 name = "mesoclaw-desktop"
-version = "0.0.6"
+version = "0.0.7"
 dependencies = [
  "mesoclaw-core",
  "opener",
@@ -3783,7 +3783,7 @@ dependencies = [
 
 [[package]]
 name = "mesoclaw-tui"
-version = "0.0.6"
+version = "0.0.7"
 dependencies = [
  "mesoclaw-core",
  "tokio",
@@ -5886,9 +5886,9 @@ dependencies = [
 
 [[package]]
 name = "schannel"
-version = "0.1.28"
+version = "0.1.29"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "891d81b926048e76efe18581bf793546b4c0eaf8448d72be8de2bbee5fd166e1"
+checksum = "91c1b7e4904c873ef0710c1f407dde2e6287de2bebc1bbbf7d430bb7cbffd939"
 dependencies = [
  "windows-sys 0.61.2",
 ]
