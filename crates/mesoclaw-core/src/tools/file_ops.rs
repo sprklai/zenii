@@ -463,22 +463,41 @@ mod tests {
     #[test]
     fn resolve_path_named_desktop() {
         let resolved = resolve_path("Desktop");
-        // On systems with XDG, this resolves to /home/user/Desktop
-        assert!(resolved.starts_with('/'), "should be absolute: {resolved}");
-        assert!(
-            resolved.contains("Desktop") || resolved.contains("desktop"),
-            "should resolve Desktop: {resolved}"
-        );
+        // On systems with XDG user dirs, resolves to /home/user/Desktop.
+        // In CI or headless environments, UserDirs::new() returns None and
+        // the function correctly falls back to returning the input as-is.
+        if directories::UserDirs::new()
+            .and_then(|u| u.desktop_dir().map(|_| ()))
+            .is_some()
+        {
+            assert!(resolved.starts_with('/'), "should be absolute: {resolved}");
+            assert!(
+                resolved.contains("Desktop") || resolved.contains("desktop"),
+                "should resolve Desktop: {resolved}"
+            );
+        } else {
+            assert_eq!(resolved, "Desktop", "fallback to passthrough: {resolved}");
+        }
     }
 
     #[test]
     fn resolve_path_named_downloads_with_file() {
         let resolved = resolve_path("Downloads/file.txt");
-        assert!(resolved.starts_with('/'), "should be absolute: {resolved}");
-        assert!(
-            resolved.ends_with("/file.txt"),
-            "should keep suffix: {resolved}"
-        );
+        if directories::UserDirs::new()
+            .and_then(|u| u.download_dir().map(|_| ()))
+            .is_some()
+        {
+            assert!(resolved.starts_with('/'), "should be absolute: {resolved}");
+            assert!(
+                resolved.ends_with("/file.txt"),
+                "should keep suffix: {resolved}"
+            );
+        } else {
+            assert_eq!(
+                resolved, "Downloads/file.txt",
+                "fallback to passthrough: {resolved}"
+            );
+        }
     }
 
     #[test]
