@@ -321,6 +321,12 @@ mod tests {
     #[tokio::test]
     async fn scheduler_status() {
         let (_dir, state) = test_state().await;
+
+        // Start the scheduler so is_running() returns true
+        if let Some(ref sched) = state.scheduler {
+            sched.start().await;
+        }
+
         let app = build_router(state);
 
         let req = Request::builder()
