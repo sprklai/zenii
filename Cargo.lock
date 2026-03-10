@@ -3725,6 +3725,7 @@ dependencies = [
  "reqwest 0.13.2",
  "rig-core",
  "rusqlite",
+ "rustls 0.23.37",
  "serde",
  "serde_json",
  "serde_yaml",
