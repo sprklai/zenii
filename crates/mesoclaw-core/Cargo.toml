@@ -52,6 +52,9 @@ teloxide = { workspace = true, optional = true }
 serenity = { workspace = true, optional = true }
 pulldown-cmark = { version = "0.12", optional = true, default-features = false, features = ["html"] }
 
+# Phase 8.11: Local Embeddings (optional)
+fastembed = { workspace = true, optional = true }
+
 # Phase 8: Scheduler (optional)
 cron = { version = "0.15", optional = true }
 
@@ -64,6 +67,7 @@ channels = []
 channels-telegram = ["channels", "dep:teloxide", "dep:pulldown-cmark"]
 channels-slack = ["channels"]
 channels-discord = ["channels", "dep:serenity"]
+local-embeddings = ["dep:fastembed"]
 scheduler = ["dep:cron"]
 keyring = ["dep:keyring"]
 

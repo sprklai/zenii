@@ -121,6 +121,11 @@ pub struct AppConfig {
     pub inbox_sessions_page_size: usize,
     pub inbox_desktop_notifications: bool,
 
+    // Phase 8.11: Embedding Provider
+    pub embedding_provider: String,
+    pub embedding_model: String,
+    pub embedding_download_dir: Option<String>,
+
     // Phase 8: Self-Evolution
     pub self_evolution_enabled: bool,
     pub learning_archive_threshold: f64,
@@ -247,6 +252,11 @@ impl Default for AppConfig {
             inbox_page_size: 50,
             inbox_sessions_page_size: 30,
             inbox_desktop_notifications: true,
+
+            // Embedding Provider
+            embedding_provider: "none".into(),
+            embedding_model: "bge-small-en-v1.5".into(),
+            embedding_download_dir: None,
 
             // Self-Evolution
             self_evolution_enabled: true,
@@ -384,6 +394,21 @@ mod tests {
         assert!((config.learning_archive_threshold - 0.3).abs() < f64::EPSILON);
         assert_eq!(config.learning_archive_after_days, 30);
         assert_eq!(config.skill_proposal_expiry_days, 7);
+    }
+
+    // 18.10 — default embedding_provider is "none"
+    #[test]
+    fn default_embedding_provider_none() {
+        let config = AppConfig::default();
+        assert_eq!(config.embedding_provider, "none");
+    }
+
+    // 18.11 — default embedding_model is "bge-small-en-v1.5"
+    #[test]
+    fn default_embedding_model() {
+        let config = AppConfig::default();
+        assert_eq!(config.embedding_model, "bge-small-en-v1.5");
+        assert!(config.embedding_download_dir.is_none());
     }
 
     // 15.3.42 — config deserializes with new fields

@@ -164,6 +164,27 @@ pub fn build_router(state: Arc<AppState>) -> Router {
             get(handlers::user::get_observation_by_key).delete(handlers::user::delete_observation),
         )
         .route("/user/profile", get(handlers::user::get_user_profile))
+        // Embeddings (Phase 8.11)
+        .route(
+            "/embeddings/status",
+            get(handlers::embeddings::embeddings_status),
+        )
+        .route(
+            "/embeddings/test",
+            post(handlers::embeddings::embeddings_test),
+        )
+        .route(
+            "/embeddings/embed",
+            post(handlers::embeddings::embeddings_embed),
+        )
+        .route(
+            "/embeddings/download",
+            post(handlers::embeddings::embeddings_download),
+        )
+        .route(
+            "/embeddings/reindex",
+            post(handlers::embeddings::embeddings_reindex),
+        )
         // Channel credential test (always available, no feature gate)
         .route(
             "/channels/{name}/test",

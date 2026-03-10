@@ -128,6 +128,9 @@
 		<Button variant="outline" onclick={() => goto('/settings/channels')}>
 			Channels
 		</Button>
+		<Button variant="outline" onclick={() => goto('/settings/embeddings')}>
+			Embeddings
+		</Button>
 	</div>
 
 	{#if configStore.loading}

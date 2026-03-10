@@ -4,6 +4,7 @@ pub mod channels_test;
 pub mod chat;
 pub mod config;
 pub mod credentials;
+pub mod embeddings;
 pub mod health;
 pub mod identity;
 pub mod memory;

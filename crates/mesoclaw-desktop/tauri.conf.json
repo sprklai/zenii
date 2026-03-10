@@ -18,6 +18,7 @@
         "height": 720,
         "minWidth": 800,
         "minHeight": 500,
+        "resizable": true,
         "center": true,
         "visible": true
       }
@@ -46,6 +47,21 @@
       "rpm": {
         "desktopTemplate": "mesoclaw.desktop"
       }
+    },
+      "macOS": {
+      "signingIdentity": "Developer ID Application: NSR Technologies Inc. (6BQSGY2B74)",
+      "entitlements": "./entitlements.plist",
+      "minimumSystemVersion": "10.13",
+      "providerShortName": "6BQSGY2B74",
+      "hardenedRuntime": true
+    },
+    "android": {
+      "minSdkVersion": 24,
+      "versionCode": 1
+    },
+    "iOS": {
+      "developmentTeam": "6BQSGY2B74",
+      "minimumSystemVersion": "13.0"
     }
   }
 }

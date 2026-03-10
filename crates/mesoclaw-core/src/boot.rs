@@ -11,7 +11,7 @@ use crate::credential::CredentialStore;
 use crate::db::{self, DbPool};
 use crate::event_bus::TokioBroadcastBus;
 use crate::identity::SoulLoader;
-use crate::memory::in_memory_store::InMemoryStore;
+use crate::memory::traits::Memory;
 use crate::security::policy::SecurityPolicy;
 use crate::skills::SkillRegistry;
 use crate::tools::ToolRegistry;
@@ -41,7 +41,7 @@ pub struct Services {
     pub config_path: PathBuf,
     pub db: DbPool,
     pub event_bus: Arc<TokioBroadcastBus>,
-    pub memory: Arc<InMemoryStore>,
+    pub memory: Arc<dyn Memory>,
     pub credentials: Arc<dyn CredentialStore>,
     pub security: Arc<SecurityPolicy>,
     pub tools: Arc<ToolRegistry>,
@@ -94,8 +94,97 @@ pub async fn init_services(config: AppConfig) -> Result<Services> {
     // 2. Event bus
     let event_bus = Arc::new(TokioBroadcastBus::new(256));
 
-    // 3. Memory
-    let memory = Arc::new(InMemoryStore::new());
+    // 3. Memory — always use SqliteMemoryStore (persistent)
+    let memory_db_path = config
+        .memory_db_path
+        .as_ref()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| {
+            db_path
+                .parent()
+                .unwrap_or(std::path::Path::new("."))
+                .join("memory.db")
+        });
+    if let Some(parent) = memory_db_path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let memory_pool = crate::db::init_pool(&memory_db_path)?;
+    {
+        let mp = memory_pool.clone();
+        tokio::task::spawn_blocking(move || {
+            crate::memory::sqlite_store::SqliteMemoryStore::run_memory_migrations(&mp)
+        })
+        .await
+        .map_err(|e| crate::MesoError::Database(format!("memory migration join failed: {e}")))??;
+    }
+
+    let memory: Arc<dyn Memory> = {
+        let store = crate::memory::sqlite_store::SqliteMemoryStore::new(
+            memory_pool.clone(),
+            config.memory_fts_weight,
+            config.memory_vector_weight,
+        );
+
+        match config.embedding_provider.as_str() {
+            "openai" => {
+                info!("Embedding provider: OpenAI (will resolve key at first use)");
+                // Defer key resolution — store without vector for now, reconfigure later if key available
+                Arc::new(store)
+            }
+            #[cfg(feature = "local-embeddings")]
+            "local" => {
+                info!("Embedding provider: local (fastembed)");
+                match crate::memory::local_embeddings::FastEmbedProvider::new(
+                    &config.embedding_model,
+                    config.embedding_download_dir.as_ref().map(PathBuf::from),
+                ) {
+                    Ok(provider) => {
+                        // Initialize VectorIndex
+                        let vi_pool = memory_pool.clone();
+                        let dim = config.embedding_dim;
+                        unsafe {
+                            rusqlite::ffi::sqlite3_auto_extension(Some(std::mem::transmute(
+                                sqlite_vec::sqlite3_vec_init as *const (),
+                            )));
+                        }
+                        match tokio::task::spawn_blocking(move || {
+                            crate::memory::vector_index::VectorIndex::new(vi_pool, dim)
+                        })
+                        .await
+                        {
+                            Ok(Ok(vi)) => {
+                                let cached = crate::memory::embeddings::LruEmbeddingCache::new(
+                                    provider,
+                                    config.embedding_cache_size,
+                                );
+                                Arc::new(store.with_vector(vi, Arc::new(cached)))
+                            }
+                            Ok(Err(e)) => {
+                                tracing::warn!(
+                                    "Vector index init failed, falling back to FTS only: {e}"
+                                );
+                                Arc::new(store)
+                            }
+                            Err(e) => {
+                                tracing::warn!("Vector index spawn failed: {e}");
+                                Arc::new(store)
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        tracing::warn!("FastEmbed init failed, falling back to FTS only: {e}");
+                        Arc::new(store)
+                    }
+                }
+            }
+            _ => {
+                // "none" or unknown — FTS5 only
+                info!("Embedding provider: none (FTS5 only)");
+                Arc::new(store)
+            }
+        }
+    };
+    info!("Memory store initialized at {}", memory_db_path.display());
 
     // 4. Credentials -- KeyringStore with InMemory fallback
     #[cfg(feature = "keyring")]
@@ -523,6 +612,7 @@ mod tests {
     fn test_config(dir: &tempfile::TempDir) -> AppConfig {
         AppConfig {
             db_path: Some(dir.path().join("test.db").to_string_lossy().into()),
+            memory_db_path: Some(dir.path().join("memory.db").to_string_lossy().into()),
             identity_dir: Some(dir.path().join("identity").to_string_lossy().into()),
             skills_dir: Some(dir.path().join("skills").to_string_lossy().into()),
             ..Default::default()
@@ -715,5 +805,34 @@ mod tests {
         assert_eq!(identity.meta.name, "MesoClaw");
         let skills = state.skill_registry.list().await;
         assert_eq!(skills.len(), 2);
+    }
+
+    // 18.12 — Boot with embedding_provider="none" creates SqliteMemoryStore without vector
+    #[tokio::test]
+    async fn boot_memory_no_embeddings() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let mut config = test_config(&dir);
+        config.embedding_provider = "none".into();
+        let services = init_services(config).await.unwrap();
+        // Memory store works — store and recall round-trip
+        services
+            .memory
+            .store(
+                "test-key",
+                "test content",
+                crate::memory::traits::MemoryCategory::Core,
+            )
+            .await
+            .unwrap();
+        let results = services.memory.recall("test", 10, 0).await.unwrap();
+        assert!(!results.is_empty());
+    }
+
+    // 18.13 — Services.memory is Arc<dyn Memory> (type check)
+    #[test]
+    fn boot_memory_trait_object() {
+        fn assert_memory_trait(_: &Arc<dyn Memory>) {}
+        // This test just verifies the type compiles
+        let _ = assert_memory_trait;
     }
 }

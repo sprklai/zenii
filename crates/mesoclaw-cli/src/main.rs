@@ -81,6 +81,11 @@ enum Commands {
         #[command(subcommand)]
         action: ScheduleAction,
     },
+    /// Manage embedding provider for semantic memory
+    Embedding {
+        #[command(subcommand)]
+        action: EmbeddingAction,
+    },
     /// View channel conversations and messages
     Channel {
         #[command(subcommand)]
@@ -261,6 +266,25 @@ enum ChannelAction {
 }
 
 #[derive(Subcommand)]
+enum EmbeddingAction {
+    /// Show current embedding provider status
+    Status,
+    /// Activate an embedding provider (local or openai)
+    Activate {
+        /// Provider type: "local" or "openai"
+        provider: String,
+    },
+    /// Deactivate embedding provider (FTS5 only)
+    Deactivate,
+    /// Download local embedding model
+    Download,
+    /// Test embedding provider with sample text
+    Test,
+    /// Re-embed all memories with current provider
+    Reindex,
+}
+
+#[derive(Subcommand)]
 enum ProviderAction {
     /// List all providers with key status
     List,
@@ -376,6 +400,16 @@ async fn main() {
             ScheduleAction::Delete { id } => commands::schedule::delete(&client, &id).await,
             ScheduleAction::History { id } => commands::schedule::history(&client, &id).await,
             ScheduleAction::Status => commands::schedule::status(&client).await,
+        },
+        Commands::Embedding { action } => match action {
+            EmbeddingAction::Status => commands::embedding::status(&client).await,
+            EmbeddingAction::Activate { provider } => {
+                commands::embedding::activate(&client, &provider).await
+            }
+            EmbeddingAction::Deactivate => commands::embedding::deactivate(&client).await,
+            EmbeddingAction::Download => commands::embedding::download(&client).await,
+            EmbeddingAction::Test => commands::embedding::test(&client).await,
+            EmbeddingAction::Reindex => commands::embedding::reindex(&client).await,
         },
         Commands::Channel { action } => match action {
             ChannelAction::List { source } => {
