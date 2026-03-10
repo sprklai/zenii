@@ -281,7 +281,7 @@ jobs:
         run: cargo install cross --git https://github.com/cross-rs/cross
 
       - name: Build CLI and daemon
-        run: cross build --profile ci-release -p mesoclaw-cli -p mesoclaw-daemon --no-default-features --features gateway,ai,channels,channels-telegram,channels-slack,channels-discord,scheduler,web-dashboard --target ${{ matrix.target }}
+        run: cross build --profile ci-release -p mesoclaw-cli -p mesoclaw-daemon --no-default-features --features channels,channels-telegram,channels-slack,channels-discord,scheduler,web-dashboard --target ${{ matrix.target }}
 
       - name: Rename binaries with target label
         run: |
