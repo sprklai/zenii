@@ -401,13 +401,18 @@ impl ContextEngine {
 
         // Environment section (Tier 2 + Tier 1)
         parts.push("## Environment".into());
+        let display_region = self
+            .config
+            .user_location
+            .as_deref()
+            .unwrap_or(&boot_context.region);
         parts.push(format!(
             "OS: {} | Arch: {} | Host: {} | Locale: {} | Region: {}",
             boot_context.os,
             boot_context.arch,
             boot_context.hostname,
             boot_context.locale,
-            boot_context.region,
+            display_region,
         ));
 
         // User environment details
@@ -446,14 +451,24 @@ impl ContextEngine {
         parts.push(self.dynamic_runtime(model_display, session_id));
 
         // User Location section (prominent, before reasoning)
-        let has_location =
-            boot_context.user_location.is_some() || boot_context.user_timezone.is_some();
+        // Read from live config (updated via PUT /config) with boot_context fallback
+        let user_location = self
+            .config
+            .user_location
+            .as_deref()
+            .or(boot_context.user_location.as_deref());
+        let user_timezone = self
+            .config
+            .user_timezone
+            .as_deref()
+            .or(boot_context.user_timezone.as_deref());
+        let has_location = user_location.is_some() || user_timezone.is_some();
         if has_location {
             let mut loc_parts = Vec::new();
-            if let Some(ref loc) = boot_context.user_location {
+            if let Some(loc) = user_location {
                 loc_parts.push(format!("Location: {loc}"));
             }
-            if let Some(ref tz) = boot_context.user_timezone {
+            if let Some(tz) = user_timezone {
                 loc_parts.push(format!("Timezone: {tz}"));
             }
             parts.push("## User Location".into());
@@ -480,7 +495,12 @@ impl ContextEngine {
                  - When a tool returns an error, analyze the error message and adapt your next tool call.\n\
                  - Do NOT describe what you would do — actually call the tools and do it.",
             );
-            if let Some(ref loc) = boot_context.user_location {
+            let reminder_location = self
+                .config
+                .user_location
+                .as_deref()
+                .or(boot_context.user_location.as_deref());
+            if let Some(loc) = reminder_location {
                 protocol.push_str(&format!(
                     "\n\nREMINDER: The user's location is '{loc}'. For ANY location-sensitive query \
                      (weather, news, events, nearby places, time), use this location unless the user \
@@ -758,13 +778,23 @@ impl ContextEngine {
     /// Compose minimal one-liner context.
     pub fn compose_minimal(&self, boot_context: &BootContext, model_display: &str) -> String {
         let now = chrono::Local::now();
-        format!(
+        let loc = self
+            .config
+            .user_location
+            .as_deref()
+            .or(boot_context.user_location.as_deref());
+        let base = format!(
             "MesoClaw — AI assistant | {} | {} {} | {}",
             now.format("%a %b %-d %Y %H:%M %Z"),
             boot_context.os,
             boot_context.arch,
             model_display,
-        )
+        );
+        if let Some(l) = loc {
+            format!("{base} | Location: {l}")
+        } else {
+            base
+        }
     }
 
     /// Compose context with conversation summary for resumed sessions.
