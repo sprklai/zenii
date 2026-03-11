@@ -25,6 +25,7 @@
   - [Stage 13: API & Configuration Reference](#stage-13-api--configuration-reference--complete)
   - [Stage 14: Architecture & Deployment Docs](#stage-14-architecture--deployment-docs--complete)
   - [Stage 15: Community & Open Source Readiness](#stage-15-community--open-source-readiness--complete)
+  - [Post-v0.0.10 Feature Additions](#post-v0010-feature-additions--complete)
 - [Future Release](#future-release)
   - [Stage FR-1: TUI Binary](#stage-fr-1-tui-binary--future-release)
   - [Stage FR-2: Mobile App](#stage-fr-2-mobile-app--future-release)
@@ -154,6 +155,8 @@ gantt
     section Deploy + Community
     Stage 14 - Architecture/Deployment  :done, s14, after s13, 1
     Stage 15 - Community                :done, s15, after s13, 1
+    section Post-Release
+    Post-v0.0.10 Features              :done, post, after p9, 1
     section Future
     FR-1 - TUI Binary                   :milestone, fr1, after s15, 0
     FR-2 - Mobile App                   :milestone, fr2, after s15, 0
@@ -669,10 +672,40 @@ Phase 8 (done) ─────┐
 - Config: `plugins_dir`, `plugin_idle_timeout_secs`, `plugin_max_restart_attempts`, `plugin_execute_timeout_secs`, `plugin_auto_update`
 
 **New modules**: `plugins/manifest.rs`, `plugins/process.rs`, `plugins/registry.rs`, `plugins/adapter.rs`, `plugins/installer.rs`, `gateway/handlers/plugins.rs`, `cli/commands/plugin.rs`
-- **Routes**: 8 new base routes (73 base total, 88 with feature-gated)
+- **Routes**: 8 new base routes (73 base at time of Phase 9 completion)
 - **Tests**: 4 new tests (962 total Rust + 37 JS), zero clippy warnings
 - **Plan**: [plans/phase9_plugin_architecture.md](../plans/phase9_plugin_architecture.md)
 - **Test plan**: [tests/phase9_plugin_architecture.md](../tests/phase9_plugin_architecture.md)
+
+---
+
+### Post-v0.0.10 Feature Additions — `[COMPLETE]`
+
+Three feature commits landed after the v0.0.10 release, adding intelligence and UX improvements without introducing new phases:
+
+**Model Capability Checks + Embedding Availability (38b3d0e)**
+- `ModelInfo.supports_tools` field with DB migration v8 -- prevents tool-calling errors with incompatible models
+- `MesoError::ModelCapability` error variant for graceful rejection
+- Embedding provider availability tracking in provider registry
+- UI improvements to provider and model management pages
+
+**Agent Reasoning Protocol + User Location Context + Onboarding (e2cfc4a)**
+- First-run onboarding flow: `GET /setup/status` endpoint + `SetupDialog.svelte` with browser timezone auto-detection
+- `user_timezone` and `user_location` config fields persisted to `config.toml`
+- Location and timezone injected into agent context via `BootContext` for location-sensitive queries
+- Agent reasoning protocol refinements in context composition
+
+**Context-Driven Auto-Discovery + Self-Evolving Prompts + OpenAPI Docs (31912d3)**
+- `ContextDomain` enum with keyword-based domain detection (Channels/Scheduler/Skills/Tools)
+- Domain-filtered context injection: only relevant agent rules and system state injected per query
+- `AgentSelfTool` (`agent_notes`): agent-writable behavioral rules by category (`general`, `channel`, `scheduling`, `user_preference`, `tool_usage`), stored in `agent_rules` DB table (migration v10), auto-injected into context
+- OpenAPI 3.1 interactive documentation via utoipa + Scalar UI at `/api-docs` (feature-gated `api-docs`)
+- 2 new base routes (`GET /config/file`, `GET /setup/status`), 2 new feature-gated routes (`GET /api-docs`, `GET /api-docs/openapi.json`)
+
+**Totals after post-v0.0.10 additions**:
+- **Routes**: 75 base + 17 feature-gated = 92 total
+- **Tools**: 14 base + 2 feature-gated = 16 total (added `agent_self`)
+- **Tests**: 1046 Rust + 37 JS
 
 ---
 

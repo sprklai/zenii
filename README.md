@@ -49,7 +49,7 @@
 
 <!-- Row 4: Quality & i18n -->
 <p align="center">
-  <img src="https://img.shields.io/badge/tests-1000%20Rust%20%2B%2039%20JS-success?style=flat-square" alt="1000 Rust + 39 JS Tests" />
+  <img src="https://img.shields.io/badge/tests-1046%20Rust%20%2B%2037%20JS-success?style=flat-square" alt="1046 Rust + 37 JS Tests" />
   <img src="https://img.shields.io/badge/i18n-EN-blue?style=flat-square" alt="English" />
 </p>
 
@@ -88,9 +88,9 @@
 | **Language** | Rust | TypeScript | Rust |
 | **Desktop GUI** | Tauri 2 + Svelte 5 | -- | -- |
 | **CLI** | clap | -- | -- |
-| **Headless Daemon** | axum (90 routes) | Node.js | 3.4MB daemon |
+| **Headless Daemon** | axum (92 routes) | Node.js | 3.4MB daemon |
 | **AI Providers** | 18 via rig-core | Multi-model | 22+ |
-| **Built-in Tools** | 15 | 100+ AgentSkills | Tool orchestration |
+| **Built-in Tools** | 16 | 100+ AgentSkills | Tool orchestration |
 | **Plugin System** | JSON-RPC (any language) | AgentSkills | Trait-based adapters |
 | **Memory** | SQLite FTS5 + vectors | File-based | Built-in |
 | **Embeddings** | OpenAI + local FastEmbed | -- | -- |
@@ -101,18 +101,23 @@
 | **Binary Size** | <20MB (native w/ GUI) | Node.js runtime | 3.4MB |
 | **Privacy** | 100% local, zero telemetry | Local, model-agnostic | 100% local |
 | **License** | MIT | Open source | Open source |
-| **Tests** | 1000 Rust + 39 JS | -- | -- |
+| **Tests** | 1046 Rust + 37 JS | -- | -- |
 
 ---
 
 ## Features
 
 - **18 AI providers** via rig-core (OpenAI, Anthropic, Google, Ollama, and more)
-- **Tool calling** with 15 built-in tools (13 base + 2 feature-gated) via DashMap-backed ToolRegistry: websearch, sysinfo, shell, file read/write/list/search, patch, process, learn, skill_proposal, memory, config + feature-gated channel_send, scheduler
+- **Tool calling** with 16 built-in tools (14 base + 2 feature-gated) via DashMap-backed ToolRegistry: websearch, sysinfo, shell, file read/write/list/search, patch, process, learn, skill_proposal, memory, config, agent_self + feature-gated channel_send, scheduler
 - **Plugin system** -- external process plugins via JSON-RPC 2.0 protocol, installable from git or local paths, with automatic tool and skill registration
 - **Autonomous reasoning** -- ReasoningEngine with ContinuationStrategy for multi-step autonomous agent loops
+- **Context-driven auto-discovery** -- keyword-based domain detection (Channels/Scheduler/Skills/Tools) filters context injection and agent rules to only relevant domains per query
+- **Self-evolving agent** -- AgentSelfTool (`agent_notes`) for agent-writable behavioral rules by category, stored in DB and auto-injected into context; SkillProposalTool for human-in-the-loop skill evolution
+- **Model capability validation** -- `supports_tools` pre-check prevents tool-calling errors with incompatible models
 - **Context-aware agent** -- 3-tier adaptive context injection (Full/Minimal/Summary) with hash-based cache invalidation
-- **Self-evolving framework** -- agent learns user preferences and proposes skill changes with human-in-the-loop approval
+- **Onboarding flow** -- first-run SetupDialog with browser timezone auto-detection and user location input, persisted to config
+- **User location awareness** -- timezone and location injected into agent context for location-sensitive queries (weather, events, news)
+- **OpenAPI interactive docs** -- Scalar UI at `/api-docs` + OpenAPI 3.1 JSON spec (feature-gated `api-docs`, built with utoipa)
 - **Streaming responses** via WebSocket
 - **Semantic memory** with SQLite FTS5 + vector embeddings (sqlite-vec), OpenAI and local FastEmbed embedding providers
 - **Soul / Persona system** -- 3 identity files (SOUL/IDENTITY/USER.md) with dynamic prompt composition
@@ -263,6 +268,7 @@ sequenceDiagram
     participant DB as SQLite
     participant Cred as Keyring
     participant AI as AI Providers
+    participant Ctx as Context Engine
     participant Plug as Plugins
     participant GW as Gateway
 
@@ -271,7 +277,8 @@ sequenceDiagram
     App->>DB: Open/create database + migrations
     App->>Cred: Initialize credential store
     App->>AI: Register providers + load API keys
-    App->>AI: Register agent tools
+    App->>AI: Register 14 base + 2 feature-gated agent tools
+    App->>Ctx: Init ContextEngine + BootContext (OS, location, timezone)
     App->>Plug: Scan plugins directory + register tools/skills
     App->>GW: Start axum server (:18981)
 
@@ -335,7 +342,7 @@ mesoclaw/
 │   ├── architecture.md     # Detailed architecture diagrams
 │   ├── phases.md           # Implementation phase details
 │   ├── processes.md        # Process flow diagrams
-│   ├── api-reference.md    # All 90 REST/WS routes
+│   ├── api-reference.md    # All 92 REST/WS routes
 │   ├── configuration.md    # All 60+ config fields
 │   ├── cli-reference.md    # CLI command reference
 │   ├── deployment.md       # Deployment guide
@@ -556,6 +563,8 @@ max_tool_retries = 3
 # agent_max_turns = 20                       # Max tool-calling turns per request
 # agent_max_continuations = 5               # Max autonomous reasoning turns
 # embedding_provider = "none"               # none | openai | local
+# user_timezone = "America/New_York"        # IANA timezone (auto-detected on first run)
+# user_location = "New York, US"            # User location for context-aware queries
 # plugins_dir = "/custom/plugins/path"      # Override default plugins directory
 # plugin_auto_update = false                # Auto-update git-sourced plugins
 ```
@@ -595,14 +604,15 @@ mesoclaw plugin info <name>                  # Show plugin details
 
 Global options: `--host`, `--port`, `--token` (or `MESOCLAW_TOKEN` env var)
 
-## Gateway Routes (73 base + 17 feature-gated = 90 total)
+## Gateway Routes (75 base + 17 feature-gated = 92 total)
 
 | Group | Routes | Description |
 |-------|--------|-------------|
 | Health | `GET /health` | Health check (no auth) |
 | Sessions & Chat | `POST /sessions`, `GET /sessions`, `GET/PUT/DELETE /sessions/{id}`, `POST /sessions/{id}/generate-title`, `GET/POST /sessions/{id}/messages`, `POST /chat` | Chat sessions and messaging |
 | Memory | `POST /memory`, `GET /memory`, `GET/PUT/DELETE /memory/{key}` | Semantic memory CRUD |
-| Config | `GET /config`, `PUT /config` | Configuration management |
+| Config | `GET /config`, `PUT /config`, `GET /config/file` | Configuration management |
+| Setup | `GET /setup/status` | First-run onboarding status |
 | Credentials | `POST/GET /credentials`, `DELETE /credentials/{key}`, `GET /credentials/{key}/value`, `GET /credentials/{key}/exists` | Credential management (keyring) |
 | Providers & Models | `GET/POST /providers`, `GET /providers/with-key-status`, `GET/PUT /providers/default`, `GET/PUT/DELETE /providers/{id}`, `POST /providers/{id}/test`, `POST /providers/{id}/models`, `DELETE /providers/{id}/models/{model_id}`, `GET /models` | Multi-provider AI management |
 | Tools | `GET /tools`, `POST /tools/{name}/execute` | Tool listing and execution |
@@ -613,7 +623,7 @@ Global options: `--host`, `--port`, `--token` (or `MESOCLAW_TOKEN` env var)
 | User | `GET/POST/DELETE /user/observations`, `GET/DELETE /user/observations/{key}`, `GET /user/profile` | User learning + privacy |
 | Embeddings | `GET /embeddings/status`, `POST /embeddings/test`, `POST /embeddings/embed`, `POST /embeddings/download`, `POST /embeddings/reindex` | Semantic memory embedding management |
 | Plugins | `GET /plugins`, `POST /plugins/install`, `GET/DELETE /plugins/{name}`, `PUT /plugins/{name}/toggle`, `POST /plugins/{name}/update`, `GET/PUT /plugins/{name}/config` | Plugin management (install, remove, enable/disable, config) |
-| Channels | `POST /channels/{name}/test` (always), `GET /channels`, `GET /channels/{name}/status`, `POST /channels/{name}/send`, `POST /channels/{name}/connect/disconnect`, `GET /channels/{name}/health`, `POST /channels/{name}/message`, `GET /channels/sessions`, `GET /channels/sessions/{id}/messages` (feature-gated) | Messaging channels |
+| Channels | `POST /channels/{name}/test` (always); `GET /channels`, `GET /channels/{name}/status`, `POST /channels/{name}/send`, `POST /channels/{name}/connect`, `POST /channels/{name}/disconnect`, `GET /channels/{name}/health`, `POST /channels/{name}/message`, `GET /channels/sessions`, `GET /channels/sessions/{id}/messages` (feature-gated) | Messaging channels |
 | Scheduler | `GET/POST /scheduler/jobs`, `PUT /scheduler/jobs/{id}/toggle`, `DELETE /scheduler/jobs/{id}`, `GET /scheduler/jobs/{id}/history`, `GET /scheduler/status` (feature-gated) | Cron job management |
 | WebSocket | `GET /ws/chat`, `GET /ws/notifications` | Streaming chat + notification push |
 | API Docs | `GET /api-docs`, `GET /api-docs/openapi.json` | Interactive Scalar UI + OpenAPI 3.1 spec (feature-gated: `api-docs`) |
@@ -625,7 +635,7 @@ Global options: `--host`, `--port`, `--token` (or `MESOCLAW_TOKEN` env var)
 Detailed documentation lives in the `docs/` directory:
 
 - [CLI Reference](docs/cli-reference.md) -- All commands, options, shell completions, recipes
-- [API Reference](docs/api-reference.md) -- All 90 REST/WS routes with request/response schemas
+- [API Reference](docs/api-reference.md) -- All 92 REST/WS routes with request/response schemas
 - [Configuration](docs/configuration.md) -- All 60+ config.toml fields with types and defaults
 - [Deployment Guide](docs/deployment.md) -- Native, Docker, systemd, Raspberry Pi, reverse proxy
 - [Development Guide](docs/development.md) -- Prerequisites, building, testing, how-to guides

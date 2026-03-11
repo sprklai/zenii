@@ -28,6 +28,11 @@
 - [Semantic Memory and Embeddings](#semantic-memory-and-embeddings-phase-811)
 - [Phase 18 Hardening](#phase-18-hardening)
 - [Plugin Architecture](#plugin-architecture-phase-9)
+- [Context-Driven Auto-Discovery](#context-driven-auto-discovery)
+- [AgentSelfTool](#agentselftool)
+- [OpenAPI Documentation](#openapi-documentation)
+- [Onboarding Flow](#onboarding-flow)
+- [Model Capability Validation](#model-capability-validation)
 - [Concurrency Rules](#concurrency-rules)
 - [Lessons Learned from v1](#lessons-learned-from-v1)
 
@@ -94,7 +99,7 @@ graph TB
     end
 
     subgraph GW["Gateway :18981"]
-        REST["REST<br>73 base + 15 feature-gated"]
+        REST["REST<br>75 base + 17 feature-gated"]
         WS["WebSocket<br>/ws/chat"]
     end
 
@@ -183,9 +188,9 @@ mesoclaw/
 │   │   │   ├── memory/     # Memory trait + SqliteMemoryStore (FTS5 + vectors) + InMemoryStore
 │   │   │   ├── credential/ # CredentialStore trait + KeyringStore + InMemoryCredentialStore
 │   │   │   ├── security/   # SecurityPolicy + AutonomyLevel + rate limiter + audit log
-│   │   │   ├── tools/      # Tool trait + ToolRegistry (DashMap) + 15 tools (13 base + 2 feature-gated)
+│   │   │   ├── tools/      # Tool trait + ToolRegistry (DashMap) + 16 tools (14 base + 2 feature-gated)
 │   │   │   ├── ai/         # AI agent (rig-core), providers, session manager, tool adapter, context engine
-│   │   │   ├── gateway/    # axum HTTP+WS gateway (73 base + 15 feature-gated routes, auth middleware, error mapping, MESO_VALIDATION)
+│   │   │   ├── gateway/    # axum HTTP+WS gateway (75 base + 17 feature-gated routes, auth middleware, error mapping, MESO_VALIDATION)
 │   │   │   ├── identity/   # SoulLoader + PromptComposer + defaults (SOUL/IDENTITY/USER.md)
 │   │   │   ├── skills/     # SkillRegistry + bundled/user skills (markdown + YAML frontmatter)
 │   │   │   ├── user/       # UserLearner + SQLite observations + privacy controls
@@ -741,7 +746,7 @@ graph TB
 
 ## Gateway Routes
 
-All clients communicate via the HTTP+WebSocket gateway at `127.0.0.1:18981`. Routes are grouped by subsystem (73 base + 15 feature-gated = 88 total).
+All clients communicate via the HTTP+WebSocket gateway at `127.0.0.1:18981`. Routes are grouped by subsystem (75 base + 17 feature-gated = 92 total).
 
 ### Health (1 route, no auth)
 
@@ -778,12 +783,19 @@ All clients communicate via the HTTP+WebSocket gateway at `127.0.0.1:18981`. Rou
 | PUT | `/memory/{key}` | Update memory by key |
 | DELETE | `/memory/{key}` | Delete memory by key |
 
-### Configuration (2 routes)
+### Configuration (3 routes)
 
 | Method | Path | Description |
 |---|---|---|
 | GET | `/config` | Get current configuration (auth token redacted) |
 | PUT | `/config` | Update configuration |
+| GET | `/config/file` | Get raw config file content |
+
+### Setup / Onboarding (1 route)
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/setup/status` | Check if first-run setup is needed (missing location/timezone) |
 
 ### Credentials (5 routes)
 
@@ -871,7 +883,7 @@ All clients communicate via the HTTP+WebSocket gateway at `127.0.0.1:18981`. Rou
 | DELETE | `/user/observations` | Clear all observations |
 | GET | `/user/profile` | Get computed user context string |
 
-### Channels (7 routes, 6 feature-gated)
+### Channels (10 routes, 9 feature-gated)
 
 | Method | Path | Feature | Description |
 |---|---|---|---|
@@ -882,6 +894,9 @@ All clients communicate via the HTTP+WebSocket gateway at `127.0.0.1:18981`. Rou
 | POST | `/channels/{name}/connect` | `channels` | Connect channel |
 | POST | `/channels/{name}/disconnect` | `channels` | Disconnect channel |
 | GET | `/channels/{name}/health` | `channels` | Health check |
+| POST | `/channels/{name}/message` | `channels` | Webhook message endpoint |
+| GET | `/channels/sessions` | `channels` | List channel sessions |
+| GET | `/channels/sessions/{id}/messages` | `channels` | List channel session messages |
 
 ### Scheduler (6 routes, feature-gated)
 
@@ -924,11 +939,12 @@ All clients communicate via the HTTP+WebSocket gateway at `127.0.0.1:18981`. Rou
 | `/ws/chat` | always | Streaming chat responses |
 | `/ws/notifications` | `scheduler` | Push scheduler notifications to clients |
 
-### Channel Router (1 route, feature-gated)
+### API Docs (2 routes, feature-gated)
 
 | Method | Path | Feature | Description |
 |---|---|---|---|
-| POST | `/channels/{name}/message` | `channels` | Channel message webhook (ChannelRouter pipeline) |
+| GET | `/api-docs` | `api-docs` | Scalar interactive documentation UI |
+| GET | `/api-docs/openapi.json` | `api-docs` | OpenAPI 3.1 JSON specification |
 
 ## Desktop App Architecture
 
@@ -1169,8 +1185,8 @@ Four new agent-callable tools give the AI agent direct control over system funct
 
 ```mermaid
 graph TD
-    subgraph ToolRegistry["ToolRegistry - 15 tools"]
-        subgraph Base["Base Tools - 13"]
+    subgraph ToolRegistry["ToolRegistry - 16 tools"]
+        subgraph Base["Base Tools - 14"]
             SysInfo[system_info]
             WebSearch[web_search]
             FileR[file_read]
@@ -1184,6 +1200,7 @@ graph TD
             SkillP[skill_proposal]
             MemT[memory]
             ConfigT[config]
+            AgentSelf["agent_notes"]
         end
         subgraph FeatureGated["Feature-Gated - 2"]
             ChanSend["channel_send<br>#40;channels#41;"]
@@ -1331,6 +1348,182 @@ description = "Get weather for a location"
 name = "weather-prompt"
 file = "skills/weather.md"
 ```
+
+## Context-Driven Auto-Discovery
+
+The context engine automatically detects which feature domains are relevant to the user's message and injects only pertinent context and agent rules.
+
+### Domain Detection
+
+```mermaid
+flowchart TD
+    Msg([User message]) --> Detect["detect_relevant_domains#40;message#41;"]
+    Detect --> KW{"Keyword matching"}
+
+    KW -->|telegram, slack, discord,<br>channel, notify, dm| ChDom["ContextDomain::Channels"]
+    KW -->|schedule, remind, cron,<br>timer, recurring, every day| ScDom["ContextDomain::Scheduler"]
+    KW -->|skill, template,<br>prompt, persona| SkDom["ContextDomain::Skills"]
+    KW -->|no match| General["General context only"]
+
+    ChDom --> CatMap["Map to rule categories"]
+    ScDom --> CatMap
+    SkDom --> CatMap
+    General --> CatMap
+
+    CatMap --> Load["Load agent_rules<br>WHERE category IN categories"]
+    Load --> Inject["Inject into preamble<br>under 'Your Learned Rules'"]
+
+    style ChDom fill:#2196F3,color:#fff
+    style ScDom fill:#FF9800,color:#fff
+    style SkDom fill:#4CAF50,color:#fff
+```
+
+### Domain-to-Category Mapping
+
+| Domain | Agent Rule Category |
+|--------|-------------------|
+| Channels | `channel` |
+| Scheduler | `scheduling` |
+| Skills / Tools | `tool_usage` |
+| Always included | `general` |
+
+**Key files**: `ai/context.rs` (`ContextDomain` enum, `detect_relevant_domains()`, `domains_to_rule_categories()`)
+
+---
+
+## AgentSelfTool
+
+The `agent_notes` tool allows the agent to learn, recall, and forget behavioral rules that persist across conversations and get auto-injected into context.
+
+### Data Model
+
+- **Table**: `agent_rules` (DB migration v10)
+- **Schema**: `id`, `content`, `category`, `created_at`, `active`
+- **Categories**: `general`, `channel`, `scheduling`, `user_preference`, `tool_usage`
+
+### Tool Actions
+
+| Action | Description | Required Params |
+|--------|-------------|-----------------|
+| `learn` | Create a new behavioral rule | `content`, optional `category` |
+| `rules` | List active rules | optional `category` filter |
+| `forget` | Soft-delete a rule by ID | `id` |
+
+### Integration
+
+```mermaid
+flowchart LR
+    Agent["Agent calls<br>agent_notes tool"] --> Learn["learn: INSERT rule"]
+    Agent --> Rules["rules: SELECT active"]
+    Agent --> Forget["forget: SET active=0"]
+    Learn --> DB["agent_rules table"]
+    Rules --> DB
+    Forget --> DB
+    DB --> Context["ContextEngine loads<br>rules by category"]
+    Context --> Preamble["Injected into<br>system prompt"]
+```
+
+**Control**: Gated by `self_evolution_enabled` config flag (runtime toggle via `Arc<AtomicBool>`).
+
+**Key file**: `tools/agent_self_tool.rs`
+
+---
+
+## OpenAPI Documentation
+
+Interactive API documentation via Scalar UI, feature-gated behind `api-docs`.
+
+### Stack
+
+- **utoipa** -- OpenAPI 3.1 spec generation from Rust handler annotations
+- **scalar** -- Interactive documentation UI served at `/api-docs`
+- **Feature gate**: `api-docs` (enabled by default in daemon and desktop)
+
+### Endpoints
+
+| Path | Description |
+|------|-------------|
+| `GET /api-docs` | Scalar interactive UI |
+| `GET /api-docs/openapi.json` | Raw OpenAPI 3.1 JSON spec |
+
+### Build
+
+The spec is assembled at runtime from `#[utoipa::path]` annotations on handler functions. Feature-gated handlers (channels, scheduler) are conditionally merged into the spec.
+
+**Key file**: `gateway/openapi.rs`
+
+---
+
+## Onboarding Flow
+
+First-run setup flow that collects user location and timezone for context-aware agent behavior.
+
+```mermaid
+sequenceDiagram
+    participant FE as Frontend (AuthGate)
+    participant GW as Gateway
+    participant Cfg as Config
+
+    FE->>GW: GET /setup/status
+    GW->>Cfg: Check user_location + user_timezone
+    Cfg-->>GW: { needs_setup, missing fields }
+    GW-->>FE: SetupStatus response
+
+    alt needs_setup = true
+        FE->>FE: Show SetupDialog
+        FE->>FE: Auto-detect timezone via Intl.DateTimeFormat
+        FE->>FE: User enters location
+        FE->>GW: PUT /config { user_location, user_timezone }
+        GW->>Cfg: Update config.toml + ArcSwap
+        GW-->>FE: 200 OK
+        FE->>FE: Dismiss dialog
+    else needs_setup = false
+        FE->>FE: Proceed to chat
+    end
+```
+
+### Detection
+
+- **Timezone**: `Intl.DateTimeFormat().resolvedOptions().timeZone` (browser JS API)
+- **Location**: Manual user input (e.g., "Toronto, Canada")
+
+### Config Fields
+
+- `user_timezone: Option<String>` -- IANA format (e.g., "America/New_York")
+- `user_location: Option<String>` -- Human-readable (e.g., "New York, US")
+
+**Key files**: `gateway/handlers/config.rs` (`setup_status`), `web/src/lib/components/SetupDialog.svelte`
+
+---
+
+## Model Capability Validation
+
+Pre-agent-dispatch check that prevents tool-calling errors with incompatible models.
+
+### Flow
+
+```mermaid
+flowchart TD
+    Chat([Chat request]) --> Resolve["Resolve provider + model"]
+    Resolve --> Lookup["Lookup ModelInfo from ProviderRegistry"]
+    Lookup --> Check{"supports_tools?"}
+    Check -->|true| Build["Build agent with tools"]
+    Check -->|false| Error["Return MesoError::ModelCapability<br>HTTP 400"]
+    Lookup -->|model not found| Build
+
+    style Error fill:#F44336,color:#fff
+    style Build fill:#4CAF50,color:#fff
+```
+
+### Data
+
+- **Field**: `ModelInfo.supports_tools: bool` (default `true`)
+- **Storage**: `ai_models.supports_tools` column (DB migration v8)
+- **API**: `POST /providers/{id}/models` accepts `supports_tools` flag
+
+**Key file**: `ai/agent.rs` (capability check in `get_or_build_agent()`)
+
+---
 
 ## Concurrency Rules
 

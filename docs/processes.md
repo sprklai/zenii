@@ -23,6 +23,9 @@
 - [Reasoning Continuation Flow](#reasoning-continuation-flow)
 - [Channel Router Message Pipeline](#channel-router-message-pipeline)
 - [Plugin Lifecycle Flow](#plugin-lifecycle-flow)
+- [Onboarding / First-Run Setup Flow](#onboarding--first-run-setup-flow)
+- [Auto-Discovery Flow](#auto-discovery-flow)
+- [Agent Self-Learning Flow](#agent-self-learning-flow)
 
 ---
 
@@ -83,7 +86,7 @@ sequenceDiagram
     DB->>DB: Run pending migrations
     App->>Cred: Initialize credential store (KeyringStore / InMemoryStore)
     App->>AI: Register providers + load API keys
-    App->>AI: Register 13 base + 2 feature-gated agent tools into ToolRegistry (DashMap)
+    App->>AI: Register 14 base + 2 feature-gated agent tools into ToolRegistry (DashMap)
     App->>App: Load identity (SoulLoader from data_dir/identity/)
     App->>App: Load skills (SkillRegistry from data_dir/skills/)
     App->>App: Init user learner (UserLearner from DB pool)
@@ -739,3 +742,116 @@ sequenceDiagram
     Proc->>Ext: SIGTERM
     Ext-->>Proc: Process exits
 ```
+
+## Onboarding / First-Run Setup Flow
+
+On first launch, the frontend checks if user location and timezone are configured. If not, a setup dialog collects these values for context-aware agent behavior.
+
+```mermaid
+sequenceDiagram
+    participant FE as Frontend (AuthGate)
+    participant SD as SetupDialog
+    participant GW as Gateway
+    participant Cfg as Config (ArcSwap)
+
+    FE->>GW: GET /setup/status
+    GW->>Cfg: Check user_location + user_timezone
+    Cfg-->>GW: SetupStatus
+    GW-->>FE: { needs_setup: bool, missing: [...] }
+
+    alt needs_setup = true
+        FE->>SD: Show SetupDialog
+        SD->>SD: Auto-detect timezone via Intl.DateTimeFormat
+        Note over SD: Browser IANA timezone (e.g., "America/Toronto")
+        SD->>SD: User enters location manually
+        SD->>GW: PUT /config { user_location, user_timezone }
+        GW->>Cfg: Update ArcSwap config + persist TOML
+        GW-->>SD: 200 OK
+        SD->>FE: Dismiss dialog, proceed to chat
+    else needs_setup = false
+        FE->>FE: Proceed directly to chat
+    end
+```
+
+**Config fields**: `user_timezone: Option<String>` (IANA format), `user_location: Option<String>` (human-readable)
+
+**Key files**: `gateway/handlers/config.rs` (`setup_status`), `web/src/lib/components/SetupDialog.svelte`, `web/src/lib/components/AuthGate.svelte`
+
+## Auto-Discovery Flow
+
+The context engine uses keyword matching to detect which feature domains are relevant to the user's message, then loads only pertinent agent rules and expanded context sections.
+
+```mermaid
+flowchart TD
+    Msg([User message arrives]) --> Parse["detect_relevant_domains#40;message#41;"]
+
+    Parse --> KW{"Match keywords<br>case-insensitive"}
+    KW -->|telegram, slack, discord,<br>channel, notify, dm| Ch["Channels domain"]
+    KW -->|schedule, remind, cron,<br>timer, recurring| Sc["Scheduler domain"]
+    KW -->|skill, template,<br>prompt, persona| Sk["Skills domain"]
+
+    Ch --> Map["domains_to_rule_categories#40;#41;"]
+    Sc --> Map
+    Sk --> Map
+    KW -->|no match| Map
+
+    Map --> Cats["Categories: general + matched"]
+    Cats --> Load["SELECT content FROM agent_rules<br>WHERE active=1 AND category IN #40;...#41;"]
+    Load --> Inject["Inject rules under<br>'Your Learned Rules' section"]
+    Inject --> Preamble["Final system prompt"]
+
+    style Ch fill:#2196F3,color:#fff
+    style Sc fill:#FF9800,color:#fff
+    style Sk fill:#4CAF50,color:#fff
+```
+
+**Domain-to-category mapping**:
+- Channels → `"channel"` rules
+- Scheduler → `"scheduling"` rules
+- Skills/Tools → `"tool_usage"` rules
+- Always included → `"general"` rules
+
+**Key file**: `ai/context.rs` (`ContextDomain`, `detect_relevant_domains()`, `domains_to_rule_categories()`)
+
+## Agent Self-Learning Flow
+
+The agent can record behavioral rules during conversations via the `agent_notes` tool. These rules persist in the database and are automatically injected into future conversations based on domain relevance.
+
+```mermaid
+sequenceDiagram
+    participant User as User
+    participant Agent as Agent (during chat)
+    participant AST as AgentSelfTool
+    participant DB as SQLite (agent_rules)
+    participant CE as ContextEngine
+
+    Note over Agent,AST: Learning a new rule
+    Agent->>AST: execute({ action: "learn", content: "...", category: "channel" })
+    AST->>AST: Check self_evolution_enabled
+    AST->>DB: INSERT INTO agent_rules (content, category, active=1)
+    DB-->>AST: rule_id
+    AST-->>Agent: "Learned rule #42"
+
+    Note over Agent,AST: Querying existing rules
+    Agent->>AST: execute({ action: "rules", category: "channel" })
+    AST->>DB: SELECT * FROM agent_rules WHERE active=1 AND category='channel'
+    DB-->>AST: [rule1, rule2, ...]
+    AST-->>Agent: Formatted rule list
+
+    Note over Agent,AST: Forgetting a rule
+    Agent->>AST: execute({ action: "forget", id: 42 })
+    AST->>DB: UPDATE agent_rules SET active=0 WHERE id=42
+    AST-->>Agent: "Forgot rule #42"
+
+    Note over CE,DB: Context injection in future chats
+    CE->>CE: detect_relevant_domains(user_message)
+    CE->>DB: Load rules by matched categories
+    DB-->>CE: Active rules for relevant categories
+    CE->>CE: Inject under "Your Learned Rules" in preamble
+```
+
+**Categories**: `general`, `channel`, `scheduling`, `user_preference`, `tool_usage`
+
+**Control**: Gated by `self_evolution_enabled` config flag (runtime toggle via `Arc<AtomicBool>`)
+
+**Key files**: `tools/agent_self_tool.rs`, `ai/context.rs` (`load_agent_rules()`)
