@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.11] - 2026-03-11
+
+### Added
+- Context-driven auto-discovery with keyword-based domain detection (Channels/Scheduler/Skills/Tools) for filtered context injection
+- AgentSelfTool (`agent_notes`): agent-writable behavioral rules by category, stored in DB, auto-injected into context
+- OpenAPI 3.1 interactive documentation via utoipa + Scalar UI at `/api-docs` (feature-gated `api-docs`)
+- First-run onboarding flow with browser timezone auto-detection and user location input (`GET /setup/status` + SetupDialog)
+- User location and timezone awareness injected into agent context for location-sensitive queries
+- Model capability validation (`supports_tools` pre-check) to prevent tool-calling errors with incompatible models
+- Agent reasoning protocol refinements in context composition
+- Embedding availability tracking in provider registry
+- `GET /config/file` endpoint for raw config file content
+- `GET /setup/status` endpoint for first-run setup detection
+
+### Changed
+- Tool count: 14 base + 2 feature-gated = 16 total (added `agent_self`)
+- Route count: 75 base + 17 feature-gated = 92 total
+
+### Fixed
+- rustfmt formatting issues
+
+### Documentation
+- Updated README, architecture, phases, and processes docs for all post-v0.0.10 features
+- Updated test badge: 1046 Rust + 37 JS
+- Added 5 new architecture sections with Mermaid diagrams
+- Added 3 new process flows (onboarding, auto-discovery, agent self-learning)
+
 ## [0.0.10] - 2026-03-10
 
 ### Fixed

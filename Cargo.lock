@@ -3689,7 +3689,7 @@ dependencies = [
 
 [[package]]
 name = "mesoclaw-cli"
-version = "0.0.10"
+version = "0.0.11"
 dependencies = [
  "clap",
  "clap_complete",
@@ -3706,7 +3706,7 @@ dependencies = [
 
 [[package]]
 name = "mesoclaw-core"
-version = "0.0.10"
+version = "0.0.11"
 dependencies = [
  "arc-swap",
  "async-trait",
@@ -3755,7 +3755,7 @@ dependencies = [
 
 [[package]]
 name = "mesoclaw-daemon"
-version = "0.0.10"
+version = "0.0.11"
 dependencies = [
  "clap",
  "mesoclaw-core",
@@ -3766,7 +3766,7 @@ dependencies = [
 
 [[package]]
 name = "mesoclaw-desktop"
-version = "0.0.10"
+version = "0.0.11"
 dependencies = [
  "mesoclaw-core",
  "opener",
@@ -3787,7 +3787,7 @@ dependencies = [
 
 [[package]]
 name = "mesoclaw-tui"
-version = "0.0.10"
+version = "0.0.11"
 dependencies = [
  "mesoclaw-core",
  "tokio",
@@ -7256,9 +7256,9 @@ dependencies = [
 
 [[package]]
 name = "tempfile"
-version = "3.26.0"
+version = "3.27.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "82a72c767771b47409d2345987fda8628641887d5466101319899796367354a0"
+checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
 dependencies = [
  "fastrand",
  "getrandom 0.4.2",
@@ -9599,9 +9599,9 @@ dependencies = [
 
 [[package]]
 name = "zune-jpeg"
-version = "0.5.12"
+version = "0.5.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "410e9ecef634c709e3831c2cfdb8d9c32164fae1c67496d5b68fff728eec37fe"
+checksum = "ec5f41c76397b7da451efd19915684f727d7e1d516384ca6bd0ec43ec94de23c"
 dependencies = [
  "zune-core",
 ]
