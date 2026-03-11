@@ -1,10 +1,10 @@
 use std::sync::Arc;
 
+use crate::gateway::state::AppState;
 use axum::Json;
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
-use crate::gateway::state::AppState;
 
 /// GET /config — return the current AppConfig with secrets redacted and paths resolved.
 #[cfg_attr(feature = "api-docs", utoipa::path(
@@ -255,7 +255,9 @@ pub async fn get_config_file(
     let content = tokio::fs::read_to_string(&state.config_path)
         .await
         .unwrap_or_else(|_| "# Config file not found or not yet created".into());
-    Ok(Json(serde_json::json!({ "path": path, "content": content })))
+    Ok(Json(
+        serde_json::json!({ "path": path, "content": content }),
+    ))
 }
 
 /// GET /setup/status — return setup completeness for onboarding.
@@ -264,9 +266,7 @@ pub async fn get_config_file(
     security(()),
     responses((status = 200, description = "Setup completeness status", body = Object))
 ))]
-pub async fn setup_status(
-    State(state): State<Arc<AppState>>,
-) -> impl IntoResponse {
+pub async fn setup_status(State(state): State<Arc<AppState>>) -> impl IntoResponse {
     let cfg = state.config.load();
     let mut missing = Vec::new();
     if cfg.user_location.is_none() {

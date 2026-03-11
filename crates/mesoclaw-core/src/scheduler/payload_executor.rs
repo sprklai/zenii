@@ -117,14 +117,7 @@ async fn execute_agent_turn(
         }
     };
 
-    let agent = match crate::ai::resolve_agent(
-        None,
-        state,
-        None,
-        preamble.as_deref(),
-    )
-    .await
-    {
+    let agent = match crate::ai::resolve_agent(None, state, None, preamble.as_deref()).await {
         Ok(a) => a,
         Err(e) => {
             warn!(

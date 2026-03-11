@@ -107,10 +107,7 @@ impl AgentSelfTool {
             return Ok(ToolResult::err("Content cannot be empty".to_string()));
         }
 
-        let category = args["category"]
-            .as_str()
-            .unwrap_or("general")
-            .to_string();
+        let category = args["category"].as_str().unwrap_or("general").to_string();
 
         if !VALID_CATEGORIES.contains(&category.as_str()) {
             return Ok(ToolResult::err(format!(
@@ -415,10 +412,7 @@ mod tests {
     #[tokio::test]
     async fn invalid_action_returns_error() {
         let (_dir, tool) = setup().await;
-        let result = tool
-            .execute(json!({ "action": "invalid" }))
-            .await
-            .unwrap();
+        let result = tool.execute(json!({ "action": "invalid" })).await.unwrap();
         assert!(!result.success);
         assert!(result.output.contains("Unknown action"));
     }

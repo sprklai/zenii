@@ -169,13 +169,11 @@ struct BaseApiDoc;
         handlers::channels::webhook_message,
         handlers::channels::health_check,
     ),
-    components(
-        schemas(
-            handlers::channels::ChannelInfo,
-            handlers::channels::ChannelHealthResponse,
-            handlers::channels::SendMessageRequest,
-        )
-    ),
+    components(schemas(
+        handlers::channels::ChannelInfo,
+        handlers::channels::ChannelHealthResponse,
+        handlers::channels::SendMessageRequest,
+    ))
 )]
 struct ChannelsApiDoc;
 
@@ -191,13 +189,11 @@ struct ChannelsApiDoc;
         handlers::scheduler::job_history,
         handlers::scheduler::scheduler_status,
     ),
-    components(
-        schemas(
-            handlers::scheduler::SchedulerStatusResponse,
-            handlers::scheduler::CreateJobResponse,
-            handlers::scheduler::ToggleResponse,
-        )
-    ),
+    components(schemas(
+        handlers::scheduler::SchedulerStatusResponse,
+        handlers::scheduler::CreateJobResponse,
+        handlers::scheduler::ToggleResponse,
+    ))
 )]
 struct SchedulerApiDoc;
 

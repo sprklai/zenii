@@ -47,8 +47,16 @@ pub fn detect_relevant_domains(user_message: &str) -> HashSet<ContextDomain> {
 
     // Channel-related
     let channel_patterns = [
-        "telegram", "slack", "discord", "channel", "send me", "notify",
-        "message me", "dm ", "chat_id", "contact",
+        "telegram",
+        "slack",
+        "discord",
+        "channel",
+        "send me",
+        "notify",
+        "message me",
+        "dm ",
+        "chat_id",
+        "contact",
     ];
     if channel_patterns.iter().any(|p| msg.contains(p)) {
         domains.insert(ContextDomain::Channels);
@@ -56,8 +64,16 @@ pub fn detect_relevant_domains(user_message: &str) -> HashSet<ContextDomain> {
 
     // Scheduler-related
     let sched_patterns = [
-        "schedule", "remind", "cron", "timer", "alarm", "recurring",
-        "every day", "every hour", "at ", "job",
+        "schedule",
+        "remind",
+        "cron",
+        "timer",
+        "alarm",
+        "recurring",
+        "every day",
+        "every hour",
+        "at ",
+        "job",
     ];
     if sched_patterns.iter().any(|p| msg.contains(p)) {
         domains.insert(ContextDomain::Scheduler);
@@ -430,7 +446,8 @@ impl ContextEngine {
         parts.push(self.dynamic_runtime(model_display, session_id));
 
         // User Location section (prominent, before reasoning)
-        let has_location = boot_context.user_location.is_some() || boot_context.user_timezone.is_some();
+        let has_location =
+            boot_context.user_location.is_some() || boot_context.user_timezone.is_some();
         if has_location {
             let mut loc_parts = Vec::new();
             if let Some(ref loc) = boot_context.user_location {
@@ -461,7 +478,7 @@ impl ContextEngine {
                  - Use ShellTool to discover paths dynamically: `ls`, `echo $HOME`, `find`.\n\
                  - If a file path fails, try common alternatives (~/Desktop, ~/desktop, $XDG_DESKTOP_DIR).\n\
                  - When a tool returns an error, analyze the error message and adapt your next tool call.\n\
-                 - Do NOT describe what you would do — actually call the tools and do it."
+                 - Do NOT describe what you would do — actually call the tools and do it.",
             );
             if let Some(ref loc) = boot_context.user_location {
                 protocol.push_str(&format!(
@@ -516,7 +533,11 @@ impl ContextEngine {
             let relevant_categories = domains_to_rule_categories(&domains);
             let rules = self.load_agent_rules(&relevant_categories).await?;
             if !rules.is_empty() {
-                let rules_str = rules.iter().map(|r| format!("- {r}")).collect::<Vec<_>>().join("\n");
+                let rules_str = rules
+                    .iter()
+                    .map(|r| format!("- {r}"))
+                    .collect::<Vec<_>>()
+                    .join("\n");
                 parts.push(format!("## Your Learned Rules\n{rules_str}"));
             }
         }
@@ -578,10 +599,7 @@ impl ContextEngine {
 
     /// Build expanded context for relevant domains.
     /// This is Tier 2: only injected when the user message triggers specific domains.
-    async fn build_expanded_context(
-        &self,
-        domains: &HashSet<ContextDomain>,
-    ) -> Result<String> {
+    async fn build_expanded_context(&self, domains: &HashSet<ContextDomain>) -> Result<String> {
         let mut sections = Vec::new();
 
         if domains.contains(&ContextDomain::Channels) {
@@ -661,10 +679,7 @@ impl ContextEngine {
 
     /// Query known contacts for a channel from the sessions table.
     /// Uses channel_key column (format: "channel_name:recipient_id").
-    async fn query_channel_contacts(
-        &self,
-        channel_name: &str,
-    ) -> Result<Vec<ChannelContact>> {
+    async fn query_channel_contacts(&self, channel_name: &str) -> Result<Vec<ChannelContact>> {
         let prefix = format!("{}:", channel_name);
         let channel_name_owned = channel_name.to_string();
         let pool = self.db.clone();
@@ -675,18 +690,14 @@ impl ContextEngine {
                  ORDER BY updated_at DESC LIMIT 20",
             )?;
             let rows = stmt.query_map([format!("{prefix}%")], |row| {
-                Ok((
-                    row.get::<_, String>(0)?,
-                    row.get::<_, Option<String>>(1)?,
-                ))
+                Ok((row.get::<_, String>(0)?, row.get::<_, Option<String>>(1)?))
             })?;
             let mut result = Vec::new();
             for row in rows {
                 let (key, title) = row.map_err(crate::MesoError::from)?;
-                let recipient_id =
-                    key.strip_prefix(&prefix).unwrap_or(&key).to_string();
-                let label = title
-                    .unwrap_or_else(|| format!("{}:{}", channel_name_owned, recipient_id));
+                let recipient_id = key.strip_prefix(&prefix).unwrap_or(&key).to_string();
+                let label =
+                    title.unwrap_or_else(|| format!("{}:{}", channel_name_owned, recipient_id));
                 result.push(ChannelContact {
                     recipient_id,
                     label,
@@ -723,16 +734,17 @@ impl ContextEngine {
         let pool = self.db.clone();
         let cats = categories.to_vec();
         db::with_db(&pool, move |conn| {
-            let placeholders: String =
-                cats.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+            let placeholders: String = cats.iter().map(|_| "?").collect::<Vec<_>>().join(",");
             let sql = format!(
                 "SELECT content FROM agent_rules WHERE active = 1 AND category IN ({}) \
                  ORDER BY created_at",
                 placeholders
             );
             let mut stmt = conn.prepare(&sql)?;
-            let params: Vec<&dyn rusqlite::types::ToSql> =
-                cats.iter().map(|c| c as &dyn rusqlite::types::ToSql).collect();
+            let params: Vec<&dyn rusqlite::types::ToSql> = cats
+                .iter()
+                .map(|c| c as &dyn rusqlite::types::ToSql)
+                .collect();
             let rows = stmt.query_map(params.as_slice(), |row| row.get::<_, String>(0))?;
             Ok(rows.filter_map(|r| r.ok()).collect())
         })
@@ -1442,7 +1454,14 @@ mod tests {
         let boot = BootContext::from_system();
 
         let result = engine
-            .compose(&ContextLevel::Full, &boot, "gpt-4o", Some("sess-1"), None, None)
+            .compose(
+                &ContextLevel::Full,
+                &boot,
+                "gpt-4o",
+                Some("sess-1"),
+                None,
+                None,
+            )
             .await
             .unwrap();
         assert!(result.contains("Date:"));
