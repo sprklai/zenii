@@ -257,8 +257,11 @@ impl Channel for DiscordChannel {
             result = client.start() => {
                 if let Err(e) = result {
                     error!("Discord gateway error: {e}");
+                    self.status.store(STATUS_DISCONNECTED, Ordering::SeqCst);
                     return Err(MesoError::Channel(format!("discord gateway error: {e}")));
                 }
+                // client.start() returned Ok — gateway closed gracefully
+                self.status.store(STATUS_DISCONNECTED, Ordering::SeqCst);
             }
             Ok(()) = shutdown_rx.changed() => {
                 if *shutdown_rx.borrow() {

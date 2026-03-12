@@ -299,6 +299,7 @@ impl Channel for SlackChannel {
                     reconnect_attempts += 1;
                     if reconnect_attempts > max_attempts {
                         error!("Slack: max reconnect attempts reached, giving up");
+                        self.status.store(STATUS_DISCONNECTED, Ordering::SeqCst);
                         return Err(e);
                     }
                     warn!("Slack: failed to get WS URL (attempt {reconnect_attempts}): {e}");
@@ -314,6 +315,7 @@ impl Channel for SlackChannel {
                     reconnect_attempts += 1;
                     if reconnect_attempts > max_attempts {
                         error!("Slack: max reconnect attempts reached, giving up");
+                        self.status.store(STATUS_DISCONNECTED, Ordering::SeqCst);
                         return Err(MesoError::Channel(format!("slack: ws connect failed: {e}")));
                     }
                     warn!("Slack: WS connect failed (attempt {reconnect_attempts}): {e}");
@@ -428,6 +430,7 @@ impl Channel for SlackChannel {
             reconnect_attempts += 1;
             if reconnect_attempts > max_attempts {
                 error!("Slack: max reconnect attempts reached, giving up");
+                self.status.store(STATUS_DISCONNECTED, Ordering::SeqCst);
                 return Err(MesoError::Channel(
                     "slack: max reconnect attempts reached".into(),
                 ));

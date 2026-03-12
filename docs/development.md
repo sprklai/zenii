@@ -2,6 +2,8 @@
 
 This document covers setting up a development environment, building from source, running tests, and contributing to MesoClaw.
 
+> **Note**: This document was generated with AI assistance and may contain inaccuracies. If you find errors, please [report an issue](https://github.com/sprklai/mesoclaw/issues).
+
 ## Table of Contents
 
 - [Prerequisites](#prerequisites)

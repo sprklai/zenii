@@ -2,6 +2,8 @@
 
 This document covers deploying MesoClaw in various environments: native binaries, Docker containers, Raspberry Pi, and behind reverse proxies.
 
+> **Note**: This document was generated with AI assistance and may contain inaccuracies. If you find errors, please [report an issue](https://github.com/sprklai/mesoclaw/issues).
+
 ## Table of Contents
 
 - [Native Deployment](#native-deployment)
@@ -201,7 +203,7 @@ docker run -d \
   -v mesoclaw-data:/data \
   -e MESOCLAW_TOKEN=your-secret-token \
   -e RUST_LOG=info \
-  ghcr.io/nsrtech/mesoclaw:latest
+  ghcr.io/sprklai/mesoclaw:latest
 ```
 
 ### Docker Compose
@@ -233,7 +235,7 @@ docker run -d \
   -v /path/to/config.toml:/config/config.toml:ro \
   -v mesoclaw-data:/data \
   -e MESOCLAW_TOKEN=your-secret-token \
-  ghcr.io/nsrtech/mesoclaw:latest \
+  ghcr.io/sprklai/mesoclaw:latest \
   --config /config/config.toml
 ```
 

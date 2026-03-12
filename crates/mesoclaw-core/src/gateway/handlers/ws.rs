@@ -56,6 +56,12 @@ pub(crate) enum WsOutbound {
         content_preview: String,
         role: String,
     },
+    #[serde(rename = "channel_connected")]
+    ChannelConnected { channel: String },
+    #[serde(rename = "channel_disconnected")]
+    ChannelDisconnected { channel: String, reason: String },
+    #[serde(rename = "channel_reconnecting")]
+    ChannelReconnecting { channel: String, attempt: u32 },
     #[serde(rename = "done")]
     Done,
     #[serde(rename = "error")]
@@ -120,6 +126,30 @@ async fn handle_notifications(mut socket: WebSocket, state: Arc<AppState>) {
                             content_preview,
                             role,
                         };
+                        if let Ok(json) = serde_json::to_string(&outbound)
+                            && socket.send(Message::Text(json.into())).await.is_err()
+                        {
+                            break;
+                        }
+                    }
+                    Ok(crate::event_bus::AppEvent::ChannelConnected { channel }) => {
+                        let outbound = WsOutbound::ChannelConnected { channel };
+                        if let Ok(json) = serde_json::to_string(&outbound)
+                            && socket.send(Message::Text(json.into())).await.is_err()
+                        {
+                            break;
+                        }
+                    }
+                    Ok(crate::event_bus::AppEvent::ChannelDisconnected { channel, reason }) => {
+                        let outbound = WsOutbound::ChannelDisconnected { channel, reason };
+                        if let Ok(json) = serde_json::to_string(&outbound)
+                            && socket.send(Message::Text(json.into())).await.is_err()
+                        {
+                            break;
+                        }
+                    }
+                    Ok(crate::event_bus::AppEvent::ChannelReconnecting { channel, attempt }) => {
+                        let outbound = WsOutbound::ChannelReconnecting { channel, attempt };
                         if let Ok(json) = serde_json::to_string(&outbound)
                             && socket.send(Message::Text(json.into())).await.is_err()
                         {
@@ -544,6 +574,43 @@ mod tests {
         assert_eq!(json["session_id"], "sess-abc");
         assert_eq!(json["content_preview"], "Hello there");
         assert_eq!(json["role"], "user");
+    }
+
+    // SUP.5 — WsOutbound::ChannelConnected serializes correctly
+    #[test]
+    fn ws_outbound_channel_connected_serializes() {
+        let msg = WsOutbound::ChannelConnected {
+            channel: "telegram".into(),
+        };
+        let json = serde_json::to_value(&msg).unwrap();
+        assert_eq!(json["type"], "channel_connected");
+        assert_eq!(json["channel"], "telegram");
+    }
+
+    // SUP.6 — WsOutbound::ChannelDisconnected serializes correctly
+    #[test]
+    fn ws_outbound_channel_disconnected_serializes() {
+        let msg = WsOutbound::ChannelDisconnected {
+            channel: "slack".into(),
+            reason: "network error".into(),
+        };
+        let json = serde_json::to_value(&msg).unwrap();
+        assert_eq!(json["type"], "channel_disconnected");
+        assert_eq!(json["channel"], "slack");
+        assert_eq!(json["reason"], "network error");
+    }
+
+    // SUP.7 — WsOutbound::ChannelReconnecting serializes correctly
+    #[test]
+    fn ws_outbound_channel_reconnecting_serializes() {
+        let msg = WsOutbound::ChannelReconnecting {
+            channel: "discord".into(),
+            attempt: 3,
+        };
+        let json = serde_json::to_value(&msg).unwrap();
+        assert_eq!(json["type"], "channel_reconnecting");
+        assert_eq!(json["channel"], "discord");
+        assert_eq!(json["attempt"], 3);
     }
 
     // TV.11 — WsOutbound::Text serializes to {"type":"text","content":"..."}

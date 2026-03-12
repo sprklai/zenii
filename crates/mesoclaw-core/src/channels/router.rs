@@ -3,6 +3,9 @@ use std::sync::Arc;
 use tokio::sync::{mpsc, watch};
 use tracing::{info, warn};
 
+#[cfg(all(feature = "channels", feature = "gateway"))]
+use tracing::error;
+
 #[cfg(feature = "gateway")]
 use crate::gateway::state::AppState;
 
@@ -380,6 +383,89 @@ impl ChannelRouter {
     }
 }
 
+/// Supervisor loop for a channel: catches `listen()` exits, publishes lifecycle events,
+/// applies exponential backoff, and restarts the channel.
+#[cfg(all(feature = "channels", feature = "gateway"))]
+pub async fn supervise_channel(
+    channel: Arc<dyn super::traits::Channel>,
+    tx: mpsc::Sender<super::message::ChannelMessage>,
+    event_bus: Arc<dyn crate::event_bus::EventBus>,
+    config: Arc<crate::config::AppConfig>,
+) {
+    let name = channel.display_name().to_string();
+    let max_restarts = config.channel_supervisor_max_restarts;
+    let min_ms = config.channel_supervisor_backoff_min_ms;
+    let max_ms = config.channel_supervisor_backoff_max_ms;
+    let mut attempt: u32 = 0;
+
+    loop {
+        // Re-connect before each listen cycle if not already connected
+        if channel.status() != super::traits::ChannelStatus::Connected {
+            let _ = event_bus.publish(crate::event_bus::AppEvent::ChannelReconnecting {
+                channel: name.clone(),
+                attempt,
+            });
+            if let Err(e) = channel.connect().await {
+                warn!("Supervisor: {name} reconnect failed: {e}");
+                let delay = supervisor_backoff(attempt, min_ms, max_ms);
+                tokio::time::sleep(delay).await;
+                attempt += 1;
+                if max_restarts > 0 && attempt >= max_restarts {
+                    error!("Supervisor: {name} max restarts ({max_restarts}) reached");
+                    let _ = event_bus.publish(crate::event_bus::AppEvent::ChannelDisconnected {
+                        channel: name.clone(),
+                        reason: "max supervisor restarts reached".into(),
+                    });
+                    break;
+                }
+                continue;
+            }
+        }
+
+        let _ = event_bus.publish(crate::event_bus::AppEvent::ChannelConnected {
+            channel: name.clone(),
+        });
+        info!("Supervisor: {name} listen started (cycle {attempt})");
+
+        let listen_start = std::time::Instant::now();
+
+        // Run listen — blocks until channel dies
+        let result = channel.listen(tx.clone()).await;
+
+        // listen() exited — channel is dead
+        warn!("Supervisor: {name} listen exited: {result:?}");
+        let _ = event_bus.publish(crate::event_bus::AppEvent::ChannelDisconnected {
+            channel: name.clone(),
+            reason: match &result {
+                Ok(()) => "listen returned Ok".into(),
+                Err(e) => e.to_string(),
+            },
+        });
+
+        attempt += 1;
+        if max_restarts > 0 && attempt >= max_restarts {
+            error!("Supervisor: {name} max restarts ({max_restarts}) reached, giving up");
+            break;
+        }
+
+        // If listen ran for > 60s, reset attempt counter (was a successful cycle)
+        if listen_start.elapsed() > std::time::Duration::from_secs(60) {
+            attempt = 1;
+        }
+
+        let delay = supervisor_backoff(attempt, min_ms, max_ms);
+        info!("Supervisor: {name} restarting in {}s", delay.as_secs());
+        tokio::time::sleep(delay).await;
+    }
+}
+
+/// Exponential backoff clamped to [min_ms, max_ms].
+#[cfg(all(feature = "channels", feature = "gateway"))]
+fn supervisor_backoff(attempt: u32, min_ms: u64, max_ms: u64) -> std::time::Duration {
+    let delay_ms = min_ms.saturating_mul(2u64.saturating_pow(attempt));
+    std::time::Duration::from_millis(delay_ms.min(max_ms))
+}
+
 /// Channel-specific system context strings injected via preamble_override.
 pub fn channel_system_context(channel_name: &str) -> &'static str {
     match channel_name {
@@ -399,6 +485,43 @@ pub fn channel_system_context(channel_name: &str) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // SUP.1 — supervisor_backoff starts at min_ms
+    #[cfg(all(feature = "channels", feature = "gateway"))]
+    #[test]
+    fn supervisor_backoff_starts_at_min() {
+        let delay = supervisor_backoff(0, 5000, 300_000);
+        assert_eq!(delay.as_millis(), 5000);
+    }
+
+    // SUP.2 — supervisor_backoff doubles each attempt
+    #[cfg(all(feature = "channels", feature = "gateway"))]
+    #[test]
+    fn supervisor_backoff_doubles() {
+        let d0 = supervisor_backoff(0, 5000, 300_000);
+        let d1 = supervisor_backoff(1, 5000, 300_000);
+        let d2 = supervisor_backoff(2, 5000, 300_000);
+        assert_eq!(d0.as_millis(), 5000);
+        assert_eq!(d1.as_millis(), 10000);
+        assert_eq!(d2.as_millis(), 20000);
+    }
+
+    // SUP.3 — supervisor_backoff clamps to max_ms
+    #[cfg(all(feature = "channels", feature = "gateway"))]
+    #[test]
+    fn supervisor_backoff_clamps_at_max() {
+        let delay = supervisor_backoff(20, 5000, 300_000);
+        assert_eq!(delay.as_millis(), 300_000);
+    }
+
+    // SUP.4 — supervisor_backoff handles overflow gracefully
+    #[cfg(all(feature = "channels", feature = "gateway"))]
+    #[test]
+    fn supervisor_backoff_overflow_safe() {
+        let delay = supervisor_backoff(u32::MAX, 5000, 300_000);
+        // Should not panic, should clamp to max
+        assert!(delay.as_millis() <= 300_000);
+    }
 
     // 8.7.1 — ChannelRouter can be created
     #[cfg(all(feature = "channels", feature = "gateway"))]

@@ -208,17 +208,16 @@ pub async fn connect_channel(
     if let Err(e) = channel.connect().await {
         tracing::warn!("Channel {name} connect failed: {e}");
     } else {
-        // Spawn listen task after successful connect
+        // Spawn supervised listen task after successful connect
         #[cfg(feature = "gateway")]
         if let Some(ref router) = state.channel_router {
             let tx = router.sender();
             let ch = channel.clone();
-            let ch_name = name.clone();
-            tokio::spawn(async move {
-                if let Err(e) = ch.listen(tx).await {
-                    tracing::error!("Channel {ch_name} listen failed: {e}");
-                }
-            });
+            let event_bus = state.event_bus.clone();
+            let config = state.config.load_full();
+            tokio::spawn(crate::channels::router::supervise_channel(
+                ch, tx, event_bus, config,
+            ));
         }
     }
 

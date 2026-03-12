@@ -47,6 +47,10 @@ pub enum AppEvent {
         channel: String,
         reason: String,
     },
+    ChannelReconnecting {
+        channel: String,
+        attempt: u32,
+    },
     ChannelMessageReceived {
         channel: String,
         sender: String,
@@ -298,6 +302,38 @@ mod tests {
         assert!(
             matches!(back, AppEvent::ChannelMessageReceived { channel, role, .. }
                 if channel == "slack" && role == "assistant")
+        );
+    }
+
+    // SUP.10 — ChannelReconnecting event round-trip
+    #[tokio::test]
+    async fn channel_reconnecting_event() {
+        let bus = TokioBroadcastBus::new(16);
+        let mut rx = bus.subscribe();
+
+        bus.publish(AppEvent::ChannelReconnecting {
+            channel: "telegram".into(),
+            attempt: 3,
+        })
+        .unwrap();
+
+        let event = rx.recv().await.unwrap();
+        assert!(
+            matches!(event, AppEvent::ChannelReconnecting { channel, attempt } if channel == "telegram" && attempt == 3)
+        );
+    }
+
+    // SUP.11 — ChannelReconnecting JSON serde round-trip
+    #[test]
+    fn channel_reconnecting_event_serde() {
+        let event = AppEvent::ChannelReconnecting {
+            channel: "slack".into(),
+            attempt: 5,
+        };
+        let json = serde_json::to_string(&event).unwrap();
+        let back: AppEvent = serde_json::from_str(&json).unwrap();
+        assert!(
+            matches!(back, AppEvent::ChannelReconnecting { channel, attempt } if channel == "slack" && attempt == 5)
         );
     }
 

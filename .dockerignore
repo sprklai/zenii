@@ -1,0 +1,8 @@
+target/
+web/
+.git/
+docs/
+plans/
+tests/
+no_commit/
+*.md

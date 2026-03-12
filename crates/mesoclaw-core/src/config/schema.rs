@@ -81,6 +81,11 @@ pub struct AppConfig {
     pub channel_router_buffer_size: usize,
     pub channel_reconnect_max_attempts: u32,
 
+    // Channel Supervisor
+    pub channel_supervisor_max_restarts: u32,
+    pub channel_supervisor_backoff_min_ms: u64,
+    pub channel_supervisor_backoff_max_ms: u64,
+
     // Phase 4: User Learning
     pub learning_enabled: bool,
     pub learning_denied_categories: Vec<String>,
@@ -229,6 +234,11 @@ impl Default for AppConfig {
             discord_allowed_channel_ids: vec![],
             channel_router_buffer_size: 256,
             channel_reconnect_max_attempts: 10,
+
+            // Channel Supervisor
+            channel_supervisor_max_restarts: 0, // 0 = infinite
+            channel_supervisor_backoff_min_ms: 5_000,
+            channel_supervisor_backoff_max_ms: 300_000,
 
             // User Learning
             learning_enabled: true,
@@ -525,6 +535,29 @@ mod tests {
         let config = AppConfig::default();
         assert!(!config.context_summary_model.is_empty());
         assert_eq!(config.context_summary_model, "gpt-4o-mini");
+    }
+
+    // SUP.8 — supervisor config defaults
+    #[test]
+    fn supervisor_config_defaults() {
+        let config = AppConfig::default();
+        assert_eq!(config.channel_supervisor_max_restarts, 0); // infinite
+        assert_eq!(config.channel_supervisor_backoff_min_ms, 5_000);
+        assert_eq!(config.channel_supervisor_backoff_max_ms, 300_000);
+    }
+
+    // SUP.9 — supervisor config from TOML
+    #[test]
+    fn supervisor_config_from_toml() {
+        let toml_str = r#"
+            channel_supervisor_max_restarts = 5
+            channel_supervisor_backoff_min_ms = 2000
+            channel_supervisor_backoff_max_ms = 60000
+        "#;
+        let config: AppConfig = toml::from_str(toml_str).unwrap();
+        assert_eq!(config.channel_supervisor_max_restarts, 5);
+        assert_eq!(config.channel_supervisor_backoff_min_ms, 2000);
+        assert_eq!(config.channel_supervisor_backoff_max_ms, 60000);
     }
 
     // WS-3.6b — learning_min_confidence clamped to [0.0, 1.0]

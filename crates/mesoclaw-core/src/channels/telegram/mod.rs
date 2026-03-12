@@ -347,7 +347,10 @@ impl Channel for TelegramChannel {
                             if attempt_count >= max_attempts {
                                 error!("Telegram: max reconnect attempts ({max_attempts}) reached, giving up");
                                 self.status.store(STATUS_DISCONNECTED, Ordering::SeqCst);
-                                break;
+                                self.listening.store(false, Ordering::SeqCst);
+                                return Err(MesoError::Channel(
+                                    "telegram: max reconnect attempts reached".into(),
+                                ));
                             }
 
                             // Retry with exponential backoff based on attempt count

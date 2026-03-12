@@ -1,4 +1,522 @@
-fn main() {
-    // STUB: TUI binary — implement ratatui interface in Phase 9
-    println!("mesoclaw-tui: not yet implemented");
+#[allow(dead_code)]
+mod app;
+#[allow(dead_code)]
+mod client;
+#[allow(dead_code)]
+mod event;
+mod handler;
+#[allow(dead_code)]
+mod markdown;
+#[allow(dead_code)]
+mod theme;
+mod ui;
+
+use std::io::{self, Stdout};
+use std::time::Duration;
+
+use clap::Parser;
+use crossterm::event::EnableMouseCapture;
+use crossterm::terminal::{
+    EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
+};
+use futures::{SinkExt, StreamExt};
+use ratatui::Terminal;
+use ratatui::backend::CrosstermBackend;
+use tokio_tungstenite::tungstenite;
+use tracing::{error, info, warn};
+
+use crate::app::{App, ChatMessage, ChatStatus, ConnectionStatus, SessionSummary, ToolEvent};
+use crate::client::MesoClient;
+use crate::event::{AppEvent, EventHandler, WsInbound};
+
+#[derive(Parser)]
+#[command(name = "mesoclaw-tui", about = "MesoClaw Terminal UI")]
+struct Args {
+    #[arg(long, default_value = "127.0.0.1", env = "MESOCLAW_HOST")]
+    host: String,
+
+    #[arg(long, default_value = "18981", env = "MESOCLAW_PORT")]
+    port: u16,
+
+    #[arg(long, env = "MESOCLAW_TOKEN")]
+    token: Option<String>,
+}
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let args = Args::parse();
+
+    // Set up tracing to file (not terminal, since we own the terminal)
+    tracing_subscriber::fmt()
+        .with_writer(|| {
+            std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open("/tmp/mesoclaw-tui.log")
+                .unwrap_or_else(|_| {
+                    #[allow(clippy::expect_used)]
+                    std::fs::File::create("/dev/null").expect("open /dev/null")
+                })
+        })
+        .with_env_filter("mesoclaw_tui=debug")
+        .init();
+
+    // Set panic hook to restore terminal
+    let original_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |panic_info| {
+        let _ = restore_terminal(&mut io::stdout());
+        original_hook(panic_info);
+    }));
+
+    let mut terminal = setup_terminal()?;
+    let client = MesoClient::new(&args.host, args.port, args.token);
+
+    let result = run_app(&mut terminal, &client).await;
+
+    restore_terminal(&mut io::stdout())?;
+
+    if let Err(e) = result {
+        eprintln!("Error: {e}");
+        std::process::exit(1);
+    }
+
+    Ok(())
+}
+
+fn setup_terminal() -> Result<Terminal<CrosstermBackend<Stdout>>, io::Error> {
+    enable_raw_mode()?;
+    let mut stdout = io::stdout();
+    crossterm::execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
+    let backend = CrosstermBackend::new(stdout);
+    Terminal::new(backend)
+}
+
+fn restore_terminal(stdout: &mut Stdout) -> Result<(), io::Error> {
+    disable_raw_mode()?;
+    crossterm::execute!(
+        stdout,
+        LeaveAlternateScreen,
+        crossterm::event::DisableMouseCapture
+    )?;
+    Ok(())
+}
+
+async fn run_app(
+    terminal: &mut Terminal<CrosstermBackend<Stdout>>,
+    client: &MesoClient,
+) -> Result<(), String> {
+    let mut app = App::new();
+
+    // Health check
+    match client.health().await {
+        Ok(true) => {
+            app.connection_status = ConnectionStatus::Connected;
+            info!("Connected to gateway");
+        }
+        Ok(false) | Err(_) => {
+            app.connection_status = ConnectionStatus::Disconnected;
+            warn!("Gateway not available");
+        }
+    }
+
+    // Load initial data
+    load_sessions(&mut app, client).await;
+    load_default_model(&mut app, client).await;
+
+    // Set up event handler with WS sender
+    let (mut events, ws_tx) = EventHandler::new_with_ws_sender(Duration::from_millis(250));
+
+    // Connect WebSocket for streaming
+    spawn_ws_reader(client, ws_tx.clone());
+
+    // Main loop
+    loop {
+        terminal
+            .draw(|f| ui::render(f, &app))
+            .map_err(|e| e.to_string())?;
+
+        let Some(event) = events.next().await else {
+            break;
+        };
+
+        match event {
+            AppEvent::Key(key) => {
+                let prev_notification = app.notification_text.take();
+                handler::handle_key_event(&mut app, key);
+
+                // Handle action signals from the handler
+                if let Some(ref signal) = app.notification_text {
+                    match signal.as_str() {
+                        "__create_session__" => {
+                            app.notification_text = None;
+                            create_session(&mut app, client).await;
+                        }
+                        "__send_message__" => {
+                            app.notification_text = None;
+                            send_message(&mut app, client, &ws_tx).await;
+                        }
+                        _ => {}
+                    }
+                }
+
+                // Handle delete confirmation
+                if app.confirm_delete {
+                    // Waiting for 'y' confirmation — notification already set
+                } else if prev_notification
+                    .as_deref()
+                    .is_some_and(|t| t == "Delete session? (y/n)")
+                {
+                    // 'y' was pressed (confirm_delete was just set to false after processing)
+                    delete_session(&mut app, client).await;
+                }
+
+                // Handle refresh signal
+                if app
+                    .notification_text
+                    .as_deref()
+                    .is_some_and(|t| t == "Refreshing...")
+                {
+                    load_sessions(&mut app, client).await;
+                    let sid = app.current_session_id.clone();
+                    if let Some(sid) = sid {
+                        load_messages(&mut app, client, &sid).await;
+                    }
+                    app.notification_text = Some("Refreshed".into());
+                }
+
+                // Load messages when entering chat mode
+                if app.mode == app::AppMode::Chat
+                    && app.current_session_id.is_none()
+                    && let Some(idx) = app.selected_session
+                    && let Some(session) = app.sessions.get(idx)
+                {
+                    let sid = session.id.clone();
+                    load_messages(&mut app, client, &sid).await;
+                    app.current_session_id = Some(sid);
+                }
+            }
+            AppEvent::Resize(_, _) => {
+                // Terminal handles redraw automatically
+            }
+            AppEvent::Tick => {
+                // Clear transient notifications
+                if app
+                    .notification_text
+                    .as_deref()
+                    .is_some_and(|t| !t.starts_with("__") && t != "Delete session? (y/n)")
+                {
+                    // Keep for one more tick, then clear
+                }
+            }
+            AppEvent::WsMessage(msg) => {
+                handle_ws_message(&mut app, msg);
+            }
+        }
+
+        if app.should_quit {
+            break;
+        }
+    }
+
+    Ok(())
+}
+
+fn handle_ws_message(app: &mut App, msg: WsInbound) {
+    match msg {
+        WsInbound::Text { content } => {
+            app.append_streaming_text(&content);
+        }
+        WsInbound::ToolCall {
+            tool_name, args, ..
+        } => {
+            app.tool_events.push(ToolEvent {
+                tool_name,
+                args: args.to_string(),
+                output: None,
+                success: None,
+                duration_ms: None,
+            });
+        }
+        WsInbound::ToolResult {
+            tool_name,
+            output,
+            success,
+            duration_ms,
+            ..
+        } => {
+            // Update the last matching tool event
+            if let Some(evt) = app
+                .tool_events
+                .iter_mut()
+                .rev()
+                .find(|e| e.tool_name == tool_name && e.output.is_none())
+            {
+                evt.output = Some(output);
+                evt.success = Some(success);
+                evt.duration_ms = Some(duration_ms);
+            }
+        }
+        WsInbound::Done => {
+            app.flush_streaming_buffer();
+        }
+        WsInbound::Error { error } => {
+            app.chat_status = ChatStatus::Error(error);
+            app.streaming_buffer.clear();
+        }
+    }
+}
+
+async fn load_sessions(app: &mut App, client: &MesoClient) {
+    match client.list_sessions().await {
+        Ok(sessions) => {
+            app.sessions = sessions
+                .into_iter()
+                .map(|v| SessionSummary {
+                    id: v["id"].as_str().unwrap_or("").to_string(),
+                    title: v["title"].as_str().unwrap_or("Untitled").to_string(),
+                    updated_at: v["updated_at"].as_str().unwrap_or("").to_string(),
+                    message_count: v["message_count"].as_i64().unwrap_or(0),
+                })
+                .collect();
+            if !app.sessions.is_empty() && app.selected_session.is_none() {
+                app.selected_session = Some(0);
+            }
+        }
+        Err(e) => {
+            warn!("Failed to load sessions: {e}");
+        }
+    }
+}
+
+async fn load_default_model(app: &mut App, client: &MesoClient) {
+    if let Ok(model) = client.get_default_model().await {
+        app.current_model = model;
+    }
+}
+
+async fn load_messages(app: &mut App, client: &MesoClient, session_id: &str) {
+    match client.get_messages(session_id).await {
+        Ok(messages) => {
+            app.messages = messages
+                .into_iter()
+                .map(|v| ChatMessage {
+                    role: v["role"].as_str().unwrap_or("user").to_string(),
+                    content: v["content"].as_str().unwrap_or("").to_string(),
+                    timestamp: v["created_at"].as_str().unwrap_or("").to_string(),
+                    tool_calls: v["tool_calls"]
+                        .as_array()
+                        .map(|calls| {
+                            calls
+                                .iter()
+                                .map(|c| ToolEvent {
+                                    tool_name: c["tool_name"].as_str().unwrap_or("").to_string(),
+                                    args: c["args"].to_string(),
+                                    output: c["output"].as_str().map(|s| s.to_string()),
+                                    success: c["success"].as_bool(),
+                                    duration_ms: c["duration_ms"].as_u64(),
+                                })
+                                .collect()
+                        })
+                        .unwrap_or_default(),
+                })
+                .collect();
+            app.scroll_offset = usize::MAX; // scroll to bottom
+        }
+        Err(e) => {
+            warn!("Failed to load messages: {e}");
+        }
+    }
+}
+
+async fn create_session(app: &mut App, client: &MesoClient) {
+    match client.create_session().await {
+        Ok(session) => {
+            let id = session["id"].as_str().unwrap_or("").to_string();
+            let title = session["title"]
+                .as_str()
+                .unwrap_or("New Session")
+                .to_string();
+            app.sessions.insert(
+                0,
+                SessionSummary {
+                    id: id.clone(),
+                    title,
+                    updated_at: String::new(),
+                    message_count: 0,
+                },
+            );
+            app.selected_session = Some(0);
+            app.current_session_id = Some(id);
+            app.messages.clear();
+            app.enter_chat_mode();
+            app.notification_text = Some("Session created".into());
+        }
+        Err(e) => {
+            app.notification_text = Some(format!("Error: {e}"));
+        }
+    }
+}
+
+async fn delete_session(app: &mut App, client: &MesoClient) {
+    let Some(idx) = app.selected_session else {
+        return;
+    };
+    let Some(session) = app.sessions.get(idx) else {
+        return;
+    };
+    let sid = session.id.clone();
+
+    match client.delete_session(&sid).await {
+        Ok(()) => {
+            app.sessions.remove(idx);
+            if app.current_session_id.as_deref() == Some(&sid) {
+                app.current_session_id = None;
+                app.messages.clear();
+            }
+            if app.sessions.is_empty() {
+                app.selected_session = None;
+            } else {
+                app.selected_session = Some(idx.min(app.sessions.len() - 1));
+            }
+            app.notification_text = Some("Session deleted".into());
+        }
+        Err(e) => {
+            app.notification_text = Some(format!("Delete failed: {e}"));
+        }
+    }
+}
+
+async fn send_message(
+    app: &mut App,
+    client: &MesoClient,
+    ws_tx: &tokio::sync::mpsc::UnboundedSender<AppEvent>,
+) {
+    let content = app.input.take_content();
+    if content.trim().is_empty() {
+        app.chat_status = ChatStatus::Idle;
+        return;
+    }
+
+    // Ensure we have a session
+    if app.current_session_id.is_none() {
+        match client.create_session().await {
+            Ok(session) => {
+                let id = session["id"].as_str().unwrap_or("").to_string();
+                let title = session["title"]
+                    .as_str()
+                    .unwrap_or("New Session")
+                    .to_string();
+                app.sessions.insert(
+                    0,
+                    SessionSummary {
+                        id: id.clone(),
+                        title,
+                        updated_at: String::new(),
+                        message_count: 0,
+                    },
+                );
+                app.selected_session = Some(0);
+                app.current_session_id = Some(id);
+            }
+            Err(e) => {
+                app.chat_status = ChatStatus::Error(format!("Failed to create session: {e}"));
+                return;
+            }
+        }
+    }
+
+    let Some(session_id) = app.current_session_id.clone() else {
+        app.chat_status = ChatStatus::Error("No session selected".into());
+        return;
+    };
+
+    // Store user message via REST
+    let _ = client.send_user_message(&session_id, &content).await;
+
+    // Add to local display
+    app.messages.push(ChatMessage {
+        role: "user".to_string(),
+        content: content.clone(),
+        timestamp: String::new(),
+        tool_calls: vec![],
+    });
+    app.scroll_offset = usize::MAX;
+
+    // Send via WebSocket for streaming response
+    let ws_url = client.ws_chat_url();
+    let auth = client.auth_header_value();
+    let prompt = content;
+    let sid = session_id;
+    let tx = ws_tx.clone();
+
+    tokio::spawn(async move {
+        let mut request =
+            match tungstenite::client::IntoClientRequest::into_client_request(ws_url.as_str()) {
+                Ok(r) => r,
+                Err(e) => {
+                    error!("Invalid WS URL: {e}");
+                    let _ = tx.send(AppEvent::WsMessage(WsInbound::Error {
+                        error: format!("Invalid WS URL: {e}"),
+                    }));
+                    return;
+                }
+            };
+
+        if let Some(auth_val) = auth
+            && let Ok(val) = auth_val.parse()
+        {
+            request.headers_mut().insert("authorization", val);
+        }
+
+        let ws = match tokio_tungstenite::connect_async(request).await {
+            Ok((ws, _)) => ws,
+            Err(e) => {
+                let _ = tx.send(AppEvent::WsMessage(WsInbound::Error {
+                    error: format!("WS connect failed: {e}"),
+                }));
+                return;
+            }
+        };
+
+        let (mut write, mut read) = ws.split();
+
+        let msg = serde_json::json!({
+            "prompt": prompt,
+            "session_id": sid,
+        });
+
+        if let Err(e) = write
+            .send(tungstenite::Message::Text(msg.to_string().into()))
+            .await
+        {
+            let _ = tx.send(AppEvent::WsMessage(WsInbound::Error {
+                error: format!("WS send failed: {e}"),
+            }));
+            return;
+        }
+
+        while let Some(msg_result) = read.next().await {
+            match msg_result {
+                Ok(tungstenite::Message::Text(text)) => {
+                    if let Ok(inbound) = serde_json::from_str::<WsInbound>(&text) {
+                        let is_done = matches!(inbound, WsInbound::Done | WsInbound::Error { .. });
+                        let _ = tx.send(AppEvent::WsMessage(inbound));
+                        if is_done {
+                            break;
+                        }
+                    }
+                }
+                Ok(tungstenite::Message::Close(_)) | Err(_) => {
+                    let _ = tx.send(AppEvent::WsMessage(WsInbound::Done));
+                    break;
+                }
+                _ => {}
+            }
+        }
+    });
+}
+
+fn spawn_ws_reader(_client: &MesoClient, _ws_tx: tokio::sync::mpsc::UnboundedSender<AppEvent>) {
+    // WebSocket connections are per-message (see send_message).
+    // A persistent notification WS can be added here later.
 }

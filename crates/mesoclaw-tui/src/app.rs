@@ -1,0 +1,488 @@
+use crate::theme::Theme;
+
+/// Focus mode / which pane is active.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AppMode {
+    SessionList,
+    Chat,
+    Input,
+    Help,
+}
+
+/// Chat streaming status.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ChatStatus {
+    Idle,
+    Composing,
+    Streaming,
+    Error(String),
+}
+
+/// Connection to gateway.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ConnectionStatus {
+    Connected,
+    Disconnected,
+    Reconnecting,
+}
+
+/// Minimal session info for the sidebar.
+#[derive(Debug, Clone)]
+pub struct SessionSummary {
+    pub id: String,
+    pub title: String,
+    pub updated_at: String,
+    pub message_count: i64,
+}
+
+/// A chat message for display.
+#[derive(Debug, Clone)]
+pub struct ChatMessage {
+    pub role: String,
+    pub content: String,
+    pub timestamp: String,
+    pub tool_calls: Vec<ToolEvent>,
+}
+
+/// Tool call event for display.
+#[derive(Debug, Clone)]
+pub struct ToolEvent {
+    pub tool_name: String,
+    pub args: String,
+    pub output: Option<String>,
+    pub success: Option<bool>,
+    pub duration_ms: Option<u64>,
+}
+
+/// Multi-line text input state.
+#[derive(Debug, Clone)]
+pub struct TextInput {
+    pub content: String,
+    pub cursor_pos: usize,
+    pub history: Vec<String>,
+    pub history_index: Option<usize>,
+}
+
+impl TextInput {
+    pub fn new() -> Self {
+        Self {
+            content: String::new(),
+            cursor_pos: 0,
+            history: Vec::new(),
+            history_index: None,
+        }
+    }
+
+    pub fn insert(&mut self, ch: char) {
+        let byte_pos = self
+            .content
+            .char_indices()
+            .nth(self.cursor_pos)
+            .map(|(i, _)| i)
+            .unwrap_or(self.content.len());
+        self.content.insert(byte_pos, ch);
+        self.cursor_pos += 1;
+    }
+
+    pub fn delete_back(&mut self) {
+        if self.cursor_pos > 0 {
+            self.cursor_pos -= 1;
+            let byte_pos = self
+                .content
+                .char_indices()
+                .nth(self.cursor_pos)
+                .map(|(i, _)| i)
+                .unwrap_or(self.content.len());
+            self.content.remove(byte_pos);
+        }
+    }
+
+    pub fn move_left(&mut self) {
+        if self.cursor_pos > 0 {
+            self.cursor_pos -= 1;
+        }
+    }
+
+    pub fn move_right(&mut self) {
+        let char_count = self.content.chars().count();
+        if self.cursor_pos < char_count {
+            self.cursor_pos += 1;
+        }
+    }
+
+    pub fn move_home(&mut self) {
+        self.cursor_pos = 0;
+    }
+
+    pub fn move_end(&mut self) {
+        self.cursor_pos = self.content.chars().count();
+    }
+
+    pub fn clear(&mut self) {
+        self.content.clear();
+        self.cursor_pos = 0;
+    }
+
+    pub fn delete_word_backward(&mut self) {
+        if self.cursor_pos == 0 {
+            return;
+        }
+        let chars: Vec<char> = self.content.chars().collect();
+        let mut new_pos = self.cursor_pos;
+        // Skip whitespace
+        while new_pos > 0 && chars[new_pos - 1].is_whitespace() {
+            new_pos -= 1;
+        }
+        // Skip word chars
+        while new_pos > 0 && !chars[new_pos - 1].is_whitespace() {
+            new_pos -= 1;
+        }
+        let start_byte = chars[..new_pos].iter().map(|c| c.len_utf8()).sum::<usize>();
+        let end_byte = chars[..self.cursor_pos]
+            .iter()
+            .map(|c| c.len_utf8())
+            .sum::<usize>();
+        self.content.replace_range(start_byte..end_byte, "");
+        self.cursor_pos = new_pos;
+    }
+
+    pub fn take_content(&mut self) -> String {
+        let text = self.content.clone();
+        if !text.is_empty() {
+            self.history.push(text.clone());
+        }
+        self.clear();
+        self.history_index = None;
+        text
+    }
+
+    pub fn history_up(&mut self) {
+        if self.history.is_empty() {
+            return;
+        }
+        let idx = match self.history_index {
+            None => self.history.len() - 1,
+            Some(0) => return,
+            Some(i) => i - 1,
+        };
+        self.history_index = Some(idx);
+        self.content = self.history[idx].clone();
+        self.cursor_pos = self.content.chars().count();
+    }
+
+    pub fn history_down(&mut self) {
+        let idx = match self.history_index {
+            None => return,
+            Some(i) => i + 1,
+        };
+        if idx >= self.history.len() {
+            self.history_index = None;
+            self.clear();
+        } else {
+            self.history_index = Some(idx);
+            self.content = self.history[idx].clone();
+            self.cursor_pos = self.content.chars().count();
+        }
+    }
+}
+
+/// Top-level application state.
+pub struct App {
+    pub mode: AppMode,
+    pub previous_mode: AppMode,
+    pub sessions: Vec<SessionSummary>,
+    pub selected_session: Option<usize>,
+    pub messages: Vec<ChatMessage>,
+    pub input: TextInput,
+    pub scroll_offset: usize,
+    pub chat_status: ChatStatus,
+    pub connection_status: ConnectionStatus,
+    pub current_model: String,
+    pub show_help: bool,
+    pub should_quit: bool,
+    pub streaming_buffer: String,
+    pub tool_events: Vec<ToolEvent>,
+    pub notification_text: Option<String>,
+    pub theme: Theme,
+    pub current_session_id: Option<String>,
+    pub confirm_delete: bool,
+}
+
+impl App {
+    pub fn new() -> Self {
+        Self {
+            mode: AppMode::SessionList,
+            previous_mode: AppMode::SessionList,
+            sessions: Vec::new(),
+            selected_session: None,
+            messages: Vec::new(),
+            input: TextInput::new(),
+            scroll_offset: 0,
+            chat_status: ChatStatus::Idle,
+            connection_status: ConnectionStatus::Disconnected,
+            current_model: "unknown".to_string(),
+            show_help: false,
+            should_quit: false,
+            streaming_buffer: String::new(),
+            tool_events: Vec::new(),
+            notification_text: None,
+            theme: Theme::default(),
+            current_session_id: None,
+            confirm_delete: false,
+        }
+    }
+
+    pub fn select_next_session(&mut self) {
+        if self.sessions.is_empty() {
+            return;
+        }
+        self.selected_session = Some(match self.selected_session {
+            None => 0,
+            Some(i) => (i + 1).min(self.sessions.len() - 1),
+        });
+    }
+
+    pub fn select_prev_session(&mut self) {
+        if self.sessions.is_empty() {
+            return;
+        }
+        self.selected_session = Some(match self.selected_session {
+            None => 0,
+            Some(0) => 0,
+            Some(i) => i - 1,
+        });
+    }
+
+    pub fn select_first_session(&mut self) {
+        if !self.sessions.is_empty() {
+            self.selected_session = Some(0);
+        }
+    }
+
+    pub fn select_last_session(&mut self) {
+        if !self.sessions.is_empty() {
+            self.selected_session = Some(self.sessions.len() - 1);
+        }
+    }
+
+    pub fn scroll_up(&mut self) {
+        self.scroll_offset = self.scroll_offset.saturating_sub(1);
+    }
+
+    pub fn scroll_down(&mut self) {
+        self.scroll_offset += 1;
+    }
+
+    pub fn scroll_to_top(&mut self) {
+        self.scroll_offset = 0;
+    }
+
+    pub fn scroll_to_bottom(&mut self) {
+        // Will be clamped during rendering
+        self.scroll_offset = usize::MAX;
+    }
+
+    pub fn scroll_page_up(&mut self, page_size: usize) {
+        self.scroll_offset = self.scroll_offset.saturating_sub(page_size);
+    }
+
+    pub fn scroll_page_down(&mut self, page_size: usize) {
+        self.scroll_offset += page_size;
+    }
+
+    pub fn toggle_help(&mut self) {
+        if self.show_help {
+            self.show_help = false;
+            self.mode = self.previous_mode;
+        } else {
+            self.previous_mode = self.mode;
+            self.show_help = true;
+            self.mode = AppMode::Help;
+        }
+    }
+
+    pub fn enter_chat_mode(&mut self) {
+        self.mode = AppMode::Chat;
+        self.scroll_offset = usize::MAX; // scroll to bottom
+    }
+
+    pub fn enter_input_mode(&mut self) {
+        self.mode = AppMode::Input;
+        self.chat_status = ChatStatus::Composing;
+    }
+
+    pub fn exit_input_mode(&mut self) {
+        self.mode = AppMode::Chat;
+        if self.chat_status == ChatStatus::Composing {
+            self.chat_status = ChatStatus::Idle;
+        }
+    }
+
+    pub fn enter_session_list_mode(&mut self) {
+        self.mode = AppMode::SessionList;
+    }
+
+    /// Append streaming text.
+    pub fn append_streaming_text(&mut self, content: &str) {
+        self.streaming_buffer.push_str(content);
+    }
+
+    /// Flush streaming buffer into a new assistant message.
+    pub fn flush_streaming_buffer(&mut self) {
+        if !self.streaming_buffer.is_empty() {
+            self.messages.push(ChatMessage {
+                role: "assistant".to_string(),
+                content: std::mem::take(&mut self.streaming_buffer),
+                timestamp: String::new(),
+                tool_calls: std::mem::take(&mut self.tool_events),
+            });
+        }
+        self.chat_status = ChatStatus::Idle;
+        self.scroll_offset = usize::MAX;
+    }
+
+    /// Clamp scroll offset to valid range given total rendered lines.
+    pub fn clamp_scroll(&mut self, total_lines: usize, visible_lines: usize) {
+        if total_lines <= visible_lines {
+            self.scroll_offset = 0;
+        } else {
+            let max = total_lines - visible_lines;
+            if self.scroll_offset > max {
+                self.scroll_offset = max;
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn app_initializes_in_session_list_mode() {
+        let app = App::new();
+        assert_eq!(app.mode, AppMode::SessionList);
+        assert!(!app.should_quit);
+        assert_eq!(app.chat_status, ChatStatus::Idle);
+        assert_eq!(app.connection_status, ConnectionStatus::Disconnected);
+    }
+
+    #[test]
+    fn transition_session_list_to_chat() {
+        let mut app = App::new();
+        app.sessions.push(SessionSummary {
+            id: "s1".into(),
+            title: "Test".into(),
+            updated_at: "2026-01-01".into(),
+            message_count: 0,
+        });
+        app.selected_session = Some(0);
+        app.enter_chat_mode();
+        assert_eq!(app.mode, AppMode::Chat);
+    }
+
+    #[test]
+    fn transition_chat_to_input() {
+        let mut app = App::new();
+        app.mode = AppMode::Chat;
+        app.enter_input_mode();
+        assert_eq!(app.mode, AppMode::Input);
+        assert_eq!(app.chat_status, ChatStatus::Composing);
+    }
+
+    #[test]
+    fn transition_input_to_chat() {
+        let mut app = App::new();
+        app.mode = AppMode::Input;
+        app.chat_status = ChatStatus::Composing;
+        app.exit_input_mode();
+        assert_eq!(app.mode, AppMode::Chat);
+        assert_eq!(app.chat_status, ChatStatus::Idle);
+    }
+
+    #[test]
+    fn transition_chat_to_session_list() {
+        let mut app = App::new();
+        app.mode = AppMode::Chat;
+        app.enter_session_list_mode();
+        assert_eq!(app.mode, AppMode::SessionList);
+    }
+
+    #[test]
+    fn toggle_help_overlay() {
+        let mut app = App::new();
+        assert!(!app.show_help);
+        app.toggle_help();
+        assert!(app.show_help);
+        assert_eq!(app.mode, AppMode::Help);
+        app.toggle_help();
+        assert!(!app.show_help);
+        assert_eq!(app.mode, AppMode::SessionList);
+    }
+
+    #[test]
+    fn quit_sets_flag() {
+        let mut app = App::new();
+        app.should_quit = true;
+        assert!(app.should_quit);
+    }
+
+    #[test]
+    fn session_selection_wraps() {
+        let mut app = App::new();
+        for i in 0..3 {
+            app.sessions.push(SessionSummary {
+                id: format!("s{i}"),
+                title: format!("Session {i}"),
+                updated_at: String::new(),
+                message_count: 0,
+            });
+        }
+        app.selected_session = Some(2);
+        app.select_next_session();
+        assert_eq!(app.selected_session, Some(2)); // clamped at max
+
+        app.selected_session = Some(0);
+        app.select_prev_session();
+        assert_eq!(app.selected_session, Some(0)); // clamped at min
+    }
+
+    #[test]
+    fn scroll_offset_clamps() {
+        let mut app = App::new();
+        app.scroll_offset = 100;
+        app.clamp_scroll(10, 20);
+        assert_eq!(app.scroll_offset, 0); // total < visible
+
+        app.scroll_offset = 100;
+        app.clamp_scroll(30, 10);
+        assert_eq!(app.scroll_offset, 20); // clamped to max
+    }
+
+    #[test]
+    fn streaming_buffer_appends() {
+        let mut app = App::new();
+        app.append_streaming_text("hello ");
+        app.append_streaming_text("world");
+        assert_eq!(app.streaming_buffer, "hello world");
+    }
+
+    #[test]
+    fn done_flushes_buffer() {
+        let mut app = App::new();
+        app.chat_status = ChatStatus::Streaming;
+        app.append_streaming_text("response text");
+        app.flush_streaming_buffer();
+        assert!(app.streaming_buffer.is_empty());
+        assert_eq!(app.messages.len(), 1);
+        assert_eq!(app.messages[0].content, "response text");
+        assert_eq!(app.chat_status, ChatStatus::Idle);
+    }
+
+    #[test]
+    fn error_sets_status() {
+        let mut app = App::new();
+        app.chat_status = ChatStatus::Error("oops".into());
+        assert_eq!(app.chat_status, ChatStatus::Error("oops".into()));
+    }
+}

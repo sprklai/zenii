@@ -1,5 +1,7 @@
 # MesoClaw API Reference
 
+> **Note**: This document was generated with AI assistance and may contain inaccuracies. If you find errors, please [report an issue](https://github.com/sprklai/mesoclaw/issues).
+
 ## Table of Contents
 
 - [Overview](#overview)
