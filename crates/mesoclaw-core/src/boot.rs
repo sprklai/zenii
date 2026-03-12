@@ -168,9 +168,9 @@ pub async fn init_services(config: AppConfig) -> Result<Services> {
                                 *const (),
                                 unsafe extern "C" fn(
                                     *mut rusqlite::ffi::sqlite3,
-                                    *mut *mut i8,
+                                    *mut *mut std::ffi::c_char,
                                     *const rusqlite::ffi::sqlite3_api_routines,
-                                ) -> i32,
+                                ) -> std::ffi::c_int,
                             >(
                                 sqlite_vec::sqlite3_vec_init as *const (),
                             )));
