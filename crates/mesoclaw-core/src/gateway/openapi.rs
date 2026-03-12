@@ -351,6 +351,7 @@ mod tests {
             channel_router: base_state.channel_router.clone(),
             #[cfg(feature = "scheduler")]
             scheduler: base_state.scheduler.clone(),
+            notification_router: None,
             embedding_model_available: base_state.embedding_model_available.clone(),
         });
 

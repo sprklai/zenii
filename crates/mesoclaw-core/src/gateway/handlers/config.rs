@@ -222,6 +222,21 @@ pub async fn update_config(
         {
             config.discord_allowed_channel_ids = v.iter().filter_map(|x| x.as_u64()).collect();
         }
+        // Notification routing
+        if let Some(v) = obj.get("notification_routing") {
+            match serde_json::from_value::<crate::notification::routing::NotificationRouting>(
+                v.clone(),
+            ) {
+                Ok(routing) => {
+                    config.notification_routing = routing;
+                }
+                Err(e) => {
+                    return Err(crate::MesoError::Validation(format!(
+                        "invalid notification_routing: {e}"
+                    )));
+                }
+            }
+        }
     }
 
     // Validate before saving
@@ -331,6 +346,7 @@ mod tests {
             channel_router: base_state.channel_router.clone(),
             #[cfg(feature = "scheduler")]
             scheduler: base_state.scheduler.clone(),
+            notification_router: None,
             embedding_model_available: base_state.embedding_model_available.clone(),
         });
         (dir, state)
@@ -380,6 +396,79 @@ mod tests {
             json["gateway_auth_token"].is_null(),
             "gateway_auth_token should be redacted to null"
         );
+    }
+
+    // 8.12.18 — PUT /config with notification_routing persists and returns success
+    #[tokio::test]
+    async fn update_notification_routing() {
+        let (_dir, state) = test_state().await;
+        let app = app(state);
+
+        let req = Request::builder()
+            .method("PUT")
+            .uri("/config")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                serde_json::to_string(&serde_json::json!({
+                    "notification_routing": {
+                        "scheduler_notification": ["toast", "telegram"],
+                        "scheduler_job_completed": ["desktop"],
+                        "channel_message": ["toast"]
+                    }
+                }))
+                .unwrap(),
+            ))
+            .unwrap();
+
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+    }
+
+    // 8.12.19 — PUT /config with invalid notification_routing is rejected
+    #[tokio::test]
+    async fn update_notification_routing_invalid() {
+        let (_dir, state) = test_state().await;
+        let app = app(state);
+
+        let req = Request::builder()
+            .method("PUT")
+            .uri("/config")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                serde_json::to_string(&serde_json::json!({
+                    "notification_routing": {
+                        "scheduler_notification": ["invalid_target"]
+                    }
+                }))
+                .unwrap(),
+            ))
+            .unwrap();
+
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+    }
+
+    // 8.12.20 — GET /config returns notification_routing field
+    #[tokio::test]
+    async fn get_config_includes_routing() {
+        let (_dir, state) = test_state().await;
+        let app = app(state);
+
+        let req = Request::builder()
+            .uri("/config")
+            .body(Body::empty())
+            .unwrap();
+
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        let body = axum::body::to_bytes(resp.into_body(), 16384).await.unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert!(json.get("notification_routing").is_some());
+        let routing = &json["notification_routing"];
+        assert!(routing.get("scheduler_notification").is_some());
+        assert!(routing.get("scheduler_job_completed").is_some());
+        assert!(routing.get("channel_message").is_some());
     }
 
     #[tokio::test]

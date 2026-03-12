@@ -2,6 +2,8 @@ use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
+use crate::notification::routing::NotificationRouting;
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(default)]
 pub struct AppConfig {
@@ -143,6 +145,9 @@ pub struct AppConfig {
     pub plugin_max_restart_attempts: u32,
     pub plugin_execute_timeout_secs: u64,
     pub plugin_auto_update: bool,
+
+    // Phase 8.12: Notification Routing
+    pub notification_routing: NotificationRouting,
 
     // Phase 8: Self-Evolution
     pub self_evolution_enabled: bool,
@@ -295,6 +300,9 @@ impl Default for AppConfig {
             plugin_max_restart_attempts: 3,
             plugin_execute_timeout_secs: 60,
             plugin_auto_update: false,
+
+            // Notification Routing
+            notification_routing: NotificationRouting::default(),
 
             // Self-Evolution
             self_evolution_enabled: true,
@@ -558,6 +566,59 @@ mod tests {
         assert_eq!(config.channel_supervisor_max_restarts, 5);
         assert_eq!(config.channel_supervisor_backoff_min_ms, 2000);
         assert_eq!(config.channel_supervisor_backoff_max_ms, 60000);
+    }
+
+    // 8.12.15 — AppConfig default includes notification_routing with toast+desktop
+    #[test]
+    fn notification_routing_defaults() {
+        let config = AppConfig::default();
+        let routing = &config.notification_routing;
+        assert_eq!(routing.scheduler_notification.len(), 2);
+        assert!(
+            routing
+                .scheduler_notification
+                .contains(&crate::notification::target::NotificationTarget::Toast)
+        );
+        assert!(
+            routing
+                .scheduler_notification
+                .contains(&crate::notification::target::NotificationTarget::Desktop)
+        );
+        assert_eq!(routing.scheduler_job_completed.len(), 2);
+        assert_eq!(routing.channel_message.len(), 2);
+    }
+
+    // 8.12.16 — AppConfig TOML deser with custom notification_routing
+    #[test]
+    fn notification_routing_toml_deser() {
+        let toml_str = r#"
+            [notification_routing]
+            scheduler_notification = ["toast", "telegram"]
+            scheduler_job_completed = ["desktop"]
+            channel_message = ["toast"]
+        "#;
+        let config: AppConfig = toml::from_str(toml_str).unwrap();
+        assert_eq!(config.notification_routing.scheduler_notification.len(), 2);
+        assert!(
+            config
+                .notification_routing
+                .scheduler_notification
+                .contains(&crate::notification::target::NotificationTarget::Telegram)
+        );
+        assert_eq!(config.notification_routing.scheduler_job_completed.len(), 1);
+        assert_eq!(config.notification_routing.channel_message.len(), 1);
+    }
+
+    // 8.12.17 — AppConfig TOML deser without notification_routing uses defaults
+    #[test]
+    fn notification_routing_missing_uses_default() {
+        let toml_str = r#"
+            gateway_host = "127.0.0.1"
+        "#;
+        let config: AppConfig = toml::from_str(toml_str).unwrap();
+        assert_eq!(config.notification_routing.scheduler_notification.len(), 2);
+        assert_eq!(config.notification_routing.scheduler_job_completed.len(), 2);
+        assert_eq!(config.notification_routing.channel_message.len(), 2);
     }
 
     // WS-3.6b — learning_min_confidence clamped to [0.0, 1.0]

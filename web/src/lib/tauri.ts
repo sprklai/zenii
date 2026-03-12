@@ -35,3 +35,17 @@ export async function openDataDir(): Promise<void> {
   const { invoke } = await import("@tauri-apps/api/core");
   await invoke("open_data_dir");
 }
+
+/** Show a native OS desktop notification. No-ops outside Tauri. */
+export async function showNotification(
+  title: string,
+  body: string,
+): Promise<void> {
+  if (!isTauri) return;
+  try {
+    const { invoke } = await import("@tauri-apps/api/core");
+    await invoke("show_notification", { title, body });
+  } catch (e) {
+    console.warn("Native notification failed:", e);
+  }
+}

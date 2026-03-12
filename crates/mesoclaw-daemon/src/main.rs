@@ -60,6 +60,7 @@ async fn main() {
     state.wire_scheduler();
     #[cfg(feature = "channels")]
     state.wire_channels();
+    state.wire_notifications();
     let gateway = GatewayServer::new(state);
 
     // Graceful shutdown on SIGTERM/SIGINT

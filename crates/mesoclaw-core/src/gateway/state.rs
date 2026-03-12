@@ -74,6 +74,7 @@ pub struct AppState {
     pub channel_router: Option<Arc<crate::channels::router::ChannelRouter>>,
     #[cfg(feature = "scheduler")]
     pub scheduler: Option<Arc<TokioScheduler>>,
+    pub notification_router: Option<Arc<crate::notification::router::NotificationRouter>>,
     /// Whether the local embedding model is downloaded and ready.
     pub embedding_model_available: Arc<AtomicBool>,
 }
@@ -86,6 +87,15 @@ impl AppState {
         if let Some(ref scheduler) = self.scheduler {
             scheduler.wire(Arc::clone(self));
             tracing::info!("Scheduler wired with AppState");
+        }
+    }
+
+    /// Wire the notification router: subscribe to EventBus and route to channel targets.
+    /// Call this after constructing Arc<AppState>.
+    pub fn wire_notifications(self: &Arc<Self>) {
+        if let Some(ref router) = self.notification_router {
+            router.start();
+            tracing::info!("Notification router wired with AppState");
         }
     }
 

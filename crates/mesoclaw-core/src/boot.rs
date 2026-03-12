@@ -76,6 +76,7 @@ pub struct Services {
     pub channel_router: Option<Arc<crate::channels::router::ChannelRouter>>,
     #[cfg(feature = "scheduler")]
     pub scheduler: Option<Arc<TokioScheduler>>,
+    pub notification_router: Option<Arc<crate::notification::router::NotificationRouter>>,
     /// Whether the local embedding model is downloaded and ready.
     pub embedding_model_available: Arc<AtomicBool>,
 }
@@ -553,7 +554,19 @@ pub async fn init_services(config: AppConfig) -> Result<Services> {
             .unwrap_or_else(|e| tracing::warn!("Failed to register scheduler tool: {e}"));
     }
 
-    // 15. Plugin system
+    // 15. Notification Router
+    let notification_router = {
+        let router = crate::notification::router::NotificationRouter::new(
+            config_swap.clone(),
+            event_bus.clone(),
+            #[cfg(feature = "channels")]
+            channel_registry.clone(),
+        );
+        Some(Arc::new(router))
+    };
+    info!("Notification router initialized");
+
+    // 16. Plugin system
     let plugins_dir = config
         .plugins_dir
         .as_ref()
@@ -648,6 +661,7 @@ pub async fn init_services(config: AppConfig) -> Result<Services> {
         channel_router,
         #[cfg(feature = "scheduler")]
         scheduler,
+        notification_router,
         embedding_model_available,
     })
 }
@@ -694,6 +708,7 @@ impl From<Services> for AppState {
             channel_router: s.channel_router,
             #[cfg(feature = "scheduler")]
             scheduler: s.scheduler,
+            notification_router: s.notification_router,
             embedding_model_available: s.embedding_model_available,
         }
     }

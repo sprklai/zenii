@@ -7,6 +7,7 @@
 	import { Switch } from '$lib/components/ui/switch';
 	import { configStore } from '$lib/stores/config.svelte';
 	import { getBaseUrl, setBaseUrl, getToken, setToken } from '$lib/api/client';
+	import { isTauri } from '$lib/tauri';
 	import { onMount } from 'svelte';
 
 	let baseUrl = $state(getBaseUrl());
@@ -15,6 +16,46 @@
 	let userTimezone = $state('');
 	let profileSaving = $state(false);
 	let profileSaved = $state(false);
+
+	interface NotificationRouting {
+		scheduler_notification: string[];
+		scheduler_job_completed: string[];
+		channel_message: string[];
+	}
+
+	const DEFAULT_ROUTING: NotificationRouting = {
+		scheduler_notification: ['toast', 'desktop'],
+		scheduler_job_completed: ['toast', 'desktop'],
+		channel_message: ['toast', 'desktop'],
+	};
+
+	function getRouting(): NotificationRouting {
+		return (configStore.config.notification_routing ?? DEFAULT_ROUTING) as NotificationRouting;
+	}
+
+	function routingHasTarget(eventType: keyof NotificationRouting, target: string): boolean {
+		const routing = getRouting();
+		return (routing[eventType] ?? []).includes(target);
+	}
+
+	async function toggleRoutingTarget(eventType: keyof NotificationRouting, target: string, enabled: boolean) {
+		const routing = { ...getRouting() };
+		const current = [...(routing[eventType] ?? [])];
+		if (enabled && !current.includes(target)) {
+			current.push(target);
+		} else if (!enabled) {
+			const idx = current.indexOf(target);
+			if (idx >= 0) current.splice(idx, 1);
+		}
+		routing[eventType] = current;
+		try {
+			await configStore.update({ notification_routing: routing });
+			await configStore.load();
+		} catch (e) {
+			console.error('[Settings] Failed to update notification routing:', e);
+			await configStore.load();
+		}
+	}
 
 	onMount(async () => {
 		await configStore.load();
@@ -65,6 +106,17 @@
 			await configStore.load();
 		}
 	}
+
+	const EVENT_TYPES: { key: keyof NotificationRouting; label: string }[] = [
+		{ key: 'scheduler_notification', label: 'Scheduler Notifications' },
+		{ key: 'scheduler_job_completed', label: 'Job Completed' },
+		{ key: 'channel_message', label: 'Channel Messages' },
+	];
+
+	const TARGETS = [
+		{ id: 'toast', label: 'Toast' },
+		{ id: 'desktop', label: 'Desktop', requiresTauri: true },
+	];
 </script>
 
 <Card.Root>
@@ -109,6 +161,37 @@
 				{#if profileSaved}
 					<span class="text-sm text-green-600">Saved</span>
 				{/if}
+			</div>
+		</Card.Content>
+	</Card.Root>
+
+	<Card.Root>
+		<Card.Header>
+			<Card.Title>Notifications</Card.Title>
+			<Card.Description>Choose how you receive notifications for each event type</Card.Description>
+		</Card.Header>
+		<Card.Content>
+			<div class="space-y-4">
+				{#each EVENT_TYPES as eventType}
+					<div class="flex items-center justify-between gap-4">
+						<p class="text-sm font-medium min-w-[160px]">{eventType.label}</p>
+						<div class="flex items-center gap-4">
+							{#each TARGETS as target}
+								{#if !target.requiresTauri || isTauri}
+									<label class="flex items-center gap-1.5 text-xs cursor-pointer">
+										<input
+											type="checkbox"
+											checked={routingHasTarget(eventType.key, target.id)}
+											onchange={(e) => toggleRoutingTarget(eventType.key, target.id, e.currentTarget.checked)}
+											class="accent-primary h-3.5 w-3.5"
+										/>
+										{target.label}
+									</label>
+								{/if}
+							{/each}
+						</div>
+					</div>
+				{/each}
 			</div>
 		</Card.Content>
 	</Card.Root>

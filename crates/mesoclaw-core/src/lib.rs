@@ -5,6 +5,7 @@ pub mod error;
 pub mod event_bus;
 pub mod identity;
 pub mod memory;
+pub mod notification;
 pub mod plugins;
 pub mod security;
 pub mod skills;

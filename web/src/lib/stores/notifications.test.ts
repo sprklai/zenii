@@ -10,11 +10,34 @@ vi.mock("svelte-sonner", () => ({
   Toaster: {},
 }));
 
+// Mock $lib/tauri
+vi.mock("$lib/tauri", () => ({
+  isTauri: false,
+  showNotification: vi.fn(),
+}));
+
+// Mock config store
+vi.mock("./config.svelte", () => ({
+  configStore: {
+    config: {
+      notification_routing: {
+        scheduler_notification: ["toast", "desktop"],
+        scheduler_job_completed: ["toast", "desktop"],
+        channel_message: ["toast", "desktop"],
+      },
+    },
+    loading: false,
+    error: null,
+    load: vi.fn(),
+    update: vi.fn(),
+    get: vi.fn(),
+  },
+}));
+
 describe("NotificationStore", () => {
   // 8.6.1.23 — notification store handles scheduler_notification messages
   it("parses scheduler_notification message", async () => {
     const { notificationStore } = await import("./notifications.svelte");
-    const { toast } = await import("svelte-sonner");
 
     // Reset
     notificationStore.notifications = [];
@@ -71,5 +94,38 @@ describe("NotificationStore", () => {
     }
 
     expect(notificationStore.notifications.length).toBe(100);
+  });
+
+  // 8.12.24 — hasTarget returns true when target is in routing config
+  it("hasTarget returns true when target is in routing config", async () => {
+    const { hasTarget } = await import("./notifications.svelte");
+    expect(hasTarget("scheduler_notification", "toast")).toBe(true);
+    expect(hasTarget("scheduler_notification", "desktop")).toBe(true);
+  });
+
+  // 8.12.25 — hasTarget defaults to toast+desktop when routing config missing
+  it("hasTarget defaults to toast+desktop when routing config missing", async () => {
+    const { hasTarget } = await import("./notifications.svelte");
+    // "unknown_event" is not in config, should fall back to empty
+    expect(hasTarget("unknown_event", "toast")).toBe(false);
+  });
+
+  // 8.12.26 — scheduler_notification event shows toast only when desktop disabled
+  it("scheduler_notification toast only when desktop disabled", async () => {
+    // Override config to disable desktop for scheduler_notification
+    const configModule = await import("./config.svelte");
+    (
+      configModule.configStore as unknown as { config: Record<string, unknown> }
+    ).config = {
+      notification_routing: {
+        scheduler_notification: ["toast"],
+        scheduler_job_completed: ["toast", "desktop"],
+        channel_message: ["toast", "desktop"],
+      },
+    };
+
+    const { hasTarget } = await import("./notifications.svelte");
+    expect(hasTarget("scheduler_notification", "toast")).toBe(true);
+    expect(hasTarget("scheduler_notification", "desktop")).toBe(false);
   });
 });

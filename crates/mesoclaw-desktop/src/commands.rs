@@ -87,6 +87,7 @@ pub fn boot_gateway(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Erro
                 state.wire_scheduler();
                 #[cfg(feature = "channels")]
                 state.wire_channels();
+                state.wire_notifications();
                 let gateway = mesoclaw_core::gateway::GatewayServer::new(state);
 
                 info!("Starting embedded gateway on {host}:{port}");
