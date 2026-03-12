@@ -71,6 +71,7 @@ pub struct AppConfig {
     pub channel_tool_policy: HashMap<String, Vec<String>>,
     pub channels_enabled: Vec<String>,
     pub telegram_polling_timeout_secs: u32,
+    pub telegram_http_timeout_buffer_secs: u32,
     pub telegram_dm_policy: String,
     pub telegram_retry_min_ms: u64,
     pub telegram_retry_max_ms: u64,
@@ -115,7 +116,6 @@ pub struct AppConfig {
     pub scheduler_stuck_threshold_secs: u64,
     pub scheduler_error_backoff_secs: Vec<u64>,
     pub scheduler_max_history_per_job: usize,
-    pub scheduler_notification_via_ws: bool,
     pub scheduler_agent_turn_timeout_secs: u64,
     pub scheduler_heartbeat_file: Option<String>,
 
@@ -228,6 +228,7 @@ impl Default for AppConfig {
             )]),
             channels_enabled: vec![],
             telegram_polling_timeout_secs: 30,
+            telegram_http_timeout_buffer_secs: 10,
             telegram_dm_policy: "allowlist".into(),
             telegram_retry_min_ms: 1000,
             telegram_retry_max_ms: 60_000,
@@ -272,7 +273,6 @@ impl Default for AppConfig {
             scheduler_stuck_threshold_secs: 120,
             scheduler_error_backoff_secs: vec![30, 60, 300, 900, 3600],
             scheduler_max_history_per_job: 100,
-            scheduler_notification_via_ws: true,
             scheduler_agent_turn_timeout_secs: 120,
             scheduler_heartbeat_file: None,
 
@@ -372,25 +372,22 @@ mod tests {
         assert_eq!(config.scheduler_max_history_per_job, 100);
     }
 
-    // 8.6.1.3 — scheduler notification config defaults
+    // 8.6.1.3 — scheduler agent turn timeout and heartbeat config
     #[test]
-    fn scheduler_notification_config_defaults() {
+    fn scheduler_agent_config_defaults() {
         let config = AppConfig::default();
-        assert!(config.scheduler_notification_via_ws);
         assert_eq!(config.scheduler_agent_turn_timeout_secs, 120);
         assert!(config.scheduler_heartbeat_file.is_none());
     }
 
-    // 8.6.1.4 — scheduler notification config from TOML
+    // 8.6.1.4 — scheduler agent config from TOML
     #[test]
-    fn scheduler_notification_config_from_toml() {
+    fn scheduler_agent_config_from_toml() {
         let toml_str = r#"
-            scheduler_notification_via_ws = false
             scheduler_agent_turn_timeout_secs = 60
             scheduler_heartbeat_file = "/tmp/heartbeat.md"
         "#;
         let config: AppConfig = toml::from_str(toml_str).unwrap();
-        assert!(!config.scheduler_notification_via_ws);
         assert_eq!(config.scheduler_agent_turn_timeout_secs, 60);
         assert_eq!(
             config.scheduler_heartbeat_file.as_deref(),

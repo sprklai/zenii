@@ -7,6 +7,7 @@
 	import Brain from '@lucide/svelte/icons/brain';
 	import Puzzle from '@lucide/svelte/icons/puzzle';
 	import FileText from '@lucide/svelte/icons/file-text';
+	import Bell from '@lucide/svelte/icons/bell';
 	import GeneralSettings from '$lib/components/settings/GeneralSettings.svelte';
 	import ConfigurationsSettings from '$lib/components/settings/ConfigurationsSettings.svelte';
 	import ProvidersSettings from '$lib/components/settings/ProvidersSettings.svelte';
@@ -14,6 +15,7 @@
 	import ChannelsSettings from '$lib/components/settings/ChannelsSettings.svelte';
 	import ServicesSettings from '$lib/components/settings/ServicesSettings.svelte';
 	import EmbeddingsSettings from '$lib/components/settings/EmbeddingsSettings.svelte';
+	import NotificationsSettings from '$lib/components/settings/NotificationsSettings.svelte';
 	import { onMount } from 'svelte';
 
 	const tabs = [
@@ -21,6 +23,7 @@
 		{ id: 'providers', label: 'Providers', icon: Building2 },
 		{ id: 'persona', label: 'Persona', icon: User },
 		{ id: 'channels', label: 'Channels', icon: MessageSquare },
+		{ id: 'notifications', label: 'Notifications', icon: Bell },
 		{ id: 'services', label: 'Services', icon: KeyRound },
 		{ id: 'embeddings', label: 'Embeddings', icon: Brain },
 		{ id: 'configurations', label: 'Configurations', icon: FileText },
@@ -101,6 +104,8 @@
 			<PersonaSettings />
 		{:else if activeTab === 'channels'}
 			<ChannelsSettings />
+		{:else if activeTab === 'notifications'}
+			<NotificationsSettings />
 		{:else if activeTab === 'services'}
 			<ServicesSettings />
 		{:else if activeTab === 'embeddings'}

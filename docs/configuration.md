@@ -341,7 +341,6 @@ telegram_require_group_mention = true
 | `scheduler_stuck_threshold_secs` | u64 | `120` | Seconds before a running job is considered stuck |
 | `scheduler_error_backoff_secs` | Vec\<u64\> | `[30, 60, 300, 900, 3600]` | Exponential backoff delays for failed jobs (seconds) |
 | `scheduler_max_history_per_job` | usize | `100` | Maximum execution history entries per job |
-| `scheduler_notification_via_ws` | bool | `true` | Send scheduler notifications over WebSocket |
 | `scheduler_agent_turn_timeout_secs` | u64 | `120` | Timeout for agent turns within scheduled jobs |
 | `scheduler_heartbeat_file` | Option\<String\> | `null` | Path to heartbeat file (updated each tick for external monitoring) |
 
@@ -350,7 +349,6 @@ scheduler_tick_interval_secs = 1
 scheduler_stuck_threshold_secs = 120
 scheduler_error_backoff_secs = [30, 60, 300, 900, 3600]
 scheduler_max_history_per_job = 100
-scheduler_notification_via_ws = true
 scheduler_agent_turn_timeout_secs = 120
 scheduler_heartbeat_file = "/tmp/mesoclaw-heartbeat"
 ```
@@ -413,7 +411,7 @@ Some configuration fields are only relevant when specific feature flags are enab
 | `channels-telegram` | `telegram_polling_timeout_secs`, `telegram_dm_policy`, `telegram_retry_min_ms`, `telegram_retry_max_ms`, `telegram_require_group_mention` |
 | `channels-slack` | (uses `channel_tool_policy` for Slack-specific tool allowlists) |
 | `channels-discord` | (uses `channel_tool_policy` for Discord-specific tool allowlists) |
-| `scheduler` | `scheduler_tick_interval_secs`, `scheduler_stuck_threshold_secs`, `scheduler_error_backoff_secs`, `scheduler_max_history_per_job`, `scheduler_notification_via_ws`, `scheduler_agent_turn_timeout_secs`, `scheduler_heartbeat_file` |
+| `scheduler` | `scheduler_tick_interval_secs`, `scheduler_stuck_threshold_secs`, `scheduler_error_backoff_secs`, `scheduler_max_history_per_job`, `scheduler_agent_turn_timeout_secs`, `scheduler_heartbeat_file` |
 
 Fields can always be set in the config file regardless of feature flags -- they are simply ignored at runtime if the corresponding feature is not compiled in.
 
@@ -489,7 +487,6 @@ telegram_dm_policy = "allowlist"
 
 # Scheduler (requires --features scheduler)
 scheduler_tick_interval_secs = 1
-scheduler_notification_via_ws = true
 
 # Credentials
 keyring_service_id = "com.sprklai.mesoclaw"

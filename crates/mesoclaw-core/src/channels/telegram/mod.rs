@@ -199,7 +199,30 @@ impl ChannelLifecycle for TelegramChannel {
                 MesoError::Channel("telegram: bot token not configured".into())
             })?;
 
-        let bot = teloxide::Bot::new(token);
+        // Build HTTP client with timeout > polling timeout to prevent premature request kills.
+        // teloxide's default_reqwest_settings() sets a 17s timeout, but our polling timeout is
+        // configurable (default 30s). Without this fix, every long-poll that doesn't receive an
+        // update within 17s fails with "error sending request".
+        let http_timeout_secs =
+            self.config.polling_timeout_secs + self.app_config.telegram_http_timeout_buffer_secs;
+        let http_timeout = std::time::Duration::from_secs(u64::from(http_timeout_secs));
+
+        info!(
+            "Telegram: http_timeout={}s (polling={}s + buffer={}s)",
+            http_timeout_secs,
+            self.config.polling_timeout_secs,
+            self.app_config.telegram_http_timeout_buffer_secs,
+        );
+
+        let client = teloxide::net::default_reqwest_settings()
+            .timeout(http_timeout)
+            .build()
+            .map_err(|e| {
+                self.status.store(STATUS_DISCONNECTED, Ordering::SeqCst);
+                MesoError::Channel(format!("telegram: failed to build HTTP client: {e}"))
+            })?;
+
+        let bot = teloxide::Bot::with_client(token, client);
 
         // Validate bot token by calling getMe
         let me = bot.get_me().await.map_err(|e| {

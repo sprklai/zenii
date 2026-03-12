@@ -17,6 +17,7 @@
 		type ScheduledJob,
 		type JobExecution
 	} from '$lib/stores/scheduler.svelte';
+	import { channelsStore } from '$lib/stores/channels.svelte';
 
 	let showForm = $state(false);
 	let showHistory = $state<string | null>(null);
@@ -29,9 +30,10 @@
 	let scheduleType = $state<'interval' | 'cron'>('interval');
 	let intervalSecs = $state(60);
 	let cronExpr = $state('');
-	let payloadType = $state<'notify' | 'heartbeat' | 'agent_turn'>('notify');
+	let payloadType = $state<'notify' | 'heartbeat' | 'agent_turn' | 'send_via_channel'>('notify');
 	let payloadMessage = $state('');
 	let payloadPrompt = $state('');
+	let payloadChannel = $state('');
 	let sessionTarget = $state<'main' | 'isolated'>('main');
 	let deleteAfterRun = $state(false);
 	let activeHoursEnabled = $state(false);
@@ -41,6 +43,7 @@
 
 	onMount(() => {
 		schedulerStore.load();
+		channelsStore.load();
 	});
 
 	function resetForm() {
@@ -51,6 +54,7 @@
 		payloadType = 'notify';
 		payloadMessage = '';
 		payloadPrompt = '';
+		payloadChannel = '';
 		sessionTarget = 'main';
 		deleteAfterRun = false;
 		activeHoursEnabled = false;
@@ -64,6 +68,19 @@
 		if (!jobName.trim()) {
 			formError = 'Job name is required';
 			return;
+		}
+
+		if (scheduleType === 'cron') {
+			const trimmed = cronExpr.trim();
+			if (!trimmed) {
+				formError = 'Cron expression is required';
+				return;
+			}
+			const fields = trimmed.split(/\s+/);
+			if (fields.length < 5 || fields.length > 6) {
+				formError = 'Cron expression must have 5 or 6 space-separated fields';
+				return;
+			}
 		}
 
 		const schedule =
@@ -80,6 +97,16 @@
 				return;
 			}
 			payload = { type: 'agent_turn', prompt: payloadPrompt };
+		} else if (payloadType === 'send_via_channel') {
+			if (!payloadChannel) {
+				formError = 'Channel is required for send via channel';
+				return;
+			}
+			if (!payloadMessage.trim()) {
+				formError = 'Message is required for send via channel';
+				return;
+			}
+			payload = { type: 'send_via_channel', channel: payloadChannel, message: payloadMessage };
 		} else {
 			if (!payloadMessage.trim()) {
 				formError = 'Message is required for notify';
@@ -234,6 +261,7 @@
 						<option value="notify">Notify</option>
 						<option value="heartbeat">Heartbeat</option>
 						<option value="agent_turn">Agent Turn</option>
+						<option value="send_via_channel">Send via Channel</option>
 					</select>
 				</div>
 
@@ -254,6 +282,30 @@
 							bind:value={payloadPrompt}
 							placeholder="Agent prompt to execute"
 						/>
+					</div>
+				{:else if payloadType === 'send_via_channel'}
+					<div class="grid grid-cols-2 gap-4">
+						<div class="space-y-2">
+							<Label for="payload-channel">Channel</Label>
+							<select
+								id="payload-channel"
+								bind:value={payloadChannel}
+								class="w-full rounded-md border bg-background text-foreground px-3 py-2 text-sm"
+							>
+								<option value="">Select channel...</option>
+								{#each channelsStore.channels.filter((c) => c.connected) as ch (ch.id)}
+									<option value={ch.id}>{ch.name}</option>
+								{/each}
+							</select>
+						</div>
+						<div class="space-y-2">
+							<Label for="channel-message">Message</Label>
+							<Input
+								id="channel-message"
+								bind:value={payloadMessage}
+								placeholder="Message to send"
+							/>
+						</div>
 					</div>
 				{/if}
 
