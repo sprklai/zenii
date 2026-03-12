@@ -3836,7 +3836,7 @@ dependencies = [
 
 [[package]]
 name = "mesoclaw-cli"
-version = "0.0.13"
+version = "0.0.14"
 dependencies = [
  "clap",
  "clap_complete",
@@ -3853,7 +3853,7 @@ dependencies = [
 
 [[package]]
 name = "mesoclaw-core"
-version = "0.0.13"
+version = "0.0.14"
 dependencies = [
  "arc-swap",
  "async-trait",
@@ -3902,7 +3902,7 @@ dependencies = [
 
 [[package]]
 name = "mesoclaw-daemon"
-version = "0.0.13"
+version = "0.0.14"
 dependencies = [
  "clap",
  "mesoclaw-core",
@@ -3913,7 +3913,7 @@ dependencies = [
 
 [[package]]
 name = "mesoclaw-desktop"
-version = "0.0.13"
+version = "0.0.14"
 dependencies = [
  "mesoclaw-core",
  "opener",
@@ -3934,7 +3934,7 @@ dependencies = [
 
 [[package]]
 name = "mesoclaw-tui"
-version = "0.0.13"
+version = "0.0.14"
 dependencies = [
  "clap",
  "crossterm",
@@ -4470,9 +4470,9 @@ dependencies = [
 
 [[package]]
 name = "once_cell"
-version = "1.21.3"
+version = "1.21.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "42f5e15c9953c5e4ccceeb2e7382a716482c34515315f7b03532b8b4e8393d2d"
+checksum = "9f7c3e4beb33f85d45ae3e3a1792185706c8e16d043238c593331cc7cd313b50"
 
 [[package]]
 name = "once_cell_polyfill"

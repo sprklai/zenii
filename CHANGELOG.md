@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.14] - 2026-03-12
+
+### Added
+- Plugin-based prompt strategy system with ~65% token reduction (PromptStrategy + PromptPlugin traits, CompactStrategy, LegacyStrategy, PromptStrategyRegistry)
+- 6 built-in prompt plugins: Memory, UserObservations, Skills, LearnedRules, Channel, Scheduler
+- Token budget overflow protection with priority-based trimming
+- Config fields: `prompt_compact_identity`, `prompt_max_preamble_tokens`
+- Frontend "Compact Prompts" toggle and "Max Preamble Tokens" input in Agent Features settings
+
+### Fixed
+- Telegram long-polling timeout mismatch causing persistent failures
+- sqlite_vec transmute for aarch64 compatibility (c_char/c_int types)
+- rustfmt cross-version compatibility via `#[rustfmt::skip]`
+
+### Changed
+- Chat, WebSocket, and channel router handlers refactored to use single `prompt_strategy.assemble()` call
+- Docker image publishing temporarily disabled in release workflow
+- Documentation updated: installation, deployment, architecture, configuration, processes
+
 ## [0.0.13] - 2026-03-12
 
 ### Added
