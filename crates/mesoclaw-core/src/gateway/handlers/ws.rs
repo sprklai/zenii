@@ -8,7 +8,7 @@ use tokio::sync::broadcast;
 use tracing::{debug, info, warn};
 
 use crate::ai::adapter::{ToolCallEvent, ToolCallPhase};
-use crate::ai::context::ContextEngine;
+use crate::ai::prompt::AssemblyRequest;
 use crate::ai::resolve_agent;
 use crate::gateway::state::AppState;
 
@@ -219,10 +219,10 @@ async fn handle_ws(mut socket: WebSocket, state: Arc<AppState>) {
             }
         };
 
-        // Build context: history + augmented preamble via ContextBuilder
-        let (history, preamble) = match state
+        // Build context parts via ContextBuilder
+        let (history, _memories, _user_obs) = match state
             .context_builder
-            .build(request.session_id.as_deref(), &request.prompt)
+            .build_parts(request.session_id.as_deref(), &request.prompt)
             .await
         {
             Ok(ctx) => ctx,
@@ -238,67 +238,45 @@ async fn handle_ws(mut socket: WebSocket, state: Arc<AppState>) {
             }
         };
 
-        // Also compose ContextEngine preamble for boot context / cached summaries
-        let ctx_enabled = state
-            .context_injection_enabled
-            .load(std::sync::atomic::Ordering::Relaxed);
-        let self_evo = state
-            .self_evolution_enabled
-            .load(std::sync::atomic::Ordering::Relaxed);
-        let mut context_engine =
-            ContextEngine::new(state.db.clone(), state.config.load_full(), ctx_enabled)
-                .with_skill_registry(state.skill_registry.clone())
-                .with_self_evolution(self_evo);
-        #[cfg(feature = "channels")]
-        {
-            context_engine = context_engine.with_channel_registry(state.channel_registry.clone());
-        }
-        #[cfg(feature = "scheduler")]
-        if let Some(ref sched) = state.scheduler {
-            context_engine = context_engine.with_scheduler(sched.clone());
-        }
-        let (message_count, last_message_at, summary) = if let Some(ref sid) = request.session_id {
+        // Get conversation summary for resumed sessions
+        let summary = if let Some(ref sid) = request.session_id {
             state
                 .session_manager
                 .get_context_info(sid)
                 .await
-                .unwrap_or((0, None, None))
+                .ok()
+                .and_then(|(_, _, s)| s)
         } else {
-            (0, None, None)
+            None
         };
-        let level = context_engine.determine_context_level(
-            message_count,
-            last_message_at.as_ref(),
-            summary.is_some(),
-            false,
-        );
+
+        // Assemble preamble via PromptStrategy
+        let config = state.config.load_full();
         let model_display = request.model.as_deref().unwrap_or("default");
-        let engine_preamble = match context_engine
-            .compose(
-                &level,
-                &state.boot_context,
-                model_display,
-                request.session_id.as_deref(),
-                summary.as_deref(),
-                Some(&request.prompt),
-            )
-            .await
-        {
+        let assembly_request = AssemblyRequest {
+            boot_context: state.boot_context.clone(),
+            model_display: model_display.into(),
+            session_id: request.session_id.clone(),
+            user_message: Some(request.prompt.clone()),
+            conversation_summary: summary,
+            channel_hint: None,
+            tool_count: state.tools.len(),
+            skill_count: state.skill_registry.list().await.len(),
+            version: config.identity_name.clone(),
+        };
+        let merged_preamble = match state.prompt_strategy.assemble(&assembly_request).await {
             Ok(p) => p,
             Err(e) => {
                 send_outbound(
                     &mut socket,
                     &WsOutbound::Error {
-                        error: format!("context compose failed: {e}"),
+                        error: format!("prompt assembly failed: {e}"),
                     },
                 )
                 .await;
                 continue;
             }
         };
-
-        // Merge preambles: ContextBuilder (identity + memory + user) + ContextEngine (boot + summaries)
-        let merged_preamble = format!("{preamble}\n\n{engine_preamble}");
         debug!(
             "WS chat: session={}, history={} msgs, preamble={}B, prompt='{}'",
             request.session_id.as_deref().unwrap_or("none"),
@@ -306,17 +284,6 @@ async fn handle_ws(mut socket: WebSocket, state: Arc<AppState>) {
             merged_preamble.len(),
             &request.prompt[..request.prompt.len().min(80)]
         );
-        for (i, msg) in history.iter().enumerate() {
-            let preview = match msg {
-                rig::message::Message::User { content, .. } => {
-                    format!("user: {:?}", content)
-                }
-                rig::message::Message::Assistant { content, .. } => {
-                    format!("assistant: {:?}", content)
-                }
-            };
-            debug!("  history[{i}] {}", &preview[..preview.len().min(120)]);
-        }
 
         // Create per-request broadcast channel for tool events
         let (tool_tx, mut tool_rx) = broadcast::channel::<ToolCallEvent>(128);

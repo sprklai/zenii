@@ -128,6 +128,7 @@ mod tests {
             last_used_model: base_state.last_used_model.clone(),
             context_builder: base_state.context_builder.clone(),
             reasoning_engine: Arc::new(crate::ai::reasoning::ReasoningEngine::new(3)),
+            prompt_strategy: base_state.prompt_strategy.clone(),
             context_injection_enabled: base_state.context_injection_enabled.clone(),
             self_evolution_enabled: base_state.self_evolution_enabled.clone(),
             soul_loader: base_state.soul_loader.clone(),

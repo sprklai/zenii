@@ -28,6 +28,8 @@ use crate::ai::agent::MesoAgent;
 #[cfg(feature = "ai")]
 use crate::ai::context::{BootContext, ContextBuilder};
 #[cfg(feature = "ai")]
+use crate::ai::prompt::PromptStrategy;
+#[cfg(feature = "ai")]
 use crate::ai::provider_registry::ProviderRegistry;
 #[cfg(feature = "ai")]
 use crate::ai::reasoning::ReasoningEngine;
@@ -59,6 +61,8 @@ pub struct AppState {
     pub context_builder: Arc<ContextBuilder>,
     #[cfg(feature = "ai")]
     pub reasoning_engine: Arc<ReasoningEngine>,
+    #[cfg(feature = "ai")]
+    pub prompt_strategy: Arc<dyn PromptStrategy>,
     /// Runtime toggle: context injection (mutable via PUT /config)
     pub context_injection_enabled: Arc<AtomicBool>,
     /// Runtime toggle: self-evolution / learning (mutable via PUT /config)

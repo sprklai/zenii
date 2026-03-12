@@ -242,6 +242,39 @@
 					</Select.Content>
 				</Select.Root>
 			</div>
+			<div class="flex items-center justify-between gap-4">
+				<div>
+					<p class="text-sm font-medium">Compact Prompts</p>
+					<p class="text-xs text-muted-foreground">Uses compact axiom-based preamble instead of verbose prose. Reduces token usage by ~60-80% while maintaining response quality.</p>
+				</div>
+				<Switch
+					checked={configStore.config.prompt_compact_identity === true}
+					onCheckedChange={(v) => toggleConfig('prompt_compact_identity', v)}
+				/>
+			</div>
+			<div class="flex items-center justify-between gap-4">
+				<div class="flex-1">
+					<p class="text-sm font-medium">Max Preamble Tokens</p>
+					<p class="text-xs text-muted-foreground">Token budget for system preamble. Overflow trims lowest-priority context.</p>
+				</div>
+				<Input
+					type="number"
+					class="w-[100px]"
+					value={String(configStore.config.prompt_max_preamble_tokens ?? 1500)}
+					onchange={async (e) => {
+						const val = parseInt(e.currentTarget.value, 10);
+						if (!isNaN(val) && val > 0) {
+							try {
+								await configStore.update({ prompt_max_preamble_tokens: val });
+								await configStore.load();
+							} catch (err) {
+								console.error('[Settings] Failed to update prompt_max_preamble_tokens:', err);
+								await configStore.load();
+							}
+						}
+					}}
+				/>
+			</div>
 		</Card.Content>
 	</Card.Root>
 {/if}

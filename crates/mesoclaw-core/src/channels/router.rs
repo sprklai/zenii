@@ -12,8 +12,6 @@ use crate::gateway::state::AppState;
 #[cfg(feature = "ai")]
 use crate::ai::adapter::{ToolCallEvent, ToolCallPhase};
 #[cfg(feature = "ai")]
-use crate::ai::context::ContextEngine;
-#[cfg(feature = "ai")]
 use crate::event_bus::AppEvent;
 #[cfg(feature = "ai")]
 use tokio::sync::broadcast;
@@ -200,60 +198,44 @@ impl ChannelRouter {
         let tool_policy = ChannelToolPolicy::new(state.config.load_full());
         let allowed_tools = tool_policy.allowed_tools(&channel_name, &state.tools);
 
-        // 4. Build full context (identity + memory + user + environment + reasoning)
-        let (history_from_ctx, preamble) = state
+        // 4. Build context parts + assemble preamble via PromptStrategy
+        let (history_from_ctx, _memories, _user_obs) = state
             .context_builder
-            .build(Some(&session_id), &message.content)
+            .build_parts(Some(&session_id), &message.content)
             .await
             .unwrap_or_else(|e| {
                 warn!("ChannelRouter: context build failed for {channel_name}: {e}");
-                (vec![], String::new())
+                (vec![], vec![], String::new())
             });
 
-        let ctx_enabled = state
-            .context_injection_enabled
-            .load(std::sync::atomic::Ordering::Relaxed);
-        let self_evo = state
-            .self_evolution_enabled
-            .load(std::sync::atomic::Ordering::Relaxed);
-        let mut context_engine =
-            ContextEngine::new(state.db.clone(), state.config.load_full(), ctx_enabled)
-                .with_skill_registry(state.skill_registry.clone())
-                .with_self_evolution(self_evo);
-        #[cfg(feature = "channels")]
-        {
-            context_engine = context_engine.with_channel_registry(state.channel_registry.clone());
-        }
-        #[cfg(feature = "scheduler")]
-        if let Some(ref sched) = state.scheduler {
-            context_engine = context_engine.with_scheduler(sched.clone());
-        }
-        let (msg_count, last_at, summary) = state
+        let summary = state
             .session_manager
             .get_context_info(&session_id)
             .await
-            .unwrap_or((0, None, None));
-        let level = context_engine.determine_context_level(
-            msg_count,
-            last_at.as_ref(),
-            summary.is_some(),
-            false,
-        );
-        let engine_preamble = context_engine
-            .compose(
-                &level,
-                &state.boot_context,
-                "default",
-                Some(&session_id),
-                summary.as_deref(),
-                Some(&message.content),
-            )
+            .ok()
+            .and_then(|(_, _, s)| s);
+
+        let config = state.config.load_full();
+        let assembly_request = crate::ai::prompt::AssemblyRequest {
+            boot_context: state.boot_context.clone(),
+            model_display: "default".into(),
+            session_id: Some(session_id.clone()),
+            user_message: Some(message.content.clone()),
+            conversation_summary: summary,
+            channel_hint: Some(channel_name.clone()),
+            tool_count: state.tools.len(),
+            skill_count: state.skill_registry.list().await.len(),
+            version: config.identity_name.clone(),
+        };
+        let preamble = state
+            .prompt_strategy
+            .assemble(&assembly_request)
             .await
             .unwrap_or_default();
 
-        // 5. Merge: full context + channel-specific formatting hint
+        // 5. Merge: preamble + channel-specific formatting hint
         let channel_hint = channel_system_context(&channel_name);
-        let system_context = format!("{preamble}\n\n{engine_preamble}\n\n{channel_hint}");
+        let system_context = format!("{preamble}\n\n{channel_hint}");
 
         // 6. Call lifecycle hook: on_agent_start
         if let Some(channel) = state.channel_registry.get_channel(&channel_name) {

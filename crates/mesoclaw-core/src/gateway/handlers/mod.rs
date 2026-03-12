@@ -108,6 +108,13 @@ pub(crate) mod tests {
             last_used_model: Arc::new(RwLock::new(None)),
             context_builder,
             reasoning_engine: Arc::new(crate::ai::reasoning::ReasoningEngine::new(3)),
+            prompt_strategy: {
+                let compact_config = Arc::new(crate::config::AppConfig::default());
+                Arc::new(crate::ai::prompt::CompactStrategy::new(
+                    compact_config,
+                    crate::ai::context::BootContext::from_system(),
+                ))
+            },
             context_injection_enabled: Arc::new(std::sync::atomic::AtomicBool::new(true)),
             self_evolution_enabled: Arc::new(std::sync::atomic::AtomicBool::new(true)),
             soul_loader,

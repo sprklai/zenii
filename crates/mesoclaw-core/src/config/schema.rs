@@ -149,6 +149,10 @@ pub struct AppConfig {
     // Phase 8.12: Notification Routing
     pub notification_routing: NotificationRouting,
 
+    // Phase 8.13: Prompt Efficiency
+    pub prompt_max_preamble_tokens: usize,
+    pub prompt_compact_identity: bool,
+
     // Phase 8: Self-Evolution
     pub self_evolution_enabled: bool,
     pub learning_archive_threshold: f64,
@@ -303,6 +307,10 @@ impl Default for AppConfig {
 
             // Notification Routing
             notification_routing: NotificationRouting::default(),
+
+            // Prompt Efficiency
+            prompt_max_preamble_tokens: 1500,
+            prompt_compact_identity: true,
 
             // Self-Evolution
             self_evolution_enabled: true,

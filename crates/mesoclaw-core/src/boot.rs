@@ -29,6 +29,7 @@ use crate::scheduler::{TokioScheduler, traits::Scheduler};
 use crate::ai::{
     agent::MesoAgent,
     context::{BootContext, ContextBuilder},
+    prompt::{self, PromptStrategy},
     provider_registry::ProviderRegistry,
     reasoning::{ReasoningEngine, continuation::ContinuationStrategy},
     session::SessionManager,
@@ -63,6 +64,8 @@ pub struct Services {
     pub context_builder: Arc<ContextBuilder>,
     #[cfg(feature = "ai")]
     pub reasoning_engine: Arc<ReasoningEngine>,
+    #[cfg(feature = "ai")]
+    pub prompt_strategy: Arc<dyn PromptStrategy>,
     pub context_injection_enabled: Arc<AtomicBool>,
     pub self_evolution_enabled: Arc<AtomicBool>,
     pub soul_loader: Arc<SoulLoader>,
@@ -554,6 +557,67 @@ pub async fn init_services(config: AppConfig) -> Result<Services> {
             .unwrap_or_else(|e| tracing::warn!("Failed to register scheduler tool: {e}"));
     }
 
+    // 14b. Prompt Strategy (compact or legacy based on config)
+    // Must be after channels + scheduler so plugins can reference them.
+    #[cfg(feature = "ai")]
+    let prompt_strategy: Arc<dyn PromptStrategy> = if config.prompt_compact_identity {
+        let base = Arc::new(prompt::CompactStrategy::new(
+            config.clone(),
+            boot_context.clone(),
+        ));
+        let registry = prompt::PromptStrategyRegistry::new(base, config.clone());
+
+        // Always-registered plugins
+        registry
+            .register_plugin(Arc::new(prompt::MemoryPlugin::new(memory.clone())))
+            .await;
+        registry
+            .register_plugin(Arc::new(prompt::UserObservationsPlugin::new(
+                user_learner.clone(),
+            )))
+            .await;
+        registry
+            .register_plugin(Arc::new(prompt::SkillsPlugin::new(skill_registry.clone())))
+            .await;
+
+        // Conditional: learned rules
+        if config.self_evolution_enabled {
+            registry
+                .register_plugin(Arc::new(prompt::LearnedRulesPlugin::new(pool.clone())))
+                .await;
+        }
+
+        // Feature-gated: channels
+        #[cfg(feature = "channels")]
+        registry
+            .register_plugin(Arc::new(prompt::ChannelContextPlugin::new(
+                channel_registry.clone(),
+            )))
+            .await;
+
+        // Feature-gated: scheduler
+        #[cfg(feature = "scheduler")]
+        if let Some(ref sched) = scheduler {
+            registry
+                .register_plugin(Arc::new(prompt::SchedulerContextPlugin::new(sched.clone())))
+                .await;
+        }
+
+        Arc::new(registry)
+    } else {
+        Arc::new(prompt::LegacyStrategy::new(
+            soul_loader.clone(),
+            user_learner.clone(),
+            config.clone(),
+            skill_registry.clone(),
+        ))
+    };
+    #[cfg(feature = "ai")]
+    info!(
+        "Prompt strategy initialized (compact={})",
+        config.prompt_compact_identity
+    );
+
     // 15. Notification Router
     let notification_router = {
         let router = crate::notification::router::NotificationRouter::new(
@@ -648,6 +712,8 @@ pub async fn init_services(config: AppConfig) -> Result<Services> {
         context_builder,
         #[cfg(feature = "ai")]
         reasoning_engine,
+        #[cfg(feature = "ai")]
+        prompt_strategy,
         context_injection_enabled,
         self_evolution_enabled,
         soul_loader,
@@ -695,6 +761,8 @@ impl From<Services> for AppState {
             context_builder: s.context_builder,
             #[cfg(feature = "ai")]
             reasoning_engine: s.reasoning_engine,
+            #[cfg(feature = "ai")]
+            prompt_strategy: s.prompt_strategy,
             context_injection_enabled: s.context_injection_enabled,
             self_evolution_enabled: s.self_evolution_enabled,
             soul_loader: s.soul_loader,

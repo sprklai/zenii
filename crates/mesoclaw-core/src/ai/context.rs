@@ -89,7 +89,7 @@ pub fn detect_relevant_domains(user_message: &str) -> HashSet<ContextDomain> {
 }
 
 /// Map detected context domains to agent rule categories.
-fn domains_to_rule_categories(domains: &HashSet<ContextDomain>) -> Vec<String> {
+pub(crate) fn domains_to_rule_categories(domains: &HashSet<ContextDomain>) -> Vec<String> {
     let mut cats = vec!["general".to_string()]; // always include general
     for d in domains {
         match d {
@@ -1211,6 +1211,57 @@ impl ContextBuilder {
         let preamble = self.augment_preamble(&memory_context, &user_context).await;
 
         Ok((history, preamble))
+    }
+
+    /// Build context parts separately for use by PromptStrategy.
+    ///
+    /// Returns `(history, memories, user_observations)`:
+    /// - `history`: windowed rig messages for agent.chat()
+    /// - `memories`: raw recalled memory strings
+    /// - `user_observations`: raw user observation context string
+    pub async fn build_parts(
+        &self,
+        session_id: Option<&str>,
+        prompt: &str,
+    ) -> Result<(Vec<RigMessage>, Vec<String>, String)> {
+        let strategy = ContextStrategy::from_str(&self.config.context_strategy).unwrap_or_default();
+
+        // 1. Get session history (same logic as build())
+        let history = if let Some(sid) = session_id {
+            let messages = self.session_manager.get_messages(sid).await?;
+            let trimmed = if messages
+                .last()
+                .is_some_and(|m| m.role == "user" && m.content == prompt)
+            {
+                &messages[..messages.len() - 1]
+            } else {
+                &messages
+            };
+            let rig_messages = convert_session_messages(trimmed);
+            window_messages(
+                rig_messages,
+                &strategy,
+                self.config.context_max_history_messages,
+            )
+        } else {
+            Vec::new()
+        };
+
+        // 2. Recall memories (raw strings)
+        let limit = memory_limit_for_strategy(&strategy, self.config.context_max_memory_results);
+        let memories = self
+            .memory
+            .recall(prompt, limit, 0)
+            .await
+            .unwrap_or_default()
+            .into_iter()
+            .map(|m| m.content)
+            .collect();
+
+        // 3. User observations
+        let user_observations = self.user_learner.build_context().await.unwrap_or_default();
+
+        Ok((history, memories, user_observations))
     }
 
     /// Recall relevant memories based on the current prompt.
