@@ -1,6 +1,7 @@
 [workspace]
 resolver = "3"
 members = [
+    "crates/zenii",
     "crates/zenii-core",
     "crates/zenii-desktop",
     "crates/zenii-cli",
@@ -14,6 +15,10 @@ edition = "2024"
 license = "MIT"
 authors = ["NSRTech"]
 rust-version = "1.85"
+repository = "https://github.com/sprklai/zenii"
+homepage = "https://zenii.sprklai.com"
+keywords = ["ai", "assistant", "agent"]
+categories = ["command-line-utilities"]
 
 [workspace.dependencies]
 # Core library

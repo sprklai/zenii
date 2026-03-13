@@ -219,23 +219,11 @@ jobs:
           projectPath: crates/zenii-desktop
           args: --target x86_64-apple-darwin --bundles dmg -- --profile ci-release
 
-      - name: Build standalone CLI and daemon (universal)
-        run: |
-          cargo build --profile ci-release -p zenii-cli -p zenii-daemon -p zenii-tui --features keyring,channels,channels-telegram,channels-slack,channels-discord,scheduler,web-dashboard --target aarch64-apple-darwin
-          cargo build --profile ci-release -p zenii-cli -p zenii-daemon -p zenii-tui --features keyring,channels,channels-telegram,channels-slack,channels-discord,scheduler,web-dashboard --target x86_64-apple-darwin
-          mkdir -p target/ci-release/universal
-          lipo -create \
-            target/aarch64-apple-darwin/ci-release/zenii \
-            target/x86_64-apple-darwin/ci-release/zenii \
-            -output target/ci-release/universal/zenii
-          lipo -create \
-            target/aarch64-apple-darwin/ci-release/zenii-daemon \
-            target/x86_64-apple-darwin/ci-release/zenii-daemon \
-            -output target/ci-release/universal/zenii-daemon
-          lipo -create \
-            target/aarch64-apple-darwin/ci-release/zenii-tui \
-            target/x86_64-apple-darwin/ci-release/zenii-tui \
-            -output target/ci-release/universal/zenii-tui
+      - name: Build standalone CLI, daemon, TUI (arm64)
+        run: cargo build --profile ci-release -p zenii-cli -p zenii-daemon -p zenii-tui --features keyring,channels,channels-telegram,channels-slack,channels-discord,scheduler,web-dashboard --target aarch64-apple-darwin
+
+      - name: Build standalone CLI, daemon, TUI (x86_64)
+        run: cargo build --profile ci-release -p zenii-cli -p zenii-daemon -p zenii-tui --features keyring,channels,channels-telegram,channels-slack,channels-discord,scheduler,web-dashboard --target x86_64-apple-darwin
 
       - name: Upload desktop artifacts
         uses: actions/upload-artifact@v7
@@ -245,20 +233,26 @@ jobs:
             target/aarch64-apple-darwin/ci-release/bundle/dmg/*.dmg
             target/x86_64-apple-darwin/ci-release/bundle/dmg/*.dmg
 
-      - name: Rename standalone binaries with platform label
+      - name: Rename standalone binaries with arch labels
         run: |
-          cp target/ci-release/universal/zenii target/ci-release/universal/zenii-macos
-          cp target/ci-release/universal/zenii-daemon target/ci-release/universal/zenii-daemon-macos
-          cp target/ci-release/universal/zenii-tui target/ci-release/universal/zenii-tui-macos
+          cp target/aarch64-apple-darwin/ci-release/zenii target/aarch64-apple-darwin/ci-release/zenii-macos-arm64
+          cp target/aarch64-apple-darwin/ci-release/zenii-daemon target/aarch64-apple-darwin/ci-release/zenii-daemon-macos-arm64
+          cp target/aarch64-apple-darwin/ci-release/zenii-tui target/aarch64-apple-darwin/ci-release/zenii-tui-macos-arm64
+          cp target/x86_64-apple-darwin/ci-release/zenii target/x86_64-apple-darwin/ci-release/zenii-macos-x86_64
+          cp target/x86_64-apple-darwin/ci-release/zenii-daemon target/x86_64-apple-darwin/ci-release/zenii-daemon-macos-x86_64
+          cp target/x86_64-apple-darwin/ci-release/zenii-tui target/x86_64-apple-darwin/ci-release/zenii-tui-macos-x86_64
 
       - name: Upload standalone binaries
         uses: actions/upload-artifact@v7
         with:
           name: macos-standalone
           path: |
-            target/ci-release/universal/zenii-macos
-            target/ci-release/universal/zenii-daemon-macos
-            target/ci-release/universal/zenii-tui-macos
+            target/aarch64-apple-darwin/ci-release/zenii-macos-arm64
+            target/aarch64-apple-darwin/ci-release/zenii-daemon-macos-arm64
+            target/aarch64-apple-darwin/ci-release/zenii-tui-macos-arm64
+            target/x86_64-apple-darwin/ci-release/zenii-macos-x86_64
+            target/x86_64-apple-darwin/ci-release/zenii-daemon-macos-x86_64
+            target/x86_64-apple-darwin/ci-release/zenii-tui-macos-x86_64
 
       - name: Cleanup keychain
         if: always()
@@ -391,7 +385,9 @@ jobs:
           find . -type f \( -name "*.deb" -o -name "*.rpm" -o -name "*.AppImage" \
             -o -name "*.dmg" -o -name "*.msi" -o -name "*.exe" \
             -o -name "zenii-linux" -o -name "zenii-daemon-linux" -o -name "zenii-tui-linux" \
-            -o -name "zenii-macos" -o -name "zenii-daemon-macos" -o -name "zenii-tui-macos" \
+            -o -name "zenii-macos-arm64" -o -name "zenii-macos-x86_64" \
+            -o -name "zenii-daemon-macos-arm64" -o -name "zenii-daemon-macos-x86_64" \
+            -o -name "zenii-tui-macos-arm64" -o -name "zenii-tui-macos-x86_64" \
             -o -name "zenii-arm64" -o -name "zenii-daemon-arm64" \
             -o -name "zenii-armv7" -o -name "zenii-daemon-armv7" \
             -o -name "zenii.exe" -o -name "zenii-daemon.exe" -o -name "zenii-tui.exe" \) \
@@ -425,9 +421,12 @@ jobs:
             artifacts/**/zenii-linux
             artifacts/**/zenii-daemon-linux
             artifacts/**/zenii-tui-linux
-            artifacts/**/zenii-macos
-            artifacts/**/zenii-daemon-macos
-            artifacts/**/zenii-tui-macos
+            artifacts/**/zenii-macos-arm64
+            artifacts/**/zenii-macos-x86_64
+            artifacts/**/zenii-daemon-macos-arm64
+            artifacts/**/zenii-daemon-macos-x86_64
+            artifacts/**/zenii-tui-macos-arm64
+            artifacts/**/zenii-tui-macos-x86_64
             artifacts/**/zenii-arm64
             artifacts/**/zenii-daemon-arm64
             artifacts/**/zenii-armv7

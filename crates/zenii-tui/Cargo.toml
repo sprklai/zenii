@@ -2,6 +2,13 @@
 name = "zenii-tui"
 version.workspace = true
 edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
+description = "Terminal UI for Zenii AI assistant"
 default-run = "zenii-tui"
 
 [[bin]]

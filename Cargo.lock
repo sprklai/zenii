@@ -9658,6 +9658,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "zenii"
+version = "0.0.16"
+
+[[package]]
 name = "zenii-cli"
 version = "0.0.16"
 dependencies = [

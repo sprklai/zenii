@@ -4,10 +4,11 @@
   <img src="crates/zenii-desktop/icons/icon.png" alt="Zenii" width="180" />
 </p>
 
-<h1 align="center">A lightweight, secure, local-first AI agent for desktop, CLI, and daemon.</h1>
+<h1 align="center">20 megabytes. AI everywhere.</h1>
 
 <p align="center">
-  Built with Rust + Tauri 2. Privacy-first alternative to <a href="https://github.com/openclaw/openclaw">OpenClaw</a>. &lt;20MB native binary.<br>
+  Install one binary. Now your scripts have AI memory. Your cron jobs reason. Your Telegram bot thinks.<br>
+  A private AI backend for everything on your machine — native desktop app, plugins in any language, and an API your <code>curl</code> can call. Just Rust.<br>
   <a href="https://zenii.sprklai.com">https://zenii.sprklai.com</a>
 </p>
 
@@ -68,40 +69,48 @@
 
 ---
 
+> *"ChatGPT is a tab you open. Zenii is a capability your machine gains."*
+
 ## Why Zenii?
 
-- **Native desktop app** -- Tauri 2 + Svelte 5 GUI, not a browser tab or Electron wrapper
-- **<20MB binary** with full GUI -- no Node.js runtime, no JVM, just a native Rust binary
-- **Plugin system in ANY language** -- JSON-RPC protocol, write plugins in Python, Go, JS, or anything that speaks stdio
-- **Self-evolving skills** -- agent learns your preferences and proposes skill changes with human-in-the-loop approval
-- **Semantic memory** -- SQLite FTS5 + vector embeddings for intelligent recall across conversations
-- **Scheduled autonomy** -- cron-driven agent tasks that run unattended
-- **Autonomous reasoning** -- multi-step agent loops with configurable continuation strategies
-- **Privacy-first** -- zero telemetry, all data local, OS keyring for credentials
+| Your pain | How Zenii fixes it |
+|-----------|-------------------|
+| Context resets every AI session | Semantic memory persists across sessions and survives restarts |
+| AI can't do things, only talk | 16 built-in tools: web search, file ops, shell, scheduling |
+| Locked into one AI provider | 18 providers, switch with one config change |
+| AI tools are cloud-only | 100% local, zero telemetry, OS keyring for secrets |
+| "Works on my machine" for AI | Same binary on macOS, Linux, Windows -- desktop, CLI, or daemon |
+| Plugin systems require learning a framework | JSON-RPC over stdio -- write plugins in Python, Go, JS, or anything |
+| AI doesn't learn your patterns | Self-evolving skills with human-in-the-loop approval |
+| AI can't run tasks while you sleep | Built-in cron scheduler for autonomous recurring tasks |
+
+## What Zenii is NOT
+
+- Not a chatbot wrapper -- it's a full API backend with 96 routes
+- Not Electron -- native Tauri 2, under 20 MB
+- Not a framework you learn -- it's infrastructure you call via `curl`
+- Not cloud-dependent -- runs fully offline with Ollama
+- Not opinionated about your stack -- any language, any tool, JSON over HTTP
 
 ---
 
 ## How It Compares
 
-| Category | Zenii | OpenClaw | ZeroClaw |
-|----------|----------|----------|----------|
-| **Language** | Rust | TypeScript | Rust |
-| **Desktop GUI** | Tauri 2 + Svelte 5 | -- | -- |
-| **CLI** | clap | -- | -- |
-| **Headless Daemon** | axum (96 routes) | Node.js | 3.4MB daemon |
-| **AI Providers** | 18 via rig-core | Multi-model | 22+ |
-| **Built-in Tools** | 16 | 100+ AgentSkills | Tool orchestration |
-| **Plugin System** | JSON-RPC (any language) | AgentSkills | Trait-based adapters |
-| **Memory** | SQLite FTS5 + vectors | File-based | Built-in |
-| **Embeddings** | OpenAI + local FastEmbed | -- | -- |
-| **Self-Evolution** | LearnTool + SkillProposals | -- | -- |
-| **Autonomous Reasoning** | ReasoningEngine | -- | -- |
-| **Scheduler** | Cron + one-shot | -- | -- |
-| **Channels** | Telegram, Slack, Discord | WhatsApp, Signal, Telegram, Discord | Telegram, Discord, WhatsApp |
-| **Binary Size** | <20MB (native w/ GUI) | Node.js runtime | 3.4MB |
-| **Privacy** | 100% local, zero telemetry | Local, model-agnostic | 100% local |
-| **License** | MIT | Open source | Open source |
-| **Tests** | 1203 Rust + JS | -- | -- |
+| | **Zenii** | OpenClaw | ZeroClaw | AIChat | Open Interpreter | Khoj |
+|---|---|---|---|---|---|---|
+| **Category** | **AI backend** | Chat agent | Minimal daemon | CLI tool | Code REPL | Document brain |
+| **Language** | **Rust** | TypeScript | Rust | Rust | Python | Python/TS |
+| **Binary** | **<20 MB (w/ GUI)** | ~100 MB+ | ~3.4 MB | Single binary | N/A (Python) | N/A (Python) |
+| **Desktop GUI** | **Native (Tauri 2)** | -- | -- | -- | -- | Browser |
+| **API Routes** | **96 REST+WS** | Chat endpoint | Daemon endpoint | Server mode | -- | -- |
+| **Plugins** | **Any language** | JS only | Rust only | -- | -- | -- |
+| **Memory** | **FTS5 + vectors** | File-based | Basic | Sessions | -- | Doc search |
+| **Self-Evolution** | **Human-approved** | Autonomous | -- | -- | -- | -- |
+| **Scheduling** | **Cron + one-shot** | Cron | -- | -- | -- | Automations |
+| **Security** | **6 layers default** | Optional sandbox | Privacy claims | Config | "Watch it" | Standard |
+| **License** | **MIT** | Open source | Open source | MIT | AGPL-3.0 | AGPL-3.0 |
+
+**No other project has ALL of these simultaneously**: native desktop GUI, 96-route REST/WS API, plugins in any language, semantic vector memory, self-evolution with human approval, under 20 MB compiled binary, and MIT licensed.
 
 ---
 

@@ -2,6 +2,13 @@
 name = "zenii-cli"
 version.workspace = true
 edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
+description = "Command-line interface for Zenii AI assistant"
 
 [[bin]]
 name = "zenii"
