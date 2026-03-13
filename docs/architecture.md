@@ -168,15 +168,7 @@ zenii/
 │   └── build.sh            # Cross-platform build script
 ├── docs/
 │   ├── architecture.md     # This file
-│   ├── phases.md           # Implementation phases
 │   └── processes.md        # Process flow diagrams
-├── plans/
-│   ├── phase1_core_foundation.md  # Detailed implementation plan
-│   └── migration_plan.md          # v1 → v2 migration strategy
-├── tests/
-│   ├── phase1_core_foundation.md  # Test plan + results
-│   ├── phase2_ai_integration.md   # (planned)
-│   └── ...
 ├── crates/
 │   ├── zenii-core/      # Shared library (NO Tauri dependency)
 │   │   ├── src/

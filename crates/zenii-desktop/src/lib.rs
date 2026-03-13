@@ -38,17 +38,14 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            commands::close_to_tray,
             commands::show_window,
             commands::get_app_version,
             commands::open_data_dir,
             commands::show_notification,
         ])
         .on_window_event(|window, event| {
-            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                // Minimize to tray instead of quitting
-                let _ = window.hide();
-                api.prevent_close();
+            if let tauri::WindowEvent::CloseRequested { .. } = event {
+                window.app_handle().exit(0);
             }
         })
         .run(tauri::generate_context!())

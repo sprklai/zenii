@@ -342,29 +342,12 @@ zenii/
 │   └── build.sh            # Cross-platform build script
 ├── docs/
 │   ├── architecture.md     # Detailed architecture diagrams
-│   ├── phases.md           # Implementation phase details
 │   ├── processes.md        # Process flow diagrams
 │   ├── api-reference.md    # All 96 REST/WS routes
 │   ├── configuration.md    # All 70+ config fields
 │   ├── cli-reference.md    # CLI command reference
 │   ├── deployment.md       # Deployment guide
 │   └── development.md      # Development guide
-├── plans/
-│   ├── phase1_core_foundation.md  # Phase 1 implementation plan
-│   ├── phase2_ai_integration.md   # Phase 2 implementation plan
-│   ├── phase3_gateway_server.md   # Phase 3 implementation plan
-│   ├── phase4_agent_intelligence.md # Phase 4 implementation plan
-│   ├── phase5_combined.md         # Phase 5 implementation plan
-│   ├── phase6_frontend.md         # Phase 6 implementation plan
-│   └── phase9_plugin_architecture.md # Phase 9 plugin plan
-├── tests/
-│   ├── phase1_core_foundation.md  # Phase 1 test plan + results
-│   ├── phase2_ai_integration.md   # Phase 2 test plan + results
-│   ├── phase3_gateway_server.md   # Phase 3 test plan + results
-│   ├── phase4_agent_intelligence.md # Phase 4 test plan + results
-│   ├── phase5_combined.md         # Phase 5 test plan + results
-│   ├── phase6_frontend.md         # Phase 6 test plan + results
-│   └── phase9_plugin_architecture.md # Phase 9 test plan
 ├── crates/
 │   ├── zenii-core/      # Shared library (NO Tauri dependency)
 │   ├── zenii-desktop/   # Tauri 2.10 shell (macOS, Windows, Linux)
@@ -645,7 +628,6 @@ Detailed documentation lives in the `docs/` directory:
 - [Deployment Guide](docs/deployment.md) -- Native, Docker, systemd, Raspberry Pi, reverse proxy
 - [Development Guide](docs/development.md) -- Prerequisites, building, testing, how-to guides
 - [Architecture](docs/architecture.md) -- System diagrams, crate dependencies, project structure
-- [Implementation Phases](docs/phases.md) -- Phase gate protocol, checklist, phase details
 - [Process Flows](docs/processes.md) -- Chat request, startup, error handling, WebSocket flows
 - [Changelog](CHANGELOG.md) -- Release history
 

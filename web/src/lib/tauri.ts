@@ -8,13 +8,6 @@ export const isTauri: boolean =
   typeof window !== "undefined" &&
   ("__TAURI_INTERNALS__" in window || "__TAURI__" in window);
 
-/** Hide the window to the system tray. */
-export async function closeToTray(): Promise<void> {
-  if (!isTauri) return;
-  const { invoke } = await import("@tauri-apps/api/core");
-  await invoke("close_to_tray");
-}
-
 /** Show and focus the main window. */
 export async function showWindow(): Promise<void> {
   if (!isTauri) return;

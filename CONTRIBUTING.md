@@ -25,9 +25,9 @@ Use descriptive branch names with one of these prefixes:
 
 ## Phase Gate Protocol
 
-Zenii follows a strict phase gate workflow for all non-trivial changes. See [docs/phases.md](docs/phases.md) for the full protocol. In short:
+Zenii follows a strict phase gate workflow for all non-trivial changes:
 
-1. **Gate 1 -- Plan**: Write a plan document in `plans/`. Get approval before writing code.
+1. **Gate 1 -- Plan**: Write a plan document. Get approval before writing code.
 2. **Gate 2 -- Tests**: Write tests first (TDD). Get approval before implementing.
 3. **Gate 3 -- Completion**: Implement, pass all checks, present summary for review.
 
@@ -43,7 +43,7 @@ Zenii follows the conventions documented in [CLAUDE.md](CLAUDE.md). Key points:
 - **Naming**: `snake_case` (Rust), `camelCase` (TypeScript/Svelte).
 - **Imports**: std, then external crates, then internal modules (blank-line separated).
 - **SQL**: Parameterized queries only. WAL mode. Migrations in transactions.
-- **Testing**: `#[cfg(test)]` in same file. Integration tests in `tests/`.
+- **Testing**: `#[cfg(test)]` in same file.
 - **No dead code**: No commented-out code, unused imports, or placeholder stubs.
 
 ## Testing Requirements

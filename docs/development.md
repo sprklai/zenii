@@ -106,8 +106,6 @@ crates/
 web/                     SvelteKit frontend (SPA, shared by desktop + web)
 scripts/                 Build and utility scripts
 docs/                    Architecture, deployment, and process documentation
-plans/                   Per-phase implementation plans
-tests/                   Per-phase test plans and results
 ```
 
 All business logic lives in `zenii-core`. Binary crates are thin shells (under 100 lines each).
@@ -246,7 +244,7 @@ cd web && bun run check
 ### Test Conventions
 
 - Unit tests live in the same file as the code (`#[cfg(test)]` module)
-- Integration tests go in `tests/` directory
+- Integration tests use `#[cfg(test)]` modules in the same file
 - Use `tempfile` crate for filesystem tests
 - Use `tower::ServiceExt::oneshot()` for gateway handler tests
 - Mock external APIs; never call real APIs in unit tests

@@ -6,20 +6,18 @@ use tauri::{
 
 /// Menu item IDs for the system tray.
 pub const MENU_SHOW: &str = "show";
-pub const MENU_HIDE: &str = "hide";
 pub const MENU_QUIT: &str = "quit";
 
-/// Expected number of menu items (show, hide, separator, quit).
-pub const EXPECTED_MENU_ITEM_COUNT: usize = 4;
+/// Expected number of menu items (show, separator, quit).
+pub const EXPECTED_MENU_ITEM_COUNT: usize = 3;
 
 /// Set up the system tray icon with menu and event handlers.
 pub fn setup_tray(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     let show_item = MenuItem::with_id(app, MENU_SHOW, "Show Window", true, None::<&str>)?;
-    let hide_item = MenuItem::with_id(app, MENU_HIDE, "Hide Window", true, None::<&str>)?;
     let separator = PredefinedMenuItem::separator(app)?;
     let quit_item = MenuItem::with_id(app, MENU_QUIT, "Quit", true, None::<&str>)?;
 
-    let menu = Menu::with_items(app, &[&show_item, &hide_item, &separator, &quit_item])?;
+    let menu = Menu::with_items(app, &[&show_item, &separator, &quit_item])?;
 
     TrayIconBuilder::with_id("main-tray")
         .icon(
@@ -35,11 +33,6 @@ pub fn setup_tray(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>
                 if let Some(w) = app.get_webview_window("main") {
                     let _ = w.show();
                     let _ = w.set_focus();
-                }
-            }
-            MENU_HIDE => {
-                if let Some(w) = app.get_webview_window("main") {
-                    let _ = w.hide();
                 }
             }
             MENU_QUIT => app.exit(0),
@@ -77,8 +70,7 @@ mod tests {
     fn tray_menu_has_expected_items() {
         // Verify the constants are correct
         assert_eq!(MENU_SHOW, "show");
-        assert_eq!(MENU_HIDE, "hide");
         assert_eq!(MENU_QUIT, "quit");
-        assert_eq!(EXPECTED_MENU_ITEM_COUNT, 4); // show, hide, separator, quit
+        assert_eq!(EXPECTED_MENU_ITEM_COUNT, 3); // show, separator, quit
     }
 }
