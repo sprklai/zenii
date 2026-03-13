@@ -1,50 +1,50 @@
-# MesoClaw CLI Reference
+# Zenii CLI Reference
 
-Complete reference for the `mesoclaw` command-line interface.
+Complete reference for the `zenii` command-line interface.
 
-> **Note**: This document was generated with AI assistance and may contain inaccuracies. If you find errors, please [report an issue](https://github.com/sprklai/mesoclaw/issues).
+> **Note**: This document was generated with AI assistance and may contain inaccuracies. If you find errors, please [report an issue](https://github.com/sprklai/zenii/issues).
 
 ## Installation
 
 ### From GitHub Releases
 
-Download the latest binary for your platform from [GitHub Releases](https://github.com/NSRTech/mesoclaw/releases):
+Download the latest binary for your platform from [GitHub Releases](https://github.com/NSRTech/zenii/releases):
 
 ```bash
 # macOS (Apple Silicon)
-curl -LO https://github.com/NSRTech/mesoclaw/releases/latest/download/mesoclaw-aarch64-apple-darwin.tar.gz
-tar xzf mesoclaw-aarch64-apple-darwin.tar.gz
-sudo mv mesoclaw /usr/local/bin/
+curl -LO https://github.com/NSRTech/zenii/releases/latest/download/zenii-aarch64-apple-darwin.tar.gz
+tar xzf zenii-aarch64-apple-darwin.tar.gz
+sudo mv zenii /usr/local/bin/
 
 # Linux (x86_64)
-curl -LO https://github.com/NSRTech/mesoclaw/releases/latest/download/mesoclaw-x86_64-unknown-linux-gnu.tar.gz
-tar xzf mesoclaw-x86_64-unknown-linux-gnu.tar.gz
-sudo mv mesoclaw /usr/local/bin/
+curl -LO https://github.com/NSRTech/zenii/releases/latest/download/zenii-x86_64-unknown-linux-gnu.tar.gz
+tar xzf zenii-x86_64-unknown-linux-gnu.tar.gz
+sudo mv zenii /usr/local/bin/
 ```
 
 ### From Source
 
 ```bash
-cargo install --path crates/mesoclaw-cli
+cargo install --path crates/zenii-cli
 ```
 
 ## Quick Start
 
 ```bash
 # 1. Start the daemon
-mesoclaw daemon start
+zenii daemon start
 
 # 2. Set your API key (stored in OS keyring)
-mesoclaw key set openai sk-your-key-here
+zenii key set openai sk-your-key-here
 
 # 3. Set the default model
-mesoclaw provider default openai gpt-4o
+zenii provider default openai gpt-4o
 
 # 4. Start chatting
-mesoclaw chat
+zenii chat
 
 # 5. Search your memory
-mesoclaw memory search "project notes"
+zenii memory search "project notes"
 ```
 
 ## Global Options
@@ -55,17 +55,17 @@ These options apply to all commands and can appear before or after the subcomman
 |--------|---------|-------------|
 | `--host <HOST>` | `127.0.0.1` | Daemon host address |
 | `--port <PORT>` | `18981` | Daemon port |
-| `--token <TOKEN>` | _(none)_ | Auth token (or set `MESOCLAW_TOKEN` env var) |
+| `--token <TOKEN>` | _(none)_ | Auth token (or set `ZENII_TOKEN` env var) |
 
 Examples:
 
 ```bash
 # Connect to a remote daemon
-mesoclaw --host 192.168.1.100 --port 9000 daemon status
+zenii --host 192.168.1.100 --port 9000 daemon status
 
 # Use a token from the environment
-export MESOCLAW_TOKEN=my-secret-token
-mesoclaw chat
+export ZENII_TOKEN=my-secret-token
+zenii chat
 ```
 
 ## Command Reference
@@ -76,10 +76,10 @@ mesoclaw chat
 
 #### `daemon start`
 
-Start the MesoClaw daemon process.
+Start the Zenii daemon process.
 
 ```bash
-mesoclaw daemon start
+zenii daemon start
 ```
 
 #### `daemon stop`
@@ -87,7 +87,7 @@ mesoclaw daemon start
 Stop the running daemon process.
 
 ```bash
-mesoclaw daemon stop
+zenii daemon stop
 ```
 
 #### `daemon status`
@@ -95,7 +95,7 @@ mesoclaw daemon stop
 Check whether the daemon is running and healthy.
 
 ```bash
-mesoclaw daemon status
+zenii daemon status
 ```
 
 ---
@@ -105,7 +105,7 @@ mesoclaw daemon status
 Open an interactive streaming chat session with the AI agent. Messages are streamed token-by-token over WebSocket.
 
 ```
-mesoclaw chat [--session <ID>] [--model <MODEL>]
+zenii chat [--session <ID>] [--model <MODEL>]
 ```
 
 | Argument | Required | Description |
@@ -117,13 +117,13 @@ Examples:
 
 ```bash
 # Start a new chat session
-mesoclaw chat
+zenii chat
 
 # Continue an existing session
-mesoclaw chat --session 550e8400-e29b-41d4-a716-446655440000
+zenii chat --session 550e8400-e29b-41d4-a716-446655440000
 
 # Use a specific model
-mesoclaw chat --model claude-sonnet-4-20250514
+zenii chat --model claude-sonnet-4-20250514
 ```
 
 ---
@@ -133,7 +133,7 @@ mesoclaw chat --model claude-sonnet-4-20250514
 Send a single prompt and print the response. Useful for scripting and pipelines.
 
 ```
-mesoclaw run <PROMPT> [--session <ID>] [--model <MODEL>]
+zenii run <PROMPT> [--session <ID>] [--model <MODEL>]
 ```
 
 | Argument | Required | Description |
@@ -146,13 +146,13 @@ Examples:
 
 ```bash
 # Simple one-shot prompt
-mesoclaw run "Summarize the Rust ownership model in 3 sentences"
+zenii run "Summarize the Rust ownership model in 3 sentences"
 
 # Use in a pipeline
-echo "Translate to French: Hello world" | xargs mesoclaw run
+echo "Translate to French: Hello world" | xargs zenii run
 
 # Continue a session with a one-off question
-mesoclaw run "What did we discuss earlier?" --session abc123
+zenii run "What did we discuss earlier?" --session abc123
 ```
 
 ---
@@ -164,7 +164,7 @@ mesoclaw run "What did we discuss earlier?" --session abc123
 Search stored memories using full-text and vector search.
 
 ```
-mesoclaw memory search <QUERY> [--limit <N>] [--offset <N>]
+zenii memory search <QUERY> [--limit <N>] [--offset <N>]
 ```
 
 | Argument | Required | Description |
@@ -176,9 +176,9 @@ mesoclaw memory search <QUERY> [--limit <N>] [--offset <N>]
 Examples:
 
 ```bash
-mesoclaw memory search "rust async patterns"
-mesoclaw memory search "meeting notes" --limit 10
-mesoclaw memory search "project ideas" --limit 5 --offset 10
+zenii memory search "rust async patterns"
+zenii memory search "meeting notes" --limit 10
+zenii memory search "project ideas" --limit 5 --offset 10
 ```
 
 #### `memory add`
@@ -186,7 +186,7 @@ mesoclaw memory search "project ideas" --limit 5 --offset 10
 Add a new memory entry.
 
 ```
-mesoclaw memory add <KEY> <CONTENT>
+zenii memory add <KEY> <CONTENT>
 ```
 
 | Argument | Required | Description |
@@ -197,8 +197,8 @@ mesoclaw memory add <KEY> <CONTENT>
 Examples:
 
 ```bash
-mesoclaw memory add "rust-tip-1" "Use Arc<Mutex<T>> for shared mutable state across threads"
-mesoclaw memory add "project-deadline" "v2 launch scheduled for Q2 2026"
+zenii memory add "rust-tip-1" "Use Arc<Mutex<T>> for shared mutable state across threads"
+zenii memory add "project-deadline" "v2 launch scheduled for Q2 2026"
 ```
 
 #### `memory remove`
@@ -206,7 +206,7 @@ mesoclaw memory add "project-deadline" "v2 launch scheduled for Q2 2026"
 Remove a memory entry by key.
 
 ```
-mesoclaw memory remove <KEY>
+zenii memory remove <KEY>
 ```
 
 | Argument | Required | Description |
@@ -216,8 +216,8 @@ mesoclaw memory remove <KEY>
 Examples:
 
 ```bash
-mesoclaw memory remove "rust-tip-1"
-mesoclaw memory remove "outdated-note"
+zenii memory remove "rust-tip-1"
+zenii memory remove "outdated-note"
 ```
 
 ---
@@ -229,7 +229,7 @@ mesoclaw memory remove "outdated-note"
 Display the current configuration as JSON.
 
 ```bash
-mesoclaw config show
+zenii config show
 ```
 
 #### `config set`
@@ -237,7 +237,7 @@ mesoclaw config show
 Set a configuration value.
 
 ```
-mesoclaw config set <KEY> <VALUE>
+zenii config set <KEY> <VALUE>
 ```
 
 | Argument | Required | Description |
@@ -248,9 +248,9 @@ mesoclaw config set <KEY> <VALUE>
 Examples:
 
 ```bash
-mesoclaw config set log_level debug
-mesoclaw config set autonomy_level supervised
-mesoclaw config set gateway_port 9090
+zenii config set log_level debug
+zenii config set autonomy_level supervised
+zenii config set gateway_port 9090
 ```
 
 ---
@@ -264,7 +264,7 @@ All credentials are stored in the OS keyring (or in-memory fallback).
 Set an API key for a provider or service.
 
 ```
-mesoclaw key set <PROVIDER> <KEY>
+zenii key set <PROVIDER> <KEY>
 ```
 
 | Argument | Required | Description |
@@ -277,9 +277,9 @@ The key is stored as `api_key:<provider>` in the credential store.
 Examples:
 
 ```bash
-mesoclaw key set openai sk-proj-abc123
-mesoclaw key set tavily tvly-xyz789
-mesoclaw key set brave BSA-key-here
+zenii key set openai sk-proj-abc123
+zenii key set tavily tvly-xyz789
+zenii key set brave BSA-key-here
 ```
 
 #### `key remove`
@@ -287,13 +287,13 @@ mesoclaw key set brave BSA-key-here
 Remove an API key for a provider.
 
 ```
-mesoclaw key remove <PROVIDER>
+zenii key remove <PROVIDER>
 ```
 
 Examples:
 
 ```bash
-mesoclaw key remove tavily
+zenii key remove tavily
 ```
 
 #### `key set-channel`
@@ -301,7 +301,7 @@ mesoclaw key remove tavily
 Set a credential field for a messaging channel.
 
 ```
-mesoclaw key set-channel <CHANNEL> <FIELD> <VALUE>
+zenii key set-channel <CHANNEL> <FIELD> <VALUE>
 ```
 
 | Argument | Required | Description |
@@ -315,9 +315,9 @@ The key is stored as `channel:<channel>:<field>` in the credential store.
 Examples:
 
 ```bash
-mesoclaw key set-channel telegram token "bot123456:ABCdefGHIjklMNO"
-mesoclaw key set-channel slack bot_token "xoxb-your-token"
-mesoclaw key set-channel discord token "MTIz.abc.xyz"
+zenii key set-channel telegram token "bot123456:ABCdefGHIjklMNO"
+zenii key set-channel slack bot_token "xoxb-your-token"
+zenii key set-channel discord token "MTIz.abc.xyz"
 ```
 
 #### `key remove-channel`
@@ -325,14 +325,14 @@ mesoclaw key set-channel discord token "MTIz.abc.xyz"
 Remove a channel credential field.
 
 ```
-mesoclaw key remove-channel <CHANNEL> <FIELD>
+zenii key remove-channel <CHANNEL> <FIELD>
 ```
 
 Examples:
 
 ```bash
-mesoclaw key remove-channel slack bot_token
-mesoclaw key remove-channel telegram token
+zenii key remove-channel slack bot_token
+zenii key remove-channel telegram token
 ```
 
 #### `key set-raw`
@@ -340,14 +340,14 @@ mesoclaw key remove-channel telegram token
 Set a raw credential key (advanced). Use the full colon-separated key directly.
 
 ```
-mesoclaw key set-raw <KEY> <VALUE>
+zenii key set-raw <KEY> <VALUE>
 ```
 
 Examples:
 
 ```bash
-mesoclaw key set-raw "channel:telegram:token" "bot123:abc"
-mesoclaw key set-raw "custom:my-service:secret" "s3cr3t"
+zenii key set-raw "channel:telegram:token" "bot123:abc"
+zenii key set-raw "custom:my-service:secret" "s3cr3t"
 ```
 
 #### `key remove-raw`
@@ -355,13 +355,13 @@ mesoclaw key set-raw "custom:my-service:secret" "s3cr3t"
 Remove a raw credential key.
 
 ```
-mesoclaw key remove-raw <KEY>
+zenii key remove-raw <KEY>
 ```
 
 Examples:
 
 ```bash
-mesoclaw key remove-raw "channel:telegram:token"
+zenii key remove-raw "channel:telegram:token"
 ```
 
 #### `key list`
@@ -369,7 +369,7 @@ mesoclaw key remove-raw "channel:telegram:token"
 List all stored credential keys, grouped by type. Values are not displayed.
 
 ```bash
-mesoclaw key list
+zenii key list
 ```
 
 ---
@@ -381,7 +381,7 @@ mesoclaw key list
 List all registered providers with their API key status.
 
 ```bash
-mesoclaw provider list
+zenii provider list
 ```
 
 #### `provider test`
@@ -389,7 +389,7 @@ mesoclaw provider list
 Test connectivity to a provider by making a lightweight API call.
 
 ```
-mesoclaw provider test <PROVIDER_ID>
+zenii provider test <PROVIDER_ID>
 ```
 
 | Argument | Required | Description |
@@ -399,8 +399,8 @@ mesoclaw provider test <PROVIDER_ID>
 Examples:
 
 ```bash
-mesoclaw provider test openai
-mesoclaw provider test anthropic
+zenii provider test openai
+zenii provider test anthropic
 ```
 
 #### `provider add`
@@ -408,7 +408,7 @@ mesoclaw provider test anthropic
 Add a custom OpenAI-compatible provider.
 
 ```
-mesoclaw provider add <ID> --base-url <URL> [--name <NAME>]
+zenii provider add <ID> --base-url <URL> [--name <NAME>]
 ```
 
 | Argument | Required | Description |
@@ -420,8 +420,8 @@ mesoclaw provider add <ID> --base-url <URL> [--name <NAME>]
 Examples:
 
 ```bash
-mesoclaw provider add ollama --base-url http://localhost:11434/v1
-mesoclaw provider add my-proxy --base-url https://proxy.example.com/v1 --name "My Proxy"
+zenii provider add ollama --base-url http://localhost:11434/v1
+zenii provider add my-proxy --base-url https://proxy.example.com/v1 --name "My Proxy"
 ```
 
 #### `provider remove`
@@ -429,13 +429,13 @@ mesoclaw provider add my-proxy --base-url https://proxy.example.com/v1 --name "M
 Remove a user-defined provider. Built-in providers cannot be removed.
 
 ```
-mesoclaw provider remove <PROVIDER_ID>
+zenii provider remove <PROVIDER_ID>
 ```
 
 Examples:
 
 ```bash
-mesoclaw provider remove my-proxy
+zenii provider remove my-proxy
 ```
 
 #### `provider default`
@@ -443,7 +443,7 @@ mesoclaw provider remove my-proxy
 Set the default model used for chat and run commands.
 
 ```
-mesoclaw provider default <PROVIDER_ID> <MODEL_ID>
+zenii provider default <PROVIDER_ID> <MODEL_ID>
 ```
 
 | Argument | Required | Description |
@@ -454,9 +454,9 @@ mesoclaw provider default <PROVIDER_ID> <MODEL_ID>
 Examples:
 
 ```bash
-mesoclaw provider default openai gpt-4o
-mesoclaw provider default anthropic claude-sonnet-4-20250514
-mesoclaw provider default ollama llama3
+zenii provider default openai gpt-4o
+zenii provider default anthropic claude-sonnet-4-20250514
+zenii provider default ollama llama3
 ```
 
 ---
@@ -468,7 +468,7 @@ mesoclaw provider default ollama llama3
 List all scheduled jobs.
 
 ```bash
-mesoclaw schedule list
+zenii schedule list
 ```
 
 #### `schedule create`
@@ -476,7 +476,7 @@ mesoclaw schedule list
 Create a new scheduled job.
 
 ```
-mesoclaw schedule create <NAME> [OPTIONS]
+zenii schedule create <NAME> [OPTIONS]
 ```
 
 | Argument | Required | Default | Description |
@@ -494,17 +494,17 @@ Examples:
 
 ```bash
 # Health check every 5 minutes
-mesoclaw schedule create health-check --interval-secs 300
+zenii schedule create health-check --interval-secs 300
 
 # Daily summary via cron
-mesoclaw schedule create daily-summary \
+zenii schedule create daily-summary \
   --schedule-type cron \
   --cron-expr "0 9 * * *" \
   --payload agent_turn \
   --prompt "Summarize my tasks for today"
 
 # One-shot reminder
-mesoclaw schedule create reminder \
+zenii schedule create reminder \
   --interval-secs 3600 \
   --payload notify \
   --message "Time for a break!" \
@@ -516,13 +516,13 @@ mesoclaw schedule create reminder \
 Toggle a job between enabled and disabled.
 
 ```
-mesoclaw schedule toggle <ID>
+zenii schedule toggle <ID>
 ```
 
 Examples:
 
 ```bash
-mesoclaw schedule toggle job-123
+zenii schedule toggle job-123
 ```
 
 #### `schedule delete`
@@ -530,13 +530,13 @@ mesoclaw schedule toggle job-123
 Delete a scheduled job permanently.
 
 ```
-mesoclaw schedule delete <ID>
+zenii schedule delete <ID>
 ```
 
 Examples:
 
 ```bash
-mesoclaw schedule delete job-456
+zenii schedule delete job-456
 ```
 
 #### `schedule history`
@@ -544,13 +544,13 @@ mesoclaw schedule delete job-456
 Show execution history for a job.
 
 ```
-mesoclaw schedule history <ID>
+zenii schedule history <ID>
 ```
 
 Examples:
 
 ```bash
-mesoclaw schedule history job-789
+zenii schedule history job-789
 ```
 
 #### `schedule status`
@@ -558,7 +558,7 @@ mesoclaw schedule history job-789
 Show overall scheduler status (running jobs, next execution times).
 
 ```bash
-mesoclaw schedule status
+zenii schedule status
 ```
 
 ---
@@ -570,7 +570,7 @@ mesoclaw schedule status
 Activate an embedding provider.
 
 ```
-mesoclaw embedding activate <PROVIDER>
+zenii embedding activate <PROVIDER>
 ```
 
 | Argument | Required | Description |
@@ -581,10 +581,10 @@ Examples:
 
 ```bash
 # Activate local embeddings (no API key required)
-mesoclaw embedding activate local
+zenii embedding activate local
 
 # Activate OpenAI embeddings (requires api_key:openai)
-mesoclaw embedding activate openai
+zenii embedding activate openai
 ```
 
 #### `embedding deactivate`
@@ -592,7 +592,7 @@ mesoclaw embedding activate openai
 Deactivate the current embedding provider (fall back to FTS5 only).
 
 ```bash
-mesoclaw embedding deactivate
+zenii embedding deactivate
 ```
 
 #### `embedding status`
@@ -600,7 +600,7 @@ mesoclaw embedding deactivate
 Show the current embedding provider status.
 
 ```bash
-mesoclaw embedding status
+zenii embedding status
 ```
 
 #### `embedding test`
@@ -608,7 +608,7 @@ mesoclaw embedding status
 Test embedding generation with the current provider.
 
 ```bash
-mesoclaw embedding test
+zenii embedding test
 ```
 
 #### `embedding reindex`
@@ -616,7 +616,7 @@ mesoclaw embedding test
 Re-embed all stored memories with the current provider.
 
 ```bash
-mesoclaw embedding reindex
+zenii embedding reindex
 ```
 
 ---
@@ -628,7 +628,7 @@ mesoclaw embedding reindex
 List all installed plugins.
 
 ```bash
-mesoclaw plugin list
+zenii plugin list
 ```
 
 #### `plugin install`
@@ -636,7 +636,7 @@ mesoclaw plugin list
 Install a plugin from a git URL or local path.
 
 ```
-mesoclaw plugin install <SOURCE> [--local]
+zenii plugin install <SOURCE> [--local]
 ```
 
 | Argument | Required | Description |
@@ -648,10 +648,10 @@ Examples:
 
 ```bash
 # Install from git
-mesoclaw plugin install https://github.com/user/weather-plugin
+zenii plugin install https://github.com/user/weather-plugin
 
 # Install from local directory
-mesoclaw plugin install ./my-plugin --local
+zenii plugin install ./my-plugin --local
 ```
 
 #### `plugin remove`
@@ -659,7 +659,7 @@ mesoclaw plugin install ./my-plugin --local
 Remove an installed plugin.
 
 ```
-mesoclaw plugin remove <NAME>
+zenii plugin remove <NAME>
 ```
 
 | Argument | Required | Description |
@@ -669,7 +669,7 @@ mesoclaw plugin remove <NAME>
 Examples:
 
 ```bash
-mesoclaw plugin remove weather
+zenii plugin remove weather
 ```
 
 #### `plugin update`
@@ -677,7 +677,7 @@ mesoclaw plugin remove weather
 Update a git-sourced plugin to the latest version.
 
 ```
-mesoclaw plugin update <NAME>
+zenii plugin update <NAME>
 ```
 
 | Argument | Required | Description |
@@ -687,7 +687,7 @@ mesoclaw plugin update <NAME>
 Examples:
 
 ```bash
-mesoclaw plugin update weather
+zenii plugin update weather
 ```
 
 #### `plugin enable`
@@ -695,7 +695,7 @@ mesoclaw plugin update weather
 Enable a disabled plugin.
 
 ```
-mesoclaw plugin enable <NAME>
+zenii plugin enable <NAME>
 ```
 
 | Argument | Required | Description |
@@ -705,7 +705,7 @@ mesoclaw plugin enable <NAME>
 Examples:
 
 ```bash
-mesoclaw plugin enable weather
+zenii plugin enable weather
 ```
 
 #### `plugin disable`
@@ -713,7 +713,7 @@ mesoclaw plugin enable weather
 Disable a plugin.
 
 ```
-mesoclaw plugin disable <NAME>
+zenii plugin disable <NAME>
 ```
 
 | Argument | Required | Description |
@@ -723,7 +723,7 @@ mesoclaw plugin disable <NAME>
 Examples:
 
 ```bash
-mesoclaw plugin disable weather
+zenii plugin disable weather
 ```
 
 #### `plugin info`
@@ -731,7 +731,7 @@ mesoclaw plugin disable weather
 Show plugin details.
 
 ```
-mesoclaw plugin info <NAME>
+zenii plugin info <NAME>
 ```
 
 | Argument | Required | Description |
@@ -741,7 +741,7 @@ mesoclaw plugin info <NAME>
 Examples:
 
 ```bash
-mesoclaw plugin info weather
+zenii plugin info weather
 ```
 
 ---
@@ -751,7 +751,7 @@ mesoclaw plugin info weather
 Generate shell completion scripts. This command is hidden from `--help` output.
 
 ```
-mesoclaw completions <SHELL>
+zenii completions <SHELL>
 ```
 
 | Argument | Required | Description |
@@ -766,8 +766,8 @@ See [Shell Completions](#shell-completions) for installation instructions.
 
 | Variable | Description |
 |----------|-------------|
-| `MESOCLAW_TOKEN` | Auth token for the daemon. Equivalent to `--token`. |
-| `MESOCLAW_GATEWAY_URL` | Override the gateway URL (used by the desktop app for external daemon mode). |
+| `ZENII_TOKEN` | Auth token for the daemon. Equivalent to `--token`. |
+| `ZENII_GATEWAY_URL` | Override the gateway URL (used by the desktop app for external daemon mode). |
 
 ## Exit Codes
 
@@ -784,15 +784,15 @@ Generate and install shell completions for tab-completion of commands and option
 ### Bash
 
 ```bash
-mesoclaw completions bash > ~/.local/share/bash-completion/completions/mesoclaw
+zenii completions bash > ~/.local/share/bash-completion/completions/zenii
 # Or system-wide:
-mesoclaw completions bash | sudo tee /etc/bash_completion.d/mesoclaw > /dev/null
+zenii completions bash | sudo tee /etc/bash_completion.d/zenii > /dev/null
 ```
 
 ### Zsh
 
 ```bash
-mesoclaw completions zsh > ~/.zfunc/_mesoclaw
+zenii completions zsh > ~/.zfunc/_zenii
 # Ensure ~/.zfunc is in your fpath (add to ~/.zshrc):
 #   fpath=(~/.zfunc $fpath)
 #   autoload -Uz compinit && compinit
@@ -801,15 +801,15 @@ mesoclaw completions zsh > ~/.zfunc/_mesoclaw
 ### Fish
 
 ```bash
-mesoclaw completions fish > ~/.config/fish/completions/mesoclaw.fish
+zenii completions fish > ~/.config/fish/completions/zenii.fish
 ```
 
 ### PowerShell
 
 ```powershell
-mesoclaw completions powershell > $HOME\Documents\PowerShell\Completions\mesoclaw.ps1
+zenii completions powershell > $HOME\Documents\PowerShell\Completions\zenii.ps1
 # Add to your $PROFILE:
-#   . $HOME\Documents\PowerShell\Completions\mesoclaw.ps1
+#   . $HOME\Documents\PowerShell\Completions\zenii.ps1
 ```
 
 ## Recipes
@@ -818,70 +818,70 @@ mesoclaw completions powershell > $HOME\Documents\PowerShell\Completions\mesocla
 
 ```bash
 # Start the daemon
-mesoclaw daemon start
+zenii daemon start
 
 # Store your OpenAI API key
-mesoclaw key set openai sk-proj-your-key
+zenii key set openai sk-proj-your-key
 
 # Set the default model
-mesoclaw provider default openai gpt-4o
+zenii provider default openai gpt-4o
 
 # Verify the provider is working
-mesoclaw provider test openai
+zenii provider test openai
 
 # Start chatting
-mesoclaw chat
+zenii chat
 ```
 
 ### Switch AI provider
 
 ```bash
 # Add your Anthropic key
-mesoclaw key set anthropic sk-ant-your-key
+zenii key set anthropic sk-ant-your-key
 
 # Set Anthropic as the default
-mesoclaw provider default anthropic claude-sonnet-4-20250514
+zenii provider default anthropic claude-sonnet-4-20250514
 
 # Verify it works
-mesoclaw provider test anthropic
+zenii provider test anthropic
 ```
 
 ### Add a local Ollama provider
 
 ```bash
 # Register Ollama as a custom provider
-mesoclaw provider add ollama --base-url http://localhost:11434/v1 --name "Ollama Local"
+zenii provider add ollama --base-url http://localhost:11434/v1 --name "Ollama Local"
 
 # No API key needed for local Ollama
 # Set as default
-mesoclaw provider default ollama llama3
+zenii provider default ollama llama3
 ```
 
 ### Schedule a daily report
 
 ```bash
 # Create a cron job that runs at 9 AM every day
-mesoclaw schedule create morning-briefing \
+zenii schedule create morning-briefing \
   --schedule-type cron \
   --cron-expr "0 9 * * *" \
   --payload agent_turn \
   --prompt "Give me a summary of my recent conversations and any pending tasks"
 
 # Check it was created
-mesoclaw schedule list
+zenii schedule list
 
 # View execution history later
-mesoclaw schedule history <job-id>
+zenii schedule history <job-id>
 ```
 
 ### Connect Telegram bot
 
 ```bash
 # Store the Telegram bot token
-mesoclaw key set-channel telegram token "bot123456789:ABCdefGHIjklMNOpqrsTUVwxyz"
+zenii key set-channel telegram token "bot123456789:ABCdefGHIjklMNOpqrsTUVwxyz"
 
 # Verify the key is stored
-mesoclaw key list
+zenii key list
 
 # Test the channel (if channels feature is enabled)
 # The daemon will pick up the credentials automatically
@@ -891,11 +891,11 @@ mesoclaw key list
 
 ```bash
 # Export all memories matching a query
-mesoclaw memory search "" --limit 1000 > memories-backup.json
+zenii memory search "" --limit 1000 > memories-backup.json
 
 # Add memories back after a fresh install
-mesoclaw memory add "key-1" "content of memory 1"
-mesoclaw memory add "key-2" "content of memory 2"
+zenii memory add "key-1" "content of memory 1"
+zenii memory add "key-2" "content of memory 2"
 ```
 
 ### Use in scripts
@@ -903,11 +903,11 @@ mesoclaw memory add "key-2" "content of memory 2"
 ```bash
 #!/bin/bash
 # Automated daily log processor
-SUMMARY=$(mesoclaw run "Summarize today's system logs: $(journalctl --since today --no-pager | tail -50)")
+SUMMARY=$(zenii run "Summarize today's system logs: $(journalctl --since today --no-pager | tail -50)")
 echo "$SUMMARY" >> ~/daily-summaries.log
 
 # Check daemon health in monitoring
-if ! mesoclaw daemon status > /dev/null 2>&1; then
-  echo "MesoClaw daemon is down!" | mail -s "Alert" admin@example.com
+if ! zenii daemon status > /dev/null 2>&1; then
+  echo "Zenii daemon is down!" | mail -s "Alert" admin@example.com
 fi
 ```

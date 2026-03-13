@@ -6,11 +6,11 @@ ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 # Files to sync
 CARGO_TOML="$ROOT_DIR/Cargo.toml"
-TAURI_CONF="$ROOT_DIR/crates/mesoclaw-desktop/tauri.conf.json"
+TAURI_CONF="$ROOT_DIR/crates/zenii-desktop/tauri.conf.json"
 PACKAGE_JSON="$ROOT_DIR/web/package.json"
 ENV_TS="$ROOT_DIR/web/src/test-mocks/environment.ts"
-IDENTITY_TYPES="$ROOT_DIR/crates/mesoclaw-core/src/identity/types.rs"
-IDENTITY_MD="$ROOT_DIR/crates/mesoclaw-core/src/identity/defaults/IDENTITY.md"
+IDENTITY_TYPES="$ROOT_DIR/crates/zenii-core/src/identity/types.rs"
+IDENTITY_MD="$ROOT_DIR/crates/zenii-core/src/identity/defaults/IDENTITY.md"
 CHANGELOG="$ROOT_DIR/CHANGELOG.md"
 
 usage() {

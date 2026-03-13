@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Default source image
-SOURCE_IMAGE="${1:-crates/mesoclaw-desktop/icons/zenii-light.svg}"
+SOURCE_IMAGE="${1:-crates/zenii-desktop/icons/zenii-light.svg}"
 
 # Background color (hex, e.g. '#FFFFFF')
 BG_COLOR="${BG_COLOR:-#FFFFFF}"
@@ -40,8 +40,8 @@ echo "🚀 Generating icons from $SOURCE_IMAGE..."
 # DESKTOP ICONS
 # -------------------------------------------------------------------------
 echo "🖥️  Generating Desktop icons..."
-ICONS_DIR="crates/mesoclaw-desktop/icons"
-TEMP_ICONSET="/tmp/MesoClaw.iconset"
+ICONS_DIR="crates/zenii-desktop/icons"
+TEMP_ICONSET="/tmp/Zenii.iconset"
 
 mkdir -p "$TEMP_ICONSET"
 
@@ -96,7 +96,7 @@ resize "web/static/app-icon-32.png"  32
 # -------------------------------------------------------------------------
 # ANDROID ICONS (only if Android project has been initialized)
 # -------------------------------------------------------------------------
-ANDROID_RES_DIR="crates/mesoclaw-desktop/gen/android/app/src/main/res"
+ANDROID_RES_DIR="crates/zenii-desktop/gen/android/app/src/main/res"
 
 if [ -d "$ANDROID_RES_DIR" ]; then
     echo "🤖 Generating Android icons..."
@@ -114,7 +114,7 @@ fi
 # -------------------------------------------------------------------------
 # iOS ICONS (only if iOS project has been initialized)
 # -------------------------------------------------------------------------
-IOS_ASSET_DIR="crates/mesoclaw-desktop/gen/apple/Assets.xcassets/AppIcon.appiconset"
+IOS_ASSET_DIR="crates/zenii-desktop/gen/apple/Assets.xcassets/AppIcon.appiconset"
 
 if [ -d "$IOS_ASSET_DIR" ]; then
     echo "🍎 Generating iOS icons..."

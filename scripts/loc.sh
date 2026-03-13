@@ -75,7 +75,7 @@ human_number() {
 case "$MODE" in
     summary)
         echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-        echo "  MesoClaw — Lines of Code (excluding tests, comments, blanks)"
+        echo "  Zenii — Lines of Code (excluding tests, comments, blanks)"
         echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
         "${TOKEI_BASE[@]}"
         echo ""
@@ -84,7 +84,7 @@ case "$MODE" in
 
     files)
         echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-        echo "  MesoClaw — Per-File Lines of Code"
+        echo "  Zenii — Per-File Lines of Code"
         echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
         "${TOKEI_BASE[@]}" --files
         ;;

@@ -1,6 +1,6 @@
 core:
   - changed-files:
-      - any-glob-to-any-file: "crates/mesoclaw-core/**"
+      - any-glob-to-any-file: "crates/zenii-core/**"
 
 frontend:
   - changed-files:
@@ -18,8 +18,8 @@ docs:
 
 cli:
   - changed-files:
-      - any-glob-to-any-file: "crates/mesoclaw-cli/**"
+      - any-glob-to-any-file: "crates/zenii-cli/**"
 
 desktop:
   - changed-files:
-      - any-glob-to-any-file: "crates/mesoclaw-desktop/**"
+      - any-glob-to-any-file: "crates/zenii-desktop/**"

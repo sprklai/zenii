@@ -1,26 +1,26 @@
-# MesoClaw
+# Zenii
 
 <p align="center">
-  <img src="crates/mesoclaw-desktop/icons/icon.png" alt="MesoClaw" width="180" />
+  <img src="crates/zenii-desktop/icons/icon.png" alt="Zenii" width="180" />
 </p>
 
 <h1 align="center">A lightweight, secure, local-first AI agent for desktop, CLI, and daemon.</h1>
 
 <p align="center">
   Built with Rust + Tauri 2. Privacy-first alternative to <a href="https://github.com/openclaw/openclaw">OpenClaw</a>. &lt;20MB native binary.<br>
-  <a href="https://mesoclaw.sprklai.com">https://mesoclaw.sprklai.com</a>
+  <a href="https://zenii.sprklai.com">https://zenii.sprklai.com</a>
 </p>
 
 <!-- Row 1: CI & Release -->
 <p align="center">
-  <a href="https://github.com/sprklai/mesoclaw/actions/workflows/release.yml">
-    <img src="https://img.shields.io/github/actions/workflow/status/sprklai/mesoclaw/release.yml?style=flat-square&label=release" alt="Release Build" />
+  <a href="https://github.com/sprklai/zenii/actions/workflows/release.yml">
+    <img src="https://img.shields.io/github/actions/workflow/status/sprklai/zenii/release.yml?style=flat-square&label=release" alt="Release Build" />
   </a>
-  <a href="https://github.com/sprklai/mesoclaw/actions/workflows/ci.yml">
-    <img src="https://img.shields.io/github/actions/workflow/status/sprklai/mesoclaw/ci.yml?style=flat-square&label=CI" alt="CI" />
+  <a href="https://github.com/sprklai/zenii/actions/workflows/ci.yml">
+    <img src="https://img.shields.io/github/actions/workflow/status/sprklai/zenii/ci.yml?style=flat-square&label=CI" alt="CI" />
   </a>
-  <a href="https://github.com/sprklai/mesoclaw/releases/latest">
-    <img src="https://img.shields.io/github/v/release/sprklai/mesoclaw?style=flat-square" alt="Latest Release" />
+  <a href="https://github.com/sprklai/zenii/releases/latest">
+    <img src="https://img.shields.io/github/v/release/sprklai/zenii?style=flat-square" alt="Latest Release" />
   </a>
   <a href="LICENSE">
     <img src="https://img.shields.io/badge/license-MIT-green?style=flat-square" alt="MIT License" />
@@ -55,20 +55,20 @@
 
 <!-- Row 5: Community -->
 <p align="center">
-  <a href="https://github.com/sprklai/mesoclaw/stargazers">
-    <img src="https://img.shields.io/github/stars/sprklai/mesoclaw?style=flat-square" alt="GitHub Stars" />
+  <a href="https://github.com/sprklai/zenii/stargazers">
+    <img src="https://img.shields.io/github/stars/sprklai/zenii?style=flat-square" alt="GitHub Stars" />
   </a>
-  <a href="https://github.com/sprklai/mesoclaw/issues">
-    <img src="https://img.shields.io/github/issues/sprklai/mesoclaw?style=flat-square" alt="GitHub Issues" />
+  <a href="https://github.com/sprklai/zenii/issues">
+    <img src="https://img.shields.io/github/issues/sprklai/zenii?style=flat-square" alt="GitHub Issues" />
   </a>
-  <a href="https://github.com/sprklai/mesoclaw/pulls">
+  <a href="https://github.com/sprklai/zenii/pulls">
     <img src="https://img.shields.io/badge/PRs-welcome-brightgreen?style=flat-square" alt="PRs Welcome" />
   </a>
 </p>
 
 ---
 
-## Why MesoClaw?
+## Why Zenii?
 
 - **Native desktop app** -- Tauri 2 + Svelte 5 GUI, not a browser tab or Electron wrapper
 - **<20MB binary** with full GUI -- no Node.js runtime, no JVM, just a native Rust binary
@@ -83,7 +83,7 @@
 
 ## How It Compares
 
-| Category | MesoClaw | OpenClaw | ZeroClaw |
+| Category | Zenii | OpenClaw | ZeroClaw |
 |----------|----------|----------|----------|
 | **Language** | Rust | TypeScript | Rust |
 | **Desktop GUI** | Tauri 2 + Svelte 5 | -- | -- |
@@ -163,7 +163,7 @@ graph TD
         Web["Frontend<br>Svelte 5"]
     end
 
-    subgraph Core["mesoclaw-core"]
+    subgraph Core["zenii-core"]
         BootEntry["boot.rs<br>init_services"]
 
         subgraph App["Application Layer"]
@@ -211,13 +211,13 @@ graph TD
 
 ```mermaid
 graph TD
-    desktop[mesoclaw-desktop] --> core[mesoclaw-core]
-    mobile["mesoclaw-mobile<br>#40;future#41;"] -.-> core
-    cli[mesoclaw-cli]
+    desktop[zenii-desktop] --> core[zenii-core]
+    mobile["zenii-mobile<br>#40;future#41;"] -.-> core
+    cli[zenii-cli]
     cli --> reqwest["reqwest<br>#40;HTTP client#41;"]
     cli --> tungstenite["tokio-tungstenite<br>#40;WS#41;"]
-    tui["mesoclaw-tui<br>#40;future#41;"] -.-> core
-    daemon[mesoclaw-daemon] --> core
+    tui["zenii-tui<br>#40;future#41;"] -.-> core
+    daemon[zenii-daemon] --> core
 
     core --> axum["axum<br>#40;gateway#41;"]
     core --> rusqlite["rusqlite<br>#40;database#41;"]
@@ -316,16 +316,16 @@ sequenceDiagram
 
 ```mermaid
 graph TD
-    Daemon[mesoclaw-daemon] --> Default[default]
+    Daemon[zenii-daemon] --> Default[default]
     Daemon --> Ch["--features channels"]
     Daemon --> Sc["--features scheduler"]
     Daemon --> Wd["--features web-dashboard"]
 
-    Default --> GW["mesoclaw-core/gateway"]
+    Default --> GW["zenii-core/gateway"]
     GW --> Axum[axum + tower-http]
-    Ch --> ChCore[mesoclaw-core/channels]
-    Sc --> ScCore[mesoclaw-core/scheduler]
-    Wd --> WdCore[mesoclaw-core/web-dashboard]
+    Ch --> ChCore[zenii-core/channels]
+    Sc --> ScCore[zenii-core/scheduler]
+    Wd --> WdCore[zenii-core/web-dashboard]
     WdCore --> GW
 ```
 
@@ -334,7 +334,7 @@ graph TD
 ## Project Structure
 
 ```
-mesoclaw/
+zenii/
 ├── Cargo.toml              # Workspace root (5 members)
 ├── CLAUDE.md               # AI assistant instructions
 ├── README.md               # This file
@@ -366,12 +366,12 @@ mesoclaw/
 │   ├── phase6_frontend.md         # Phase 6 test plan + results
 │   └── phase9_plugin_architecture.md # Phase 9 test plan
 ├── crates/
-│   ├── mesoclaw-core/      # Shared library (NO Tauri dependency)
-│   ├── mesoclaw-desktop/   # Tauri 2.10 shell (macOS, Windows, Linux)
-│   ├── mesoclaw-mobile/    # Tauri 2 shell (iOS, Android) (future release)
-│   ├── mesoclaw-cli/       # clap CLI
-│   ├── mesoclaw-tui/       # ratatui TUI (future release)
-│   └── mesoclaw-daemon/    # Headless daemon
+│   ├── zenii-core/      # Shared library (NO Tauri dependency)
+│   ├── zenii-desktop/   # Tauri 2.10 shell (macOS, Windows, Linux)
+│   ├── zenii-mobile/    # Tauri 2 shell (iOS, Android) (future release)
+│   ├── zenii-cli/       # clap CLI
+│   ├── zenii-tui/       # ratatui TUI (future release)
+│   └── zenii-daemon/    # Headless daemon
 └── web/                    # Svelte 5 SPA frontend (shared by desktop + mobile)
 ```
 
@@ -416,19 +416,19 @@ cargo test --workspace
 cargo clippy --workspace
 
 # Start the daemon
-cargo run -p mesoclaw-daemon
+cargo run -p zenii-daemon
 
 # Start the CLI
-cargo run -p mesoclaw-cli -- chat
+cargo run -p zenii-cli -- chat
 
 # Start the TUI
-cargo run -p mesoclaw-tui
+cargo run -p zenii-tui
 
 # Start the desktop app (dev mode with hot reload)
-cd crates/mesoclaw-desktop && cargo tauri dev
+cd crates/zenii-desktop && cargo tauri dev
 
 # Start the desktop app connecting to external daemon
-MESOCLAW_GATEWAY_URL=http://localhost:18981 cd crates/mesoclaw-desktop && cargo tauri dev
+ZENII_GATEWAY_URL=http://localhost:18981 cd crates/zenii-desktop && cargo tauri dev
 
 # Frontend dev server (hot reload)
 cd web && bun run dev
@@ -441,7 +441,7 @@ cd web && bun run dev
 ```bash
 ./scripts/build.sh --target native                  # Debug build
 ./scripts/build.sh --target native --release         # Release (optimized, smallest binary)
-./scripts/build.sh --target native --release --crates "mesoclaw-daemon mesoclaw-cli"  # Specific crates only
+./scripts/build.sh --target native --release --crates "zenii-daemon zenii-cli"  # Specific crates only
 ./scripts/build.sh --target native --release --all-features  # With all features
 ```
 
@@ -511,16 +511,16 @@ See [scripts/build.sh](scripts/build.sh) for full options.
 ## Feature Flags
 
 ```bash
-cargo build -p mesoclaw-daemon                          # Core only (gateway + ai + keyring)
-cargo build -p mesoclaw-daemon --features local-embeddings  # + local FastEmbed ONNX embeddings
-cargo build -p mesoclaw-daemon --features channels      # + channel core traits + registry
-cargo build -p mesoclaw-daemon --features channels-telegram  # + Telegram (teloxide)
-cargo build -p mesoclaw-daemon --features channels-slack     # + Slack
-cargo build -p mesoclaw-daemon --features channels-discord   # + Discord (serenity)
-cargo build -p mesoclaw-daemon --features scheduler     # + cron jobs
-cargo build -p mesoclaw-daemon --features api-docs      # + Scalar UI + OpenAPI spec at /api-docs
-cargo build -p mesoclaw-daemon --features web-dashboard # + embedded web UI
-cargo build -p mesoclaw-daemon --all-features           # Everything
+cargo build -p zenii-daemon                          # Core only (gateway + ai + keyring)
+cargo build -p zenii-daemon --features local-embeddings  # + local FastEmbed ONNX embeddings
+cargo build -p zenii-daemon --features channels      # + channel core traits + registry
+cargo build -p zenii-daemon --features channels-telegram  # + Telegram (teloxide)
+cargo build -p zenii-daemon --features channels-slack     # + Slack
+cargo build -p zenii-daemon --features channels-discord   # + Discord (serenity)
+cargo build -p zenii-daemon --features scheduler     # + cron jobs
+cargo build -p zenii-daemon --features api-docs      # + Scalar UI + OpenAPI spec at /api-docs
+cargo build -p zenii-daemon --features web-dashboard # + embedded web UI
+cargo build -p zenii-daemon --all-features           # Everything
 ```
 
 ---
@@ -529,9 +529,9 @@ cargo build -p mesoclaw-daemon --all-features           # Everything
 
 ```bash
 cargo test --workspace                    # All tests
-cargo test -p mesoclaw-core               # Core only
-cargo test -p mesoclaw-core -- memory     # Memory module
-cargo test -p mesoclaw-core -- db         # Database module
+cargo test -p zenii-core               # Core only
+cargo test -p zenii-core -- memory     # Memory module
+cargo test -p zenii-core -- db         # Database module
 cd web && bun run test                    # Frontend tests
 ```
 
@@ -539,13 +539,13 @@ cd web && bun run test                    # Frontend tests
 
 ## Configuration
 
-MesoClaw uses a TOML configuration file. Paths are resolved via `directories::ProjectDirs::from("com", "sprklai", "mesoclaw")`:
+Zenii uses a TOML configuration file. Paths are resolved via `directories::ProjectDirs::from("com", "sprklai", "zenii")`:
 
 | OS | Config File | Database File |
 |---|---|---|
-| **Linux** | `~/.config/mesoclaw/config.toml` | `~/.local/share/mesoclaw/mesoclaw.db` |
-| **macOS** | `~/Library/Application Support/com.sprklai.mesoclaw/config.toml` | `~/Library/Application Support/com.sprklai.mesoclaw/mesoclaw.db` |
-| **Windows** | `%APPDATA%\sprklai\mesoclaw\config\config.toml` | `%APPDATA%\sprklai\mesoclaw\data\mesoclaw.db` |
+| **Linux** | `~/.config/zenii/config.toml` | `~/.local/share/zenii/zenii.db` |
+| **macOS** | `~/Library/Application Support/com.sprklai.zenii/config.toml` | `~/Library/Application Support/com.sprklai.zenii/zenii.db` |
+| **Windows** | `%APPDATA%\sprklai\zenii\config\config.toml` | `%APPDATA%\sprklai\zenii\data\zenii.db` |
 
 Example `config.toml` (flat structure, all fields optional with defaults):
 
@@ -554,8 +554,8 @@ gateway_host = "127.0.0.1"
 gateway_port = 18981
 log_level = "info"
 # data_dir = "/custom/data/path"       # Override default data directory
-# db_path = "/custom/path/mesoclaw.db" # Override database file path
-identity_name = "MesoClaw"
+# db_path = "/custom/path/zenii.db" # Override database file path
+identity_name = "Zenii"
 identity_description = "AI-powered assistant"
 default_provider = "openai"
 default_model = "gpt-4o"
@@ -576,37 +576,37 @@ max_tool_retries = 3
 ## CLI Commands
 
 ```bash
-mesoclaw daemon start|stop|status     # Manage the daemon process
-mesoclaw chat [--session ID] [--model M]  # Interactive WS streaming chat
-mesoclaw run "prompt" [--session] [--model]  # Single prompt, print response
-mesoclaw memory search "query" [--limit N] [--offset N]  # Search memories
-mesoclaw memory add <key> <content>   # Add memory entry
-mesoclaw memory remove <key>          # Remove memory entry
-mesoclaw config show                  # Show current config
-mesoclaw config set <key> <value>     # Set a config value
-mesoclaw key set <provider> <key>     # Set API key
-mesoclaw key remove <provider>        # Remove API key
-mesoclaw key list                     # List stored keys
-mesoclaw provider list                # List AI providers
-mesoclaw provider test <id>           # Test provider connection
-mesoclaw provider add <id> <name> <base_url>  # Add custom provider
-mesoclaw provider remove <id>         # Remove user-defined provider
-mesoclaw provider default <provider> <model>  # Set default model
-mesoclaw embedding activate <provider>       # Activate embeddings (openai/local)
-mesoclaw embedding deactivate                # Deactivate embeddings
-mesoclaw embedding status                    # Show embedding provider status
-mesoclaw embedding test                      # Test embedding generation
-mesoclaw embedding reindex                   # Re-embed all memories
-mesoclaw plugin list                         # List installed plugins
-mesoclaw plugin install <source> [--local]   # Install from git URL or local path
-mesoclaw plugin remove <name>                # Remove a plugin
-mesoclaw plugin update <name>                # Update a plugin
-mesoclaw plugin enable <name>                # Enable a plugin
-mesoclaw plugin disable <name>               # Disable a plugin
-mesoclaw plugin info <name>                  # Show plugin details
+zenii daemon start|stop|status     # Manage the daemon process
+zenii chat [--session ID] [--model M]  # Interactive WS streaming chat
+zenii run "prompt" [--session] [--model]  # Single prompt, print response
+zenii memory search "query" [--limit N] [--offset N]  # Search memories
+zenii memory add <key> <content>   # Add memory entry
+zenii memory remove <key>          # Remove memory entry
+zenii config show                  # Show current config
+zenii config set <key> <value>     # Set a config value
+zenii key set <provider> <key>     # Set API key
+zenii key remove <provider>        # Remove API key
+zenii key list                     # List stored keys
+zenii provider list                # List AI providers
+zenii provider test <id>           # Test provider connection
+zenii provider add <id> <name> <base_url>  # Add custom provider
+zenii provider remove <id>         # Remove user-defined provider
+zenii provider default <provider> <model>  # Set default model
+zenii embedding activate <provider>       # Activate embeddings (openai/local)
+zenii embedding deactivate                # Deactivate embeddings
+zenii embedding status                    # Show embedding provider status
+zenii embedding test                      # Test embedding generation
+zenii embedding reindex                   # Re-embed all memories
+zenii plugin list                         # List installed plugins
+zenii plugin install <source> [--local]   # Install from git URL or local path
+zenii plugin remove <name>                # Remove a plugin
+zenii plugin update <name>                # Update a plugin
+zenii plugin enable <name>                # Enable a plugin
+zenii plugin disable <name>               # Disable a plugin
+zenii plugin info <name>                  # Show plugin details
 ```
 
-Global options: `--host`, `--port`, `--token` (or `MESOCLAW_TOKEN` env var)
+Global options: `--host`, `--port`, `--token` (or `ZENII_TOKEN` env var)
 
 ## Gateway Routes (79 base + 17 feature-gated = 96 total)
 

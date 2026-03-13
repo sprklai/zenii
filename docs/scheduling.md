@@ -1,8 +1,8 @@
-# Scheduling Jobs in MesoClaw
+# Scheduling Jobs in Zenii
 
-MesoClaw includes a built-in job scheduler for recurring tasks like periodic agent prompts, notifications, heartbeat checks, and channel messages. The scheduler is **feature-gated** — enable it with the `scheduler` feature flag.
+Zenii includes a built-in job scheduler for recurring tasks like periodic agent prompts, notifications, heartbeat checks, and channel messages. The scheduler is **feature-gated** — enable it with the `scheduler` feature flag.
 
-> **Note**: This document was generated with AI assistance and may contain inaccuracies. If you find errors, please [report an issue](https://github.com/sprklai/mesoclaw/issues).
+> **Note**: This document was generated with AI assistance and may contain inaccuracies. If you find errors, please [report an issue](https://github.com/sprklai/zenii/issues).
 
 ## Quick Start
 
@@ -10,10 +10,10 @@ MesoClaw includes a built-in job scheduler for recurring tasks like periodic age
 
 ```bash
 # Build daemon with scheduler support
-cargo run -p mesoclaw-daemon --features scheduler
+cargo run -p zenii-daemon --features scheduler
 
 # Or build with all features
-cargo run -p mesoclaw-daemon --all-features
+cargo run -p zenii-daemon --all-features
 ```
 
 The scheduler starts automatically on boot, loading any previously saved jobs from the database.
@@ -86,14 +86,14 @@ All scheduler commands go through the daemon's HTTP API, so ensure the daemon is
 
 ```bash
 # Check scheduler status
-mesoclaw-cli schedule status
+zenii-cli schedule status
 # Output: Scheduler: Running (3 jobs)
 ```
 
 **List all jobs:**
 
 ```bash
-mesoclaw-cli schedule list
+zenii-cli schedule list
 ```
 
 Output:
@@ -109,7 +109,7 @@ i9j0k1l2-...                         | Weekly Report     | disabled | Cron: 0 17
 **Create a notification job (every 30 minutes):**
 
 ```bash
-mesoclaw-cli schedule create \
+zenii-cli schedule create \
   --name "Hydration Reminder" \
   --schedule-type interval \
   --interval-secs 1800 \
@@ -120,7 +120,7 @@ mesoclaw-cli schedule create \
 **Create a daily agent prompt (weekdays at 9 AM):**
 
 ```bash
-mesoclaw-cli schedule create \
+zenii-cli schedule create \
   --name "Morning Briefing" \
   --schedule-type cron \
   --cron-expr "0 9 * * 1-5" \
@@ -131,7 +131,7 @@ mesoclaw-cli schedule create \
 **Create a one-shot reminder (run once in 1 hour, then delete):**
 
 ```bash
-mesoclaw-cli schedule create \
+zenii-cli schedule create \
   --name "Deploy Reminder" \
   --schedule-type interval \
   --interval-secs 3600 \
@@ -143,7 +143,7 @@ mesoclaw-cli schedule create \
 **Create a heartbeat job (every 2 minutes, only during work hours):**
 
 ```bash
-mesoclaw-cli schedule create \
+zenii-cli schedule create \
   --name "System Heartbeat" \
   --schedule-type interval \
   --interval-secs 120 \
@@ -155,14 +155,14 @@ mesoclaw-cli schedule create \
 **Toggle a job on/off:**
 
 ```bash
-mesoclaw-cli schedule toggle a1b2c3d4-e5f6-7890-abcd-ef1234567890
+zenii-cli schedule toggle a1b2c3d4-e5f6-7890-abcd-ef1234567890
 # Output: Job a1b2c3d4-...: disabled
 ```
 
 **View execution history:**
 
 ```bash
-mesoclaw-cli schedule history a1b2c3d4-e5f6-7890-abcd-ef1234567890
+zenii-cli schedule history a1b2c3d4-e5f6-7890-abcd-ef1234567890
 ```
 
 Output:
@@ -177,7 +177,7 @@ Output:
 **Delete a job:**
 
 ```bash
-mesoclaw-cli schedule delete a1b2c3d4-e5f6-7890-abcd-ef1234567890
+zenii-cli schedule delete a1b2c3d4-e5f6-7890-abcd-ef1234567890
 # Output: Job a1b2c3d4-... deleted.
 ```
 
@@ -185,7 +185,7 @@ mesoclaw-cli schedule delete a1b2c3d4-e5f6-7890-abcd-ef1234567890
 
 ### TUI
 
-The TUI (`mesoclaw-tui`) communicates with the same daemon HTTP API. Scheduler management is available through the schedule view panel. Navigation and controls mirror the CLI semantics — list, create, toggle, delete, and view history — rendered in a terminal UI.
+The TUI (`zenii-tui`) communicates with the same daemon HTTP API. Scheduler management is available through the schedule view panel. Navigation and controls mirror the CLI semantics — list, create, toggle, delete, and view history — rendered in a terminal UI.
 
 ---
 
@@ -267,7 +267,7 @@ curl -X DELETE http://127.0.0.1:18981/scheduler/jobs/{job_id}
 Have the agent prepare a standup summary every weekday at 8:45 AM:
 
 ```bash
-mesoclaw-cli schedule create \
+zenii-cli schedule create \
   --name "Standup Prep" \
   --schedule-type cron \
   --cron-expr "45 8 * * 1-5" \
@@ -294,7 +294,7 @@ curl -X POST http://127.0.0.1:18981/scheduler/jobs \
 ### 3. Weekly project report (Friday at 5 PM)
 
 ```bash
-mesoclaw-cli schedule create \
+zenii-cli schedule create \
   --name "Weekly Report" \
   --schedule-type cron \
   --cron-expr "0 17 * * 5" \
@@ -307,7 +307,7 @@ mesoclaw-cli schedule create \
 Remind yourself in 2 hours to check the deployment:
 
 ```bash
-mesoclaw-cli schedule create \
+zenii-cli schedule create \
   --name "Check Deploy" \
   --schedule-type interval \
   --interval-secs 7200 \
@@ -350,7 +350,7 @@ curl -X POST http://127.0.0.1:18981/scheduler/jobs \
 
 ## Configuration
 
-All scheduler tunables live in `~/.config/mesoclaw/config.toml`:
+All scheduler tunables live in `~/.config/zenii/config.toml`:
 
 ```toml
 # How often the scheduler checks for due jobs (seconds)
@@ -376,7 +376,7 @@ scheduler_max_history_per_job = 100
 
 ## Cron Expression Reference
 
-MesoClaw supports standard 5-field, 6-field (with seconds), and 7-field cron expressions:
+Zenii supports standard 5-field, 6-field (with seconds), and 7-field cron expressions:
 
 ```
 ┌───────────── second (0–59, optional)

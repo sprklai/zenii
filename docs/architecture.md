@@ -1,4 +1,4 @@
-# MesoClaw Architecture
+# Zenii Architecture
 
 ## Table of Contents
 
@@ -48,7 +48,7 @@ graph TD
         Web["Frontend<br>Svelte 5"]
     end
 
-    subgraph Core["mesoclaw-core"]
+    subgraph Core["zenii-core"]
         BootEntry["boot.rs<br>init_services"]
 
         subgraph App["Application Layer"]
@@ -124,17 +124,17 @@ graph TB
 
 ```mermaid
 graph TD
-    desktop[mesoclaw-desktop] --> core[mesoclaw-core]
+    desktop[zenii-desktop] --> core[zenii-core]
     desktop --> tauri["tauri 2.10<br>#40;app framework#41;"]
     desktop --> winstate["tauri-plugin-window-state<br>#40;persist size/position#41;"]
     desktop --> singleinst["tauri-plugin-single-instance<br>#40;enforce one instance#41;"]
     desktop --> opnr["tauri-plugin-opener<br>#40;open data dir#41;"]
     desktop -.-> devtools["tauri-plugin-devtools<br>#40;feature-gated#41;"]
 
-    mobile["mesoclaw-mobile<br>#40;future#41;"] -.-> core
-    cli[mesoclaw-cli]
-    tui["mesoclaw-tui<br>#40;future#41;"] -.-> core
-    daemon[mesoclaw-daemon] --> core
+    mobile["zenii-mobile<br>#40;future#41;"] -.-> core
+    cli[zenii-cli]
+    tui["zenii-tui<br>#40;future#41;"] -.-> core
+    daemon[zenii-daemon] --> core
 
     core --> axum["axum<br>#40;gateway#41;"]
     core --> rusqlite["rusqlite<br>#40;database#41;"]
@@ -160,7 +160,7 @@ graph TD
 ## Project Structure
 
 ```
-mesoclaw/
+zenii/
 ├── Cargo.toml              # Workspace root (5 members)
 ├── CLAUDE.md               # AI assistant instructions
 ├── README.md               # Project documentation
@@ -178,10 +178,10 @@ mesoclaw/
 │   ├── phase2_ai_integration.md   # (planned)
 │   └── ...
 ├── crates/
-│   ├── mesoclaw-core/      # Shared library (NO Tauri dependency)
+│   ├── zenii-core/      # Shared library (NO Tauri dependency)
 │   │   ├── src/
 │   │   │   ├── lib.rs      # Module exports + Result<T> alias
-│   │   │   ├── error.rs    # MesoError enum (30 variants, thiserror)
+│   │   │   ├── error.rs    # ZeniiError enum (30 variants, thiserror)
 │   │   │   ├── boot.rs     # init_services() -> Services -> AppState, single boot entry point
 │   │   │   ├── config/     # TOML config (schema + load/save + OS paths)
 │   │   │   ├── db/         # rusqlite pool + WAL + migrations + spawn_blocking
@@ -191,7 +191,7 @@ mesoclaw/
 │   │   │   ├── security/   # SecurityPolicy + AutonomyLevel + rate limiter + audit log
 │   │   │   ├── tools/      # Tool trait + ToolRegistry (DashMap) + 16 tools (14 base + 2 feature-gated)
 │   │   │   ├── ai/         # AI agent (rig-core), providers, session manager, tool adapter, context engine
-│   │   │   ├── gateway/    # axum HTTP+WS gateway (75 base + 17 feature-gated routes, auth middleware, error mapping, MESO_VALIDATION)
+│   │   │   ├── gateway/    # axum HTTP+WS gateway (75 base + 17 feature-gated routes, auth middleware, error mapping, ZENII_VALIDATION)
 │   │   │   ├── identity/   # SoulLoader + PromptComposer + defaults (SOUL/IDENTITY/USER.md)
 │   │   │   ├── skills/     # SkillRegistry + bundled/user skills (markdown + YAML frontmatter)
 │   │   │   ├── user/       # UserLearner + SQLite observations + privacy controls
@@ -206,10 +206,10 @@ mesoclaw/
 │   │   │   │   └── discord/       # DiscordChannel + config
 │   │   │   └── scheduler/  # Cron + scheduled tasks, feature-gated (Phase 8)
 │   │   └── tests/          # Integration tests
-│   ├── mesoclaw-desktop/   # Tauri 2.10 shell (desktop)
+│   ├── zenii-desktop/   # Tauri 2.10 shell (desktop)
 │   │   ├── Cargo.toml      # tauri 2.10, 4 plugins, devtools feature
 │   │   ├── build.rs         # tauri_build::build()
-│   │   ├── tauri.conf.json  # 1280x720, CSP, com.sprklai.mesoclaw
+│   │   ├── tauri.conf.json  # 1280x720, CSP, com.sprklai.zenii
 │   │   ├── capabilities/default.json
 │   │   ├── icons/           # 7 icon files
 │   │   └── src/
@@ -217,10 +217,10 @@ mesoclaw/
 │   │       ├── lib.rs       # Builder: plugins, tray, IPC, close-to-tray
 │   │       ├── commands.rs  # 4 IPC + boot_gateway() + 7 tests
 │   │       └── tray.rs      # Show/Hide/Quit menu + 1 test
-│   ├── mesoclaw-mobile/    # Tauri 2 shell (iOS + Android) (future release)
-│   ├── mesoclaw-cli/       # clap CLI
-│   ├── mesoclaw-tui/       # ratatui TUI (future release)
-│   └── mesoclaw-daemon/    # Headless daemon (full gateway server)
+│   ├── zenii-mobile/    # Tauri 2 shell (iOS + Android) (future release)
+│   ├── zenii-cli/       # clap CLI
+│   ├── zenii-tui/       # ratatui TUI (future release)
+│   └── zenii-daemon/    # Headless daemon (full gateway server)
 └── web/                    # Svelte 5 frontend (SPA)
     ├── src/
     │   ├── app.css          # Tailwind v4 + shadcn theme tokens
@@ -255,27 +255,27 @@ mesoclaw/
 
 ## Default Paths by OS
 
-Resolved via `directories::ProjectDirs::from("com", "sprklai", "mesoclaw")`.
+Resolved via `directories::ProjectDirs::from("com", "sprklai", "zenii")`.
 
-Source: `crates/mesoclaw-core/src/config/mod.rs`
+Source: `crates/zenii-core/src/config/mod.rs`
 
 | OS | Config Path | Data Dir / DB Path |
 |---|---|---|
-| **Linux** | `~/.config/mesoclaw/config.toml` | `~/.local/share/mesoclaw/mesoclaw.db` |
-| **macOS** | `~/Library/Application Support/com.sprklai.mesoclaw/config.toml` | `~/Library/Application Support/com.sprklai.mesoclaw/mesoclaw.db` |
-| **Windows** | `%APPDATA%\sprklai\mesoclaw\config\config.toml` | `%APPDATA%\sprklai\mesoclaw\data\mesoclaw.db` |
+| **Linux** | `~/.config/zenii/config.toml` | `~/.local/share/zenii/zenii.db` |
+| **macOS** | `~/Library/Application Support/com.sprklai.zenii/config.toml` | `~/Library/Application Support/com.sprklai.zenii/zenii.db` |
+| **Windows** | `%APPDATA%\sprklai\zenii\config\config.toml` | `%APPDATA%\sprklai\zenii\data\zenii.db` |
 
 Override in `config.toml`:
 ```toml
 data_dir = "/custom/data/path"        # overrides default data directory
-db_path = "/custom/path/mesoclaw.db"  # overrides database file directly
+db_path = "/custom/path/zenii.db"  # overrides database file directly
 ```
 
 ## Feature Flag Composition
 
 ```mermaid
 graph TD
-    Daemon[mesoclaw-daemon binary] --> Default[default - no flags]
+    Daemon[zenii-daemon binary] --> Default[default - no flags]
     Daemon --> Channels["--features channels"]
     Daemon --> ChTG["--features channels-telegram"]
     Daemon --> ChSL["--features channels-slack"]
@@ -283,17 +283,17 @@ graph TD
     Daemon --> Scheduler["--features scheduler"]
     Daemon --> Dashboard["--features web-dashboard"]
 
-    Default --> CoreGW["mesoclaw-core<br>#40;gateway + ai + keyring#41;"]
+    Default --> CoreGW["zenii-core<br>#40;gateway + ai + keyring#41;"]
     CoreGW --> Axum[axum + tower-http]
 
-    Channels --> CoreCH[mesoclaw-core/channels]
+    Channels --> CoreCH[zenii-core/channels]
     ChTG --> CoreCH
     ChTG --> Teloxide[teloxide]
     ChSL --> CoreCH
     ChDC --> CoreCH
     ChDC --> Serenity[serenity]
-    Scheduler --> CoreSC[mesoclaw-core/scheduler]
-    Dashboard --> CoreWD[mesoclaw-core/web-dashboard]
+    Scheduler --> CoreSC[zenii-core/scheduler]
+    Dashboard --> CoreWD[zenii-core/web-dashboard]
     CoreWD --> CoreGW
 ```
 
@@ -303,7 +303,7 @@ All major subsystems are abstracted behind traits, allowing swappable implementa
 
 ```mermaid
 graph TB
-    subgraph TraitAbstractions["Trait Abstractions - mesoclaw-core"]
+    subgraph TraitAbstractions["Trait Abstractions - zenii-core"]
         Memory["dyn Memory<br>SQLite now<br>PostgreSQL + pgvector later"]
         CredStore["dyn CredentialStore<br>Keyring now<br>Vault / cloud KMS later"]
         Channel["dyn Channel<br>openclaw-channels"]
@@ -417,7 +417,7 @@ graph TB
     end
 
     subgraph ProvConsumers["Consumers"]
-        Agent["MesoAgent<br>multi-provider dispatch"]
+        Agent["ZeniiAgent<br>multi-provider dispatch"]
         GW["Gateway<br>11 provider routes"]
         Settings["Desktop Settings UI<br>provider cards + key management"]
     end
@@ -539,7 +539,7 @@ graph TB
 
 ```markdown
 ---
-name: MesoClaw
+name: Zenii
 version: "2.0"
 description: AI-powered assistant
 ---
@@ -601,7 +601,7 @@ When creating system prompts, follow these principles:
 
 ## User Profile + Progressive Learning
 
-MesoClaw learns user preferences over time via explicit observation API. Observations are stored in SQLite with category-based organization and confidence scoring.
+Zenii learns user preferences over time via explicit observation API. Observations are stored in SQLite with category-based organization and confidence scoring.
 
 ```mermaid
 graph TB
@@ -686,7 +686,7 @@ graph TB
 | Condition | Level | Content |
 |---|---|---|
 | New session (0 messages) | Full | Boot + runtime + identity + user + capabilities |
-| Continuing (recent messages, within gap) | Minimal | One-liner: "MesoClaw — AI assistant \| date \| OS \| model" |
+| Continuing (recent messages, within gap) | Minimal | One-liner: "Zenii — AI assistant \| date \| OS \| model" |
 | Gap exceeded (> N minutes since last msg) | Full | Same as new session |
 | Message count threshold exceeded | Full | Same as new session |
 | Resumed session with prior messages | Summary | Full + prior conversation summary |
@@ -1001,7 +1001,7 @@ The desktop app is a Tauri 2.10 shell wrapping the SvelteKit SPA frontend. It em
 | `close_to_tray` | Hide window to system tray |
 | `show_window` | Show and focus the main window |
 | `get_app_version` | Return app version string |
-| `open_data_dir` | Open MesoClaw data directory in OS file manager |
+| `open_data_dir` | Open Zenii data directory in OS file manager |
 
 ### Desktop Boot Flow
 
@@ -1019,7 +1019,7 @@ flowchart TD
     DevPlugin --> Setup
 
     Setup["setup#40;#41; hook"] --> Tray["Setup system tray<br>Show / Hide / Quit menu"]
-    Tray --> GWMode{"MESOCLAW_GATEWAY_URL<br>env var set?"}
+    Tray --> GWMode{"ZENII_GATEWAY_URL<br>env var set?"}
 
     GWMode -->|Yes, valid URL| External["Use external gateway<br>Store URL in state"]
     GWMode -->|No| Embedded["Boot embedded gateway"]
@@ -1039,7 +1039,7 @@ The desktop app supports two gateway modes:
 
 1. **Embedded** (default): The gateway server starts in a background Tokio task during `setup()`. A `oneshot` channel provides graceful shutdown. This is the zero-configuration path -- users launch the desktop app and everything works.
 
-2. **External**: If `MESOCLAW_GATEWAY_URL` is set to a valid URL, the desktop app connects to an external daemon instead of starting its own gateway. Useful for multi-device setups or when running the daemon as a system service.
+2. **External**: If `ZENII_GATEWAY_URL` is set to a valid URL, the desktop app connects to an external daemon instead of starting its own gateway. Useful for multi-device setups or when running the daemon as a system service.
 
 ### Frontend Integration
 
@@ -1199,7 +1199,7 @@ Stage 8.9 addressed test coverage gaps and hardened critical modules.
 
 ### ProcessTool Kill Action
 
-The `ProcessTool` gained a `kill` action using `sysinfo`-based process lookup. Kill requires `Full` autonomy level — lower autonomy levels are denied with `MesoError::PolicyDenied`.
+The `ProcessTool` gained a `kill` action using `sysinfo`-based process lookup. Kill requires `Full` autonomy level — lower autonomy levels are denied with `ZeniiError::PolicyDenied`.
 
 ### Context Engine Tests (52 tests)
 
@@ -1259,7 +1259,7 @@ The `ReasoningEngine` provides an extensible pipeline for autonomous multi-step 
 flowchart TD
     Chat([Chat request]) --> Cache["ToolCallCache<br>per-request DashMap"]
     Cache --> RE["ReasoningEngine::chat()"]
-    RE --> Agent["MesoAgent::prompt()"]
+    RE --> Agent["ZeniiAgent::prompt()"]
     Agent --> LLM["LLM Provider"]
     LLM --> Response["Agent response"]
     Response --> Strategies["Run strategies"]
@@ -1614,7 +1614,7 @@ flowchart TD
     Resolve --> Lookup["Lookup ModelInfo from ProviderRegistry"]
     Lookup --> Check{"supports_tools?"}
     Check -->|true| Build["Build agent with tools"]
-    Check -->|false| Error["Return MesoError::ModelCapability<br>HTTP 400"]
+    Check -->|false| Error["Return ZeniiError::ModelCapability<br>HTTP 400"]
     Lookup -->|model not found| Build
 
     style Error fill:#F44336,color:#fff
@@ -1640,20 +1640,20 @@ These rules are enforced across the entire codebase to prevent async runtime iss
 | No `std::sync::Mutex` in async paths | Blocks the tokio runtime; use `tokio::sync::Mutex` or `DashMap` |
 | No `block_on()` anywhere | Panics inside tokio runtime; use `tokio::spawn` or `.await` |
 | All SQLite ops via `spawn_blocking` | `rusqlite` is synchronous; blocking in async context starves tasks |
-| All errors are `MesoError` | No `Result<T, String>`; use `thiserror` enum with typed variants |
+| All errors are `ZeniiError` | No `Result<T, String>`; use `thiserror` enum with typed variants |
 | `AppState` is `Clone + Arc<T>` | Shared across axum handlers without lifetime issues |
 | `EventBus` uses `tokio::sync::broadcast` | Lock-free fan-out to all subscribers |
 | Never hold async locks across `.await` | Prevents deadlocks; acquire, use, drop before yielding |
 
 ## Lessons Learned from v1
 
-Key architectural mistakes from MesoClaw v1 and how v2 prevents them.
+Key architectural mistakes from Zenii v1 and how v2 prevents them.
 
 | v1 Mistake | v2 Prevention |
 |---|---|
 | `std::sync::Mutex` in async code | `tokio::sync::Mutex` or `DashMap` exclusively |
 | `block_on()` in event loop | Zero `block_on()` calls; `tokio::spawn` for sync work |
-| `Result<T, String>` everywhere | `MesoError` enum with `thiserror` |
+| `Result<T, String>` everywhere | `ZeniiError` enum with `thiserror` |
 | Custom AI layer (1400 LOC) | `rig-core` (battle-tested, 18 providers) |
 | 21 Zustand stores | 6 Svelte 5 rune stores ($state), single WS connection |
 | 165 IPC commands (Tauri v1) | Gateway-only architecture (~40 HTTP routes) |

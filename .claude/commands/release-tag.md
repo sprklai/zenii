@@ -216,12 +216,12 @@ Release complete:
   Secret scan: PASSED
 
   GitHub Actions will now build release artifacts for all platforms.
-  Monitor: https://github.com/sprklai/mesoclawv2/actions
+  Monitor: https://github.com/sprklai/zeniiv2/actions
 
   Artifacts (when complete):
-    Linux:    .deb, .rpm, .AppImage + mesoclaw + mesoclaw-daemon
-    macOS:    .dmg (universal) + mesoclaw + mesoclaw-daemon
-    Windows:  .msi, .exe (NSIS) + mesoclaw.exe + mesoclaw-daemon.exe
-    Embedded: mesoclaw + mesoclaw-daemon (arm64, armv7, musl)
+    Linux:    .deb, .rpm, .AppImage + zenii + zenii-daemon
+    macOS:    .dmg (universal) + zenii + zenii-daemon
+    Windows:  .msi, .exe (NSIS) + zenii.exe + zenii-daemon.exe
+    Embedded: zenii + zenii-daemon (arm64, armv7, musl)
     Checksums: SHA256SUMS.txt
 ```

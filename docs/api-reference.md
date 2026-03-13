@@ -1,6 +1,6 @@
-# MesoClaw API Reference
+# Zenii API Reference
 
-> **Note**: This document was generated with AI assistance and may contain inaccuracies. If you find errors, please [report an issue](https://github.com/sprklai/mesoclaw/issues).
+> **Note**: This document was generated with AI assistance and may contain inaccuracies. If you find errors, please [report an issue](https://github.com/sprklai/zenii/issues).
 
 ## Table of Contents
 
@@ -39,11 +39,11 @@
 
 **Base URL:** `http://127.0.0.1:18981`
 
-The MesoClaw gateway is an axum HTTP+WebSocket server. All routes accept and return JSON unless otherwise noted. CORS is configured via the `gateway_cors_origins` config field; an empty list or `["*"]` enables permissive CORS.
+The Zenii gateway is an axum HTTP+WebSocket server. All routes accept and return JSON unless otherwise noted. CORS is configured via the `gateway_cors_origins` config field; an empty list or `["*"]` enables permissive CORS.
 
 ### Interactive API Documentation
 
-When built with the `api-docs` feature (enabled by default in daemon and desktop), MesoClaw serves interactive API documentation:
+When built with the `api-docs` feature (enabled by default in daemon and desktop), Zenii serves interactive API documentation:
 
 - **Scalar UI:** `http://127.0.0.1:18981/api-docs` -- interactive API explorer with try-it-out functionality
 - **OpenAPI JSON:** `http://127.0.0.1:18981/api-docs/openapi.json` -- raw OpenAPI 3.1 spec
@@ -60,7 +60,7 @@ curl http://127.0.0.1:18981/api-docs/openapi.json -o openapi.json
 
 To disable API docs (reduces binary size), build without the feature:
 ```bash
-cargo build -p mesoclaw-daemon --no-default-features --features gateway,ai,keyring
+cargo build -p zenii-daemon --no-default-features --features gateway,ai,keyring
 ```
 
 ## Authentication
@@ -75,7 +75,7 @@ Authorization: Bearer <token>
 - `GET /health` always bypasses authentication.
 - WebSocket endpoints (`/ws/*`) also accept a `?token=<token>` query parameter as an alternative to the header.
 
-Set the token via `MESOCLAW_TOKEN` environment variable or `gateway_auth_token` in `config.toml`.
+Set the token via `ZENII_TOKEN` environment variable or `gateway_auth_token` in `config.toml`.
 
 ## Error Format
 
@@ -83,47 +83,47 @@ All errors return JSON with the following structure:
 
 ```json
 {
-  "error_code": "MESO_*",
+  "error_code": "ZENII_*",
   "message": "Human-readable error description"
 }
 ```
 
 ## Error Codes
 
-| Error Code | HTTP Status | MesoError Variant | Description |
+| Error Code | HTTP Status | ZeniiError Variant | Description |
 |---|---|---|---|
-| `MESO_NOT_FOUND` | 404 | `NotFound` | Resource not found |
-| `MESO_POLICY_DENIED` | 403 | `PolicyDenied` | Security policy blocked the action |
-| `MESO_RATE_LIMITED` | 429 | `RateLimited` | Rate limit exceeded |
-| `MESO_AUTH_REQUIRED` | 401 | `Auth` | Missing or invalid authentication |
-| `MESO_BAD_REQUEST` | 400 | `Serialization` | Invalid JSON in request body |
-| `MESO_TOML_PARSE_ERROR` | 400 | `TomlParse` | Invalid TOML syntax |
-| `MESO_CONFIG_ERROR` | 422 | `Config` | Invalid configuration value |
-| `MESO_DB_ERROR` | 503 | `Database` | Database operation failed |
-| `MESO_SQLITE_ERROR` | 503 | `Sqlite` | SQLite-level error |
-| `MESO_AGENT_ERROR` | 502 | `Agent` | AI agent call failed |
-| `MESO_HTTP_ERROR` | 502 | `Http` | Upstream HTTP request failed |
-| `MESO_TOOL_ERROR` | 500 | `Tool` | Tool execution failed |
-| `MESO_MEMORY_ERROR` | 500 | `Memory` | Memory store operation failed |
-| `MESO_EMBEDDING_ERROR` | 500 | `Embedding` | Embedding generation failed |
-| `MESO_CREDENTIAL_ERROR` | 500 | `Credential` | Credential store operation failed |
-| `MESO_GATEWAY_ERROR` | 500 | `Gateway` | Gateway internal error |
-| `MESO_IO_ERROR` | 500 | `Io` | File system I/O error |
-| `MESO_EVENT_ERROR` | 500 | `EventBus` | Event bus broadcast error |
-| `MESO_CHANNEL_ERROR` | 500 | `Channel` | Messaging channel error |
-| `MESO_CONTEXT` | 500 | `Context` | Context engine error |
-| `MESO_TOML_SERIALIZE_ERROR` | 500 | `TomlSerialize` | TOML serialization failed |
-| `MESO_P4_IDENTITY` | 500 | `Identity` | Identity system error |
-| `MESO_P4_IDENTITY_NOT_FOUND` | 404 | `IdentityNotFound` | Identity file not found |
-| `MESO_P4_SKILL` | 500 | `Skill` | Skill system error |
-| `MESO_P4_SKILL_NOT_FOUND` | 404 | `SkillNotFound` | Skill not found |
-| `MESO_P4_USER` | 500 | `User` | User learning system error |
-| `MESO_YAML_PARSE_ERROR` | 400 | `Yaml` | Invalid YAML syntax |
-| `MESO_VALIDATION` | 400 | `Validation` | Input validation failed |
-| `MESO_SCHEDULER_ERROR` | 500 | `Scheduler` | Scheduler operation failed |
-| `MESO_PLUGIN_ERROR` | 500 | `Plugin` | Plugin system error |
-| `MESO_PLUGIN_NOT_FOUND` | 404 | `PluginNotFound` | Plugin not found |
-| `MESO_INTERNAL_ERROR` | 500 | `Other` | Unclassified internal error |
+| `ZENII_NOT_FOUND` | 404 | `NotFound` | Resource not found |
+| `ZENII_POLICY_DENIED` | 403 | `PolicyDenied` | Security policy blocked the action |
+| `ZENII_RATE_LIMITED` | 429 | `RateLimited` | Rate limit exceeded |
+| `ZENII_AUTH_REQUIRED` | 401 | `Auth` | Missing or invalid authentication |
+| `ZENII_BAD_REQUEST` | 400 | `Serialization` | Invalid JSON in request body |
+| `ZENII_TOML_PARSE_ERROR` | 400 | `TomlParse` | Invalid TOML syntax |
+| `ZENII_CONFIG_ERROR` | 422 | `Config` | Invalid configuration value |
+| `ZENII_DB_ERROR` | 503 | `Database` | Database operation failed |
+| `ZENII_SQLITE_ERROR` | 503 | `Sqlite` | SQLite-level error |
+| `ZENII_AGENT_ERROR` | 502 | `Agent` | AI agent call failed |
+| `ZENII_HTTP_ERROR` | 502 | `Http` | Upstream HTTP request failed |
+| `ZENII_TOOL_ERROR` | 500 | `Tool` | Tool execution failed |
+| `ZENII_MEMORY_ERROR` | 500 | `Memory` | Memory store operation failed |
+| `ZENII_EMBEDDING_ERROR` | 500 | `Embedding` | Embedding generation failed |
+| `ZENII_CREDENTIAL_ERROR` | 500 | `Credential` | Credential store operation failed |
+| `ZENII_GATEWAY_ERROR` | 500 | `Gateway` | Gateway internal error |
+| `ZENII_IO_ERROR` | 500 | `Io` | File system I/O error |
+| `ZENII_EVENT_ERROR` | 500 | `EventBus` | Event bus broadcast error |
+| `ZENII_CHANNEL_ERROR` | 500 | `Channel` | Messaging channel error |
+| `ZENII_CONTEXT` | 500 | `Context` | Context engine error |
+| `ZENII_TOML_SERIALIZE_ERROR` | 500 | `TomlSerialize` | TOML serialization failed |
+| `ZENII_P4_IDENTITY` | 500 | `Identity` | Identity system error |
+| `ZENII_P4_IDENTITY_NOT_FOUND` | 404 | `IdentityNotFound` | Identity file not found |
+| `ZENII_P4_SKILL` | 500 | `Skill` | Skill system error |
+| `ZENII_P4_SKILL_NOT_FOUND` | 404 | `SkillNotFound` | Skill not found |
+| `ZENII_P4_USER` | 500 | `User` | User learning system error |
+| `ZENII_YAML_PARSE_ERROR` | 400 | `Yaml` | Invalid YAML syntax |
+| `ZENII_VALIDATION` | 400 | `Validation` | Input validation failed |
+| `ZENII_SCHEDULER_ERROR` | 500 | `Scheduler` | Scheduler operation failed |
+| `ZENII_PLUGIN_ERROR` | 500 | `Plugin` | Plugin system error |
+| `ZENII_PLUGIN_NOT_FOUND` | 404 | `PluginNotFound` | Plugin not found |
+| `ZENII_INTERNAL_ERROR` | 500 | `Other` | Unclassified internal error |
 
 ---
 
@@ -479,7 +479,7 @@ Get the actual credential value. Use with caution -- this reveals the secret.
 }
 ```
 
-Returns `404 MESO_NOT_FOUND` if the key does not exist.
+Returns `404 ZENII_NOT_FOUND` if the key does not exist.
 
 #### GET /credentials/{key}/exists
 
@@ -740,7 +740,7 @@ Get an identity file's content.
 ```json
 {
   "name": "SOUL",
-  "content": "# Soul\n\nYou are MesoClaw...",
+  "content": "# Soul\n\nYou are Zenii...",
   "is_default": true
 }
 ```
@@ -1252,7 +1252,7 @@ Send a message through a channel.
 **Request Body:**
 ```json
 {
-  "content": "Hello from MesoClaw!",
+  "content": "Hello from Zenii!",
   "recipient": "optional-recipient-id"
 }
 ```
@@ -1509,4 +1509,4 @@ Rate limiting is configurable via `config.toml`:
 - `security_rate_limit_max`: Maximum requests per window (default: 60)
 - `security_rate_limit_window_secs`: Window duration in seconds (default: 60)
 
-When rate-limited, the server returns `429 Too Many Requests` with error code `MESO_RATE_LIMITED`.
+When rate-limited, the server returns `429 Too Many Requests` with error code `ZENII_RATE_LIMITED`.

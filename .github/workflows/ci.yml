@@ -142,8 +142,8 @@ jobs:
 
       - name: Check CLI + Daemon for aarch64-musl
         run: |
-          cargo check -p mesoclaw-cli --target aarch64-unknown-linux-musl
-          cargo check -p mesoclaw-daemon --no-default-features --target aarch64-unknown-linux-musl
+          cargo check -p zenii-cli --target aarch64-unknown-linux-musl
+          cargo check -p zenii-daemon --no-default-features --target aarch64-unknown-linux-musl
 
   cargo-audit:
     name: Cargo Audit

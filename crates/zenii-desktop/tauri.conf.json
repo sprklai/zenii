@@ -1,0 +1,67 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Zenii",
+  "version": "0.0.15",
+  "identifier": "com.sprklai.zenii",
+  "build": {
+    "devUrl": "http://localhost:18971",
+    "frontendDist": "../../web/build",
+    "beforeDevCommand": "",
+    "beforeBuildCommand": ""
+  },
+  "app": {
+    "withGlobalTauri": false,
+    "windows": [
+      {
+        "title": "Zenii",
+        "width": 1280,
+        "height": 720,
+        "minWidth": 800,
+        "minHeight": 500,
+        "resizable": true,
+        "center": true,
+        "visible": true
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; script-src 'self'; connect-src 'self' http://127.0.0.1:* ws://127.0.0.1:*; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "shortDescription": "Zenii - AI-powered personal assistant",
+    "longDescription": "Zenii is an AI-powered personal assistant with multi-provider support, memory, tools, and extensible channels.",
+    "category": "Utility",
+    "linux": {
+      "deb": {
+        "desktopTemplate": "zenii.desktop"
+      },
+      "rpm": {
+        "desktopTemplate": "zenii.desktop"
+      }
+    },
+      "macOS": {
+      "signingIdentity": "Developer ID Application: NSR Technologies Inc. (6BQSGY2B74)",
+      "entitlements": "./entitlements.plist",
+      "minimumSystemVersion": "10.13",
+      "providerShortName": "6BQSGY2B74",
+      "hardenedRuntime": true
+    },
+    "android": {
+      "minSdkVersion": 24,
+      "versionCode": 1
+    },
+    "iOS": {
+      "developmentTeam": "6BQSGY2B74",
+      "minimumSystemVersion": "13.0"
+    }
+  }
+}

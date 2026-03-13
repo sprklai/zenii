@@ -63,7 +63,7 @@
 	onMount(async () => {
 		await configStore.load();
 		userName = String(configStore.config.user_name ?? '');
-		assistantName = String(configStore.config.identity_name ?? 'MesoClaw');
+		assistantName = String(configStore.config.identity_name ?? 'Zenii');
 		userLocation = String(configStore.config.user_location ?? '');
 		userTimezone = String(configStore.config.user_timezone ?? '');
 	});
@@ -94,7 +94,7 @@
 		try {
 			const updates: Record<string, string | null> = {
 				user_name: userName.trim() || null,
-				identity_name: assistantName.trim() || 'MesoClaw',
+				identity_name: assistantName.trim() || 'Zenii',
 				user_location: userLocation.trim() || null,
 				user_timezone: userTimezone.trim() || null,
 			};
@@ -167,7 +167,7 @@
 			</div>
 			<div class="space-y-1">
 				<label class="text-sm font-medium" for="assistant-name">Assistant Name</label>
-				<Input id="assistant-name" bind:value={assistantName} placeholder="MesoClaw" />
+				<Input id="assistant-name" bind:value={assistantName} placeholder="Zenii" />
 			</div>
 			<div class="space-y-1">
 				<label class="text-sm font-medium" for="user-location">Location</label>

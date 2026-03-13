@@ -1,11 +1,11 @@
 [workspace]
 resolver = "3"
 members = [
-    "crates/mesoclaw-core",
-    "crates/mesoclaw-desktop",
-    "crates/mesoclaw-cli",
-    "crates/mesoclaw-tui",
-    "crates/mesoclaw-daemon",
+    "crates/zenii-core",
+    "crates/zenii-desktop",
+    "crates/zenii-cli",
+    "crates/zenii-tui",
+    "crates/zenii-daemon",
 ]
 
 [workspace.package]
@@ -17,7 +17,7 @@ rust-version = "1.85"
 
 [workspace.dependencies]
 # Core library
-mesoclaw-core = { path = "crates/mesoclaw-core", default-features = false }
+zenii-core = { path = "crates/zenii-core", default-features = false }
 
 # Async runtime
 tokio = { version = "1.50.0", features = ["full"] }

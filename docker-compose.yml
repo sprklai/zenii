@@ -1,13 +1,13 @@
 services:
-  mesoclaw:
+  zenii:
     build: .
     ports:
       - "18981:18981"
     volumes:
       - ./config:/config:ro
-      - mesoclaw-data:/data
+      - zenii-data:/data
     environment:
-      - MESOCLAW_TOKEN=${MESOCLAW_TOKEN:-}
+      - ZENII_TOKEN=${ZENII_TOKEN:-}
       - RUST_LOG=info
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:18981/health"]
@@ -17,4 +17,4 @@ services:
     restart: unless-stopped
 
 volumes:
-  mesoclaw-data:
+  zenii-data:

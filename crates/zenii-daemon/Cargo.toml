@@ -1,0 +1,31 @@
+[package]
+name = "zenii-daemon"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "zenii-daemon"
+path = "src/main.rs"
+
+[dependencies]
+zenii-core = { workspace = true, default-features = false, features = ["gateway", "ai"] }
+tokio = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+clap = { workspace = true }
+
+[lints]
+workspace = true
+
+[features]
+default = ["keyring", "channels", "channels-telegram", "channels-slack", "channels-discord", "api-docs"]
+api-docs = ["zenii-core/api-docs"]
+keyring = ["zenii-core/keyring"]
+channels = ["zenii-core/channels"]
+channels-telegram = ["channels", "zenii-core/channels-telegram"]
+channels-slack = ["channels", "zenii-core/channels-slack"]
+channels-discord = ["channels", "zenii-core/channels-discord"]
+local-embeddings = ["zenii-core/local-embeddings"]
+scheduler = ["zenii-core/scheduler"]
+web-dashboard = ["zenii-core/web-dashboard"]
+vendored-openssl = ["zenii-core/vendored-openssl"]

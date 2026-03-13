@@ -1,14 +1,14 @@
-# Contributing to MesoClaw
+# Contributing to Zenii
 
-Thank you for your interest in contributing to MesoClaw! This guide will help you get started.
+Thank you for your interest in contributing to Zenii! This guide will help you get started.
 
 ## Getting Started
 
 1. **Fork** the repository on GitHub
 2. **Clone** your fork locally:
    ```bash
-   git clone https://github.com/<your-username>/mesoclaw.git
-   cd mesoclaw
+   git clone https://github.com/<your-username>/zenii.git
+   cd zenii
    ```
 3. **Install prerequisites**:
    - Rust 1.85+ (2024 edition)
@@ -25,7 +25,7 @@ Use descriptive branch names with one of these prefixes:
 
 ## Phase Gate Protocol
 
-MesoClaw follows a strict phase gate workflow for all non-trivial changes. See [docs/phases.md](docs/phases.md) for the full protocol. In short:
+Zenii follows a strict phase gate workflow for all non-trivial changes. See [docs/phases.md](docs/phases.md) for the full protocol. In short:
 
 1. **Gate 1 -- Plan**: Write a plan document in `plans/`. Get approval before writing code.
 2. **Gate 2 -- Tests**: Write tests first (TDD). Get approval before implementing.
@@ -35,9 +35,9 @@ For small bug fixes or documentation updates, a standard PR workflow is sufficie
 
 ## Code Style
 
-MesoClaw follows the conventions documented in [CLAUDE.md](CLAUDE.md). Key points:
+Zenii follows the conventions documented in [CLAUDE.md](CLAUDE.md). Key points:
 
-- **Error handling**: Use `MesoError` enum (thiserror). Never `Result<T, String>`.
+- **Error handling**: Use `ZeniiError` enum (thiserror). Never `Result<T, String>`.
 - **Async**: tokio::sync primitives only. Never `std::sync::Mutex` in async paths.
 - **Logging**: `tracing` macros only (`info!`, `warn!`, `error!`, `debug!`). Never `println!`.
 - **Naming**: `snake_case` (Rust), `camelCase` (TypeScript/Svelte).
@@ -105,8 +105,8 @@ Before submitting your PR, verify:
 
 ## Reporting Issues
 
-- **Bugs**: Use the [Bug Report](https://github.com/nsrtech/mesoclaw/issues/new?template=bug_report.md) template.
-- **Features**: Use the [Feature Request](https://github.com/nsrtech/mesoclaw/issues/new?template=feature_request.md) template.
+- **Bugs**: Use the [Bug Report](https://github.com/nsrtech/zenii/issues/new?template=bug_report.md) template.
+- **Features**: Use the [Feature Request](https://github.com/nsrtech/zenii/issues/new?template=feature_request.md) template.
 - **Security**: See [SECURITY.md](SECURITY.md) for responsible disclosure.
 
 ## Code of Conduct

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# MesoClaw -- Cross-Platform Build Script
+# Zenii -- Cross-Platform Build Script
 # Usage: ./scripts/build.sh [OPTIONS]
 #
 # Options:
@@ -25,7 +25,7 @@ WORKSPACE_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BUILD_DIR="${WORKSPACE_ROOT}/dist"
 
 # All binary crates in the workspace
-ALL_CRATES="mesoclaw-cli mesoclaw-tui mesoclaw-daemon mesoclaw-desktop"
+ALL_CRATES="zenii-cli zenii-tui zenii-daemon zenii-desktop"
 
 # Target mappings: friendly name -> Rust triple
 # Using a function instead of associative arrays for macOS Bash 3.2 compatibility
@@ -223,7 +223,7 @@ build_target() {
 
     for crate in $crates_to_build; do
         # Skip desktop crate for non-native cross-compilation (needs Tauri setup)
-        if [ "$crate" = "mesoclaw-desktop" ] && [ "$rust_target" != "$(get_native_target)" ]; then
+        if [ "$crate" = "zenii-desktop" ] && [ "$rust_target" != "$(get_native_target)" ]; then
             warn "Skipping $crate for cross-compilation (requires Tauri platform setup)"
             continue
         fi
@@ -313,7 +313,7 @@ build_macos_universal() {
 
     for crate in $crates_to_build; do
         # Skip desktop for cross-compilation
-        if [ "$crate" = "mesoclaw-desktop" ]; then
+        if [ "$crate" = "zenii-desktop" ]; then
             warn "Skipping $crate for universal build (requires Tauri platform setup)"
             continue
         fi
@@ -376,10 +376,10 @@ get_bin_name() {
 
     local name
     case "$crate" in
-        "mesoclaw-cli")     name="mesoclaw";;
-        "mesoclaw-tui")     name="mesoclaw-tui";;
-        "mesoclaw-daemon")  name="mesoclaw-daemon";;
-        "mesoclaw-desktop") name="mesoclaw-desktop";;
+        "zenii-cli")     name="zenii";;
+        "zenii-tui")     name="zenii-tui";;
+        "zenii-daemon")  name="zenii-daemon";;
+        "zenii-desktop") name="zenii-desktop";;
         *)                  name="$crate";;
     esac
 
@@ -506,7 +506,7 @@ run_tauri_build() {
     fi
 
     info "Running: cargo tauri build ${tauri_args[*]}"
-    (cd "${WORKSPACE_ROOT}/crates/mesoclaw-desktop" && cargo tauri build "${tauri_args[@]}")
+    (cd "${WORKSPACE_ROOT}/crates/zenii-desktop" && cargo tauri build "${tauri_args[@]}")
 
     if [ $? -eq 0 ]; then
         ok "Tauri build complete!"
@@ -591,7 +591,7 @@ run_dev() {
     # Start Tauri dev without its own dev server (cleanup handled by trap)
     # --no-watch: prevent file watcher from interrupting the initial build
     info "Starting Tauri dev server..."
-    (cd "${WORKSPACE_ROOT}/crates/mesoclaw-desktop" && cargo tauri dev --no-dev-server --no-watch)
+    (cd "${WORKSPACE_ROOT}/crates/zenii-desktop" && cargo tauri dev --no-dev-server --no-watch)
     exit $?
 }
 
@@ -612,7 +612,7 @@ fi
 
 echo ""
 echo "========================================"
-echo "  MesoClaw Build"
+echo "  Zenii Build"
 echo "  Target:  $TARGET"
 echo "  Profile: $PROFILE"
 echo "  Crates:  ${CRATES:-all}"

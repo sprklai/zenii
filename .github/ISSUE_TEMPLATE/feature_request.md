@@ -1,6 +1,6 @@
 ---
 name: Feature Request
-about: Suggest a new feature for MesoClaw
+about: Suggest a new feature for Zenii
 title: "[FEATURE] "
 labels: enhancement
 ---

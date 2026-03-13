@@ -3835,124 +3835,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "mesoclaw-cli"
-version = "0.0.15"
-dependencies = [
- "clap",
- "clap_complete",
- "futures",
- "openssl",
- "reqwest 0.13.2",
- "serde",
- "serde_json",
- "tokio",
- "tokio-tungstenite 0.28.0",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
-name = "mesoclaw-core"
-version = "0.0.15"
-dependencies = [
- "arc-swap",
- "async-trait",
- "axum 0.8.8",
- "chrono",
- "cron",
- "dashmap",
- "diffy",
- "directories",
- "fastembed",
- "futures",
- "ignore",
- "keyring",
- "lru 0.16.3",
- "openssl",
- "parking_lot",
- "pulldown-cmark",
- "reqwest 0.13.2",
- "rig-core",
- "rusqlite",
- "rustls 0.23.37",
- "serde",
- "serde_json",
- "serde_yaml",
- "serenity",
- "sqlite-vec",
- "sysinfo",
- "teloxide",
- "tempfile",
- "thiserror 2.0.18",
- "tokio",
- "tokio-stream",
- "tokio-tungstenite 0.28.0",
- "toml 1.0.6+spec-1.1.0",
- "tower 0.5.3",
- "tower-http 0.6.8",
- "tracing",
- "tracing-subscriber",
- "urlencoding",
- "utoipa",
- "utoipa-scalar",
- "uuid",
- "websearch",
- "zeroize",
-]
-
-[[package]]
-name = "mesoclaw-daemon"
-version = "0.0.15"
-dependencies = [
- "clap",
- "mesoclaw-core",
- "tokio",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
-name = "mesoclaw-desktop"
-version = "0.0.15"
-dependencies = [
- "mesoclaw-core",
- "opener",
- "serde",
- "serde_json",
- "tauri",
- "tauri-build",
- "tauri-plugin-devtools",
- "tauri-plugin-notification",
- "tauri-plugin-opener",
- "tauri-plugin-single-instance",
- "tauri-plugin-window-state",
- "tokio",
- "tracing",
- "tracing-subscriber",
- "url",
-]
-
-[[package]]
-name = "mesoclaw-tui"
-version = "0.0.15"
-dependencies = [
- "clap",
- "crossterm",
- "futures",
- "ratatui",
- "reqwest 0.13.2",
- "serde",
- "serde_json",
- "syntect",
- "textwrap",
- "tokio",
- "tokio-tungstenite 0.28.0",
- "tracing",
- "tracing-subscriber",
- "unicode-width 0.2.0",
-]
-
-[[package]]
 name = "mime"
 version = "0.3.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9773,6 +9655,124 @@ dependencies = [
  "serde",
  "winnow 0.7.15",
  "zvariant",
+]
+
+[[package]]
+name = "zenii-cli"
+version = "0.0.15"
+dependencies = [
+ "clap",
+ "clap_complete",
+ "futures",
+ "openssl",
+ "reqwest 0.13.2",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tokio-tungstenite 0.28.0",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "zenii-core"
+version = "0.0.15"
+dependencies = [
+ "arc-swap",
+ "async-trait",
+ "axum 0.8.8",
+ "chrono",
+ "cron",
+ "dashmap",
+ "diffy",
+ "directories",
+ "fastembed",
+ "futures",
+ "ignore",
+ "keyring",
+ "lru 0.16.3",
+ "openssl",
+ "parking_lot",
+ "pulldown-cmark",
+ "reqwest 0.13.2",
+ "rig-core",
+ "rusqlite",
+ "rustls 0.23.37",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "serenity",
+ "sqlite-vec",
+ "sysinfo",
+ "teloxide",
+ "tempfile",
+ "thiserror 2.0.18",
+ "tokio",
+ "tokio-stream",
+ "tokio-tungstenite 0.28.0",
+ "toml 1.0.6+spec-1.1.0",
+ "tower 0.5.3",
+ "tower-http 0.6.8",
+ "tracing",
+ "tracing-subscriber",
+ "urlencoding",
+ "utoipa",
+ "utoipa-scalar",
+ "uuid",
+ "websearch",
+ "zeroize",
+]
+
+[[package]]
+name = "zenii-daemon"
+version = "0.0.15"
+dependencies = [
+ "clap",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "zenii-core",
+]
+
+[[package]]
+name = "zenii-desktop"
+version = "0.0.15"
+dependencies = [
+ "opener",
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-devtools",
+ "tauri-plugin-notification",
+ "tauri-plugin-opener",
+ "tauri-plugin-single-instance",
+ "tauri-plugin-window-state",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "url",
+ "zenii-core",
+]
+
+[[package]]
+name = "zenii-tui"
+version = "0.0.15"
+dependencies = [
+ "clap",
+ "crossterm",
+ "futures",
+ "ratatui",
+ "reqwest 0.13.2",
+ "serde",
+ "serde_json",
+ "syntect",
+ "textwrap",
+ "tokio",
+ "tokio-tungstenite 0.28.0",
+ "tracing",
+ "tracing-subscriber",
+ "unicode-width 0.2.0",
 ]
 
 [[package]]

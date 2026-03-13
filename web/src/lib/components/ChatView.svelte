@@ -155,7 +155,7 @@
 			{#if messagesStore.messages.length === 0 && !messagesStore.streaming}
 				<ConversationEmptyState
 					title="Start a conversation"
-					description="Send a message to begin chatting with MesoClaw"
+					description="Send a message to begin chatting with Zenii"
 				/>
 			{:else}
 				<div class="space-y-2">

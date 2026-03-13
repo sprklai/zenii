@@ -51,8 +51,8 @@
 		<Sidebar.Root>
 			<Sidebar.Header class="sticky top-0 z-10 bg-sidebar-accent/50 border-b border-sidebar-border">
 				<div class="flex items-center gap-2 px-2 py-1">
-					<img src="/logo.png" alt="MesoClaw" class="h-6 w-6" />
-					<span class="font-semibold text-lg">MesoClaw</span>
+					<img src="/app-icon-32.png" alt="Zenii" class="h-6 w-6" />
+					<span class="font-semibold text-lg">Zenii</span>
 				</div>
 			</Sidebar.Header>
 

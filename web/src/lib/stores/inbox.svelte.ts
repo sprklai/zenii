@@ -26,7 +26,7 @@ export interface ChannelRealtimeEvent {
   role: string;
 }
 
-const LAST_READ_KEY = "mesoclaw_inbox_last_read";
+const LAST_READ_KEY = "zenii_inbox_last_read";
 
 function getLastReadTimestamps(): Record<string, number> {
   try {

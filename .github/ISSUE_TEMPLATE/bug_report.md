@@ -1,6 +1,6 @@
 ---
 name: Bug Report
-about: Report a bug in MesoClaw
+about: Report a bug in Zenii
 title: "[BUG] "
 labels: bug
 ---
@@ -12,7 +12,7 @@ A clear description of the bug.
 ## Environment
 
 - **OS**: [e.g., Ubuntu 24.04, macOS 15, Windows 11]
-- **MesoClaw Version**: [output of `mesoclaw --version`]
+- **Zenii Version**: [output of `zenii --version`]
 - **Interface**: [Desktop / CLI / Daemon / Web]
 
 ## Steps to Reproduce

@@ -1,20 +1,20 @@
-# CLAUDE.md -- MesoClaw
+# CLAUDE.md -- Zenii
 
 ## Project Overview
 
-MesoClaw is a Rust workspace producing 5 binaries from a shared core:
+Zenii is a Rust workspace producing 5 binaries from a shared core:
 - **Desktop** (Tauri 2 + Svelte 5), **Mobile** (Tauri 2 iOS/Android), **CLI** (clap), **TUI** (ratatui), **Daemon** (headless axum)
 
 All clients communicate via HTTP+WebSocket gateway (axum at 127.0.0.1:18981).
 
 ## v2 Philosophy
 
-MesoClaw v2 is a clean rewrite, not a patch. Core principles:
+Zenii v2 is a clean rewrite, not a patch. Core principles:
 
 1. **Use proven crates, don't hand-roll** -- prefer battle-tested crates over custom implementations. Examples: `sysinfo` over parsing `/proc`, `websearch` over hand-rolled provider cascades, `rig-core` over custom AI agent loops, `ignore` over manual file walking. Less code to maintain, fewer platform-specific bugs.
-2. **Port patterns, not code** -- v1 has good architectural patterns (trait-based tools, security policy enforcement, memory abstraction). Port the *design* and adapt to v2 conventions (`MesoError`, `tokio::sync`, `spawn_blocking`), don't copy-paste v1 code with its `Result<T, String>` and `std::sync::Mutex`.
+2. **Port patterns, not code** -- v1 has good architectural patterns (trait-based tools, security policy enforcement, memory abstraction). Port the *design* and adapt to v2 conventions (`ZeniiError`, `tokio::sync`, `spawn_blocking`), don't copy-paste v1 code with its `Result<T, String>` and `std::sync::Mutex`.
 3. **Lean by default** -- feature-gate optional modules (channels, scheduler, web-dashboard). Default binary includes only what's needed for core operation. Check dependency trees before adding crates.
-4. **Single shared core** -- ALL business logic lives in `mesoclaw-core`. Binary crates are thin shells (<100 lines each). No logic duplication across binaries.
+4. **Single shared core** -- ALL business logic lives in `zenii-core`. Binary crates are thin shells (<100 lines each). No logic duplication across binaries.
 
 ## References
 
@@ -31,18 +31,18 @@ Rust 2024 | Tokio | rig-core (AI) | rusqlite + sqlite-vec (DB) | axum (gateway) 
 cargo check --workspace                    # Compile check
 cargo test --workspace                     # Run all tests
 cargo clippy --workspace                   # Lint
-cargo run -p mesoclaw-daemon               # Start daemon
-cargo run -p mesoclaw-cli -- chat          # CLI chat
+cargo run -p zenii-daemon               # Start daemon
+cargo run -p zenii-cli -- chat          # CLI chat
 cd web && bun run dev                      # Frontend dev
-cd crates/mesoclaw-desktop && cargo tauri dev  # Desktop app
+cd crates/zenii-desktop && cargo tauri dev  # Desktop app
 ./scripts/build.sh --target native --release  # Build binaries
 ```
 
 ## Workspace Structure
 
 ```
-crates/mesoclaw-core/       # Shared library (ALL business logic, NO Tauri dep)
-  src/error.rs              # MesoError enum (thiserror)
+crates/zenii-core/       # Shared library (ALL business logic, NO Tauri dep)
+  src/error.rs              # ZeniiError enum (thiserror)
   src/config/               # TOML config (schema + load/save + OS paths)
   src/db/                   # rusqlite pool + WAL + migrations + spawn_blocking
   src/event_bus/            # EventBus trait + TokioBroadcastBus
@@ -58,11 +58,11 @@ crates/mesoclaw-core/       # Shared library (ALL business logic, NO Tauri dep)
   src/channels/             # openclaw-channels integration (feature-gated)
   src/scheduler/            # Cron jobs (feature-gated)
   src/boot.rs               # init_services() -> Services bundle
-crates/mesoclaw-desktop/    # Tauri 2 shell (macOS, Windows, Linux)
-crates/mesoclaw-mobile/     # Tauri 2 shell (iOS, Android)
-crates/mesoclaw-cli/        # clap CLI (thin wrapper)
-crates/mesoclaw-tui/        # ratatui TUI (thin wrapper)
-crates/mesoclaw-daemon/     # Headless daemon (thin wrapper)
+crates/zenii-desktop/    # Tauri 2 shell (macOS, Windows, Linux)
+crates/zenii-mobile/     # Tauri 2 shell (iOS, Android)
+crates/zenii-cli/        # clap CLI (thin wrapper)
+crates/zenii-tui/        # ratatui TUI (thin wrapper)
+crates/zenii-daemon/     # Headless daemon (thin wrapper)
 web/                        # Svelte 5 frontend (shared by desktop + mobile)
 docs/                       # Architecture diagrams, phase details, process flows
 plans/                      # Detailed per-phase implementation plans
@@ -74,10 +74,10 @@ scripts/build.sh            # Cross-platform build script
 
 1. **No std::sync::Mutex in async paths** -- use tokio::sync::Mutex or DashMap
 2. **No block_on()** -- use tokio::spawn or .await
-3. **No Result<T, String>** -- use MesoError enum (thiserror)
+3. **No Result<T, String>** -- use ZeniiError enum (thiserror)
 4. **All SQLite ops via spawn_blocking** -- rusqlite is sync
-5. **Zero business logic in binary crates** -- everything in mesoclaw-core
-6. **No code duplication** -- if used twice, extract to mesoclaw-core
+5. **Zero business logic in binary crates** -- everything in zenii-core
+6. **No code duplication** -- if used twice, extract to zenii-core
 7. **TDD: plan -> user approves -> write tests -> user approves -> implement -> cargo test -> user validates**
 8. **No phase proceeds without user confirmation at all 3 gates (plan, tests, completion)**
 9. **All public functions must have unit tests**
@@ -88,7 +88,7 @@ scripts/build.sh            # Cross-platform build script
 
 ## Conventions
 
-- Error handling: MesoError enum with thiserror, no `.map_err(|e| e.to_string())`
+- Error handling: ZeniiError enum with thiserror, no `.map_err(|e| e.to_string())`
 - Async: tokio::sync primitives only, never std::sync in async code
 - Concurrency: DashMap for concurrent HashMaps, tokio::sync::Mutex for async locks
 - Testing: `#[cfg(test)]` in same file, integration tests in `tests/`
@@ -112,7 +112,7 @@ scripts/build.sh            # Cross-platform build script
 Use the **Agent tool** (subagents) to parallelize work and protect context:
 
 - **Explore agents** (`subagent_type=Explore`): Use for broad codebase research, deep file traversal, or understanding unfamiliar modules. Prefer over manual Glob/Grep when the search requires more than 3 queries.
-- **Parallel task agents**: Spawn independent agents when implementing changes across unrelated modules (e.g., updating `mesoclaw-cli` and `mesoclaw-tui` simultaneously, or researching multiple crate alternatives at once).
+- **Parallel task agents**: Spawn independent agents when implementing changes across unrelated modules (e.g., updating `zenii-cli` and `zenii-tui` simultaneously, or researching multiple crate alternatives at once).
 - **Research agents**: Delegate dependency research, documentation lookups, or v1 codebase analysis to agents to keep the main context focused on decision-making.
 - **Phase Gate agents**: During Gate 1 (Plan), use agents to research crates, scan the v1 codebase for portable patterns, and audit existing code -- all in parallel.
 
@@ -214,9 +214,9 @@ Statuses: `[ ]` open, `[x]` done, `[-]` won't do (with reason)
 ## Feature Flags
 
 ```bash
-cargo build -p mesoclaw-daemon                          # Core only
-cargo build -p mesoclaw-daemon --features channels      # + messaging
-cargo build -p mesoclaw-daemon --features scheduler     # + cron
-cargo build -p mesoclaw-daemon --features web-dashboard # + web UI
-cargo build -p mesoclaw-daemon --all-features           # Everything
+cargo build -p zenii-daemon                          # Core only
+cargo build -p zenii-daemon --features channels      # + messaging
+cargo build -p zenii-daemon --features scheduler     # + cron
+cargo build -p zenii-daemon --features web-dashboard # + web UI
+cargo build -p zenii-daemon --all-features           # Everything
 ```

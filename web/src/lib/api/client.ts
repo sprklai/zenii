@@ -1,6 +1,6 @@
 const DEFAULT_BASE_URL = "http://127.0.0.1:18981";
-const TOKEN_KEY = "mesoclaw_token";
-const BASE_URL_KEY = "mesoclaw_base_url";
+const TOKEN_KEY = "zenii_token";
+const BASE_URL_KEY = "zenii_base_url";
 
 export function getToken(): string | null {
   if (typeof window === "undefined") return null;
@@ -97,7 +97,7 @@ export async function api<T>(
   });
 
   if (!response.ok) {
-    let errorCode = "MESO_UNKNOWN";
+    let errorCode = "ZENII_UNKNOWN";
     let details = response.statusText;
     try {
       const body: ApiError = await response.json();

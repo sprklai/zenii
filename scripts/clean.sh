@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# MesoClaw -- Clean Build Artifacts
+# Zenii -- Clean Build Artifacts
 # Usage: ./scripts/clean.sh [OPTIONS]
 #
 #   --all         Clean everything (default if no flags)
@@ -64,7 +64,7 @@ if [[ "$ANY_FLAG" == false ]]; then
 fi
 
 echo ""
-echo -e "${BOLD}MesoClaw — Clean Build Artifacts${NC}"
+echo -e "${BOLD}Zenii — Clean Build Artifacts${NC}"
 if [[ "$DRY_RUN" == true ]]; then
     echo -e "${YELLOW}(dry-run mode — nothing will be deleted)${NC}"
 fi
@@ -143,7 +143,7 @@ fi
 
 # ── Tauri gen (preserve gen/schemas) ──────────────────────────────────
 if [[ "$DO_TAURI" == true ]]; then
-    TAURI_GEN="$WORKSPACE_ROOT/crates/mesoclaw-desktop/gen"
+    TAURI_GEN="$WORKSPACE_ROOT/crates/zenii-desktop/gen"
     if [[ -d "$TAURI_GEN" ]]; then
         # Calculate size of everything except schemas/
         size=0

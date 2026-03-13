@@ -40,7 +40,7 @@
 <Dialog.Root bind:open>
 	<Dialog.Content class="sm:max-w-md">
 		<Dialog.Header>
-			<Dialog.Title>Welcome to MesoClaw</Dialog.Title>
+			<Dialog.Title>Welcome to Zenii</Dialog.Title>
 			<Dialog.Description>
 				Set your location so the AI can give you relevant, location-aware responses (weather, news, events, etc.).
 			</Dialog.Description>

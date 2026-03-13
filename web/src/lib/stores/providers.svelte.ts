@@ -31,7 +31,7 @@ export interface DefaultModel {
   model_id: string;
 }
 
-const SELECTED_MODEL_KEY = "mesoclaw:selectedModel";
+const SELECTED_MODEL_KEY = "zenii:selectedModel";
 
 function createProvidersStore() {
   let providers = $state<ProviderWithKeyStatus[]>([]);

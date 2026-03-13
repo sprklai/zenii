@@ -1,8 +1,8 @@
-# MesoClaw Installation and Usage Guide
+# Zenii Installation and Usage Guide
 
-A complete guide to installing, running, and integrating MesoClaw across all supported platforms, interfaces, and programming languages.
+A complete guide to installing, running, and integrating Zenii across all supported platforms, interfaces, and programming languages.
 
-> **Note**: This document was generated with AI assistance and may contain inaccuracies. If you find errors, please [report an issue](https://github.com/sprklai/mesoclaw/issues).
+> **Note**: This document was generated with AI assistance and may contain inaccuracies. If you find errors, please [report an issue](https://github.com/sprklai/zenii/issues).
 
 ## Table of Contents
 
@@ -15,7 +15,7 @@ A complete guide to installing, running, and integrating MesoClaw across all sup
   - [macOS](#macos)
   - [Windows](#windows)
   - [Docker / Docker Compose](#docker--docker-compose)
-- [Running MesoClaw](#running-mesoclaw)
+- [Running Zenii](#running-zenii)
   - [Desktop App (GUI)](#desktop-app-gui)
   - [Daemon (Headless Server)](#daemon-headless-server)
   - [CLI (Command Line)](#cli-command-line)
@@ -70,14 +70,14 @@ A complete guide to installing, running, and integrating MesoClaw across all sup
 
 ## Overview
 
-MesoClaw is an AI assistant platform with a Rust backend and multiple client interfaces. All interfaces communicate through a single HTTP+WebSocket gateway running on `127.0.0.1:18981` by default.
+Zenii is an AI assistant platform with a Rust backend and multiple client interfaces. All interfaces communicate through a single HTTP+WebSocket gateway running on `127.0.0.1:18981` by default.
 
 **Architecture:**
 
 ```
 Desktop (Tauri+Svelte)  ──┐
-CLI (mesoclaw)           ──┼──▶  Gateway (axum)  ──▶  AI Providers (OpenAI, Anthropic, etc.)
-TUI (mesoclaw-tui)       ──┤     :18981                SQLite DB
+CLI (zenii)           ──┼──▶  Gateway (axum)  ──▶  AI Providers (OpenAI, Anthropic, etc.)
+TUI (zenii-tui)       ──┤     :18981                SQLite DB
 Daemon (headless)        ──┤                           Memory Store
 Your App (HTTP/WS)       ──┘                           Tool Registry
 ```
@@ -86,10 +86,10 @@ Your App (HTTP/WS)       ──┘                           Tool Registry
 
 | Interface | Binary | Use Case | Requires Display |
 |-----------|--------|----------|-----------------|
-| **Desktop** | `mesoclaw-desktop` | Full GUI experience with Svelte frontend | Yes |
-| **Daemon** | `mesoclaw-daemon` | Headless server, Docker, systemd, APIs | No |
-| **CLI** | `mesoclaw` | Terminal chat, scripting, piping | No |
-| **TUI** | `mesoclaw-tui` | Interactive terminal dashboard | No (terminal only) |
+| **Desktop** | `zenii-desktop` | Full GUI experience with Svelte frontend | Yes |
+| **Daemon** | `zenii-daemon` | Headless server, Docker, systemd, APIs | No |
+| **CLI** | `zenii` | Terminal chat, scripting, piping | No |
+| **TUI** | `zenii-tui` | Interactive terminal dashboard | No (terminal only) |
 
 The **daemon** is the core — it runs the gateway server. Desktop embeds the daemon internally. CLI and TUI connect to a running daemon over HTTP/WS.
 
@@ -103,11 +103,11 @@ The **daemon** is the core — it runs the gateway server. Desktop embeds the da
 
 ```bash
 # Download the latest release
-curl -LO https://github.com/sprklai/mesoclaw/releases/latest/download/mesoclaw-x86_64-unknown-linux-gnu.tar.gz
-tar xzf mesoclaw-x86_64-unknown-linux-gnu.tar.gz
+curl -LO https://github.com/sprklai/zenii/releases/latest/download/zenii-x86_64-unknown-linux-gnu.tar.gz
+tar xzf zenii-x86_64-unknown-linux-gnu.tar.gz
 
 # Install
-sudo mv mesoclaw-daemon mesoclaw mesoclaw-tui /usr/local/bin/
+sudo mv zenii-daemon zenii zenii-tui /usr/local/bin/
 ```
 
 **From source:**
@@ -117,48 +117,48 @@ sudo mv mesoclaw-daemon mesoclaw mesoclaw-tui /usr/local/bin/
 sudo apt install build-essential pkg-config libsqlite3-dev libssl-dev
 
 # Clone and build
-git clone https://github.com/sprklai/mesoclaw.git
-cd mesoclaw
-cargo build --release -p mesoclaw-daemon -p mesoclaw-cli -p mesoclaw-tui
+git clone https://github.com/sprklai/zenii.git
+cd zenii
+cargo build --release -p zenii-daemon -p zenii-cli -p zenii-tui
 
 # Binaries are in target/release/
-sudo cp target/release/mesoclaw-daemon target/release/mesoclaw target/release/mesoclaw-tui /usr/local/bin/
+sudo cp target/release/zenii-daemon target/release/zenii target/release/zenii-tui /usr/local/bin/
 ```
 
 **Desktop app (Debian/Ubuntu):**
 
 ```bash
 # Download .deb package
-curl -LO https://github.com/sprklai/mesoclaw/releases/latest/download/mesoclaw-desktop_amd64.deb
-sudo dpkg -i mesoclaw-desktop_amd64.deb
+curl -LO https://github.com/sprklai/zenii/releases/latest/download/zenii-desktop_amd64.deb
+sudo dpkg -i zenii-desktop_amd64.deb
 
 # Or AppImage (no install needed)
-curl -LO https://github.com/sprklai/mesoclaw/releases/latest/download/mesoclaw-desktop_amd64.AppImage
-chmod +x mesoclaw-desktop_amd64.AppImage
-./mesoclaw-desktop_amd64.AppImage
+curl -LO https://github.com/sprklai/zenii/releases/latest/download/zenii-desktop_amd64.AppImage
+chmod +x zenii-desktop_amd64.AppImage
+./zenii-desktop_amd64.AppImage
 ```
 
 ### Linux (ARM64 / Raspberry Pi)
 
 ```bash
 # Pre-built binary
-curl -LO https://github.com/sprklai/mesoclaw/releases/latest/download/mesoclaw-aarch64-unknown-linux-gnu.tar.gz
-tar xzf mesoclaw-aarch64-unknown-linux-gnu.tar.gz
-sudo mv mesoclaw-daemon mesoclaw /usr/local/bin/
+curl -LO https://github.com/sprklai/zenii/releases/latest/download/zenii-aarch64-unknown-linux-gnu.tar.gz
+tar xzf zenii-aarch64-unknown-linux-gnu.tar.gz
+sudo mv zenii-daemon zenii /usr/local/bin/
 ```
 
 **From source on the board:**
 
 ```bash
 sudo apt install build-essential pkg-config libsqlite3-dev libssl-dev
-cargo build --release -p mesoclaw-daemon -p mesoclaw-cli
+cargo build --release -p zenii-daemon -p zenii-cli
 ```
 
 **Cross-compile from x86 host:**
 
 ```bash
 # Using the build script
-./scripts/build.sh --target linux-arm64 --release --crates "mesoclaw-daemon mesoclaw-cli"
+./scripts/build.sh --target linux-arm64 --release --crates "zenii-daemon zenii-cli"
 
 # Or using Docker-based cross-compilation
 ./scripts/build.sh --target linux-arm64 --release --docker
@@ -168,9 +168,9 @@ cargo build --release -p mesoclaw-daemon -p mesoclaw-cli
 
 ```bash
 # Pre-built binary
-curl -LO https://github.com/sprklai/mesoclaw/releases/latest/download/mesoclaw-armv7-unknown-linux-gnueabihf.tar.gz
-tar xzf mesoclaw-armv7-unknown-linux-gnueabihf.tar.gz
-sudo mv mesoclaw-daemon mesoclaw /usr/local/bin/
+curl -LO https://github.com/sprklai/zenii/releases/latest/download/zenii-armv7-unknown-linux-gnueabihf.tar.gz
+tar xzf zenii-armv7-unknown-linux-gnueabihf.tar.gz
+sudo mv zenii-daemon zenii /usr/local/bin/
 
 # Cross-compile from host
 ./scripts/build.sh --target linux-armv7 --release
@@ -182,22 +182,22 @@ sudo mv mesoclaw-daemon mesoclaw /usr/local/bin/
 
 ```bash
 # Apple Silicon (M1/M2/M3/M4)
-curl -LO https://github.com/sprklai/mesoclaw/releases/latest/download/mesoclaw-aarch64-apple-darwin.tar.gz
-tar xzf mesoclaw-aarch64-apple-darwin.tar.gz
-sudo mv mesoclaw-daemon mesoclaw mesoclaw-tui /usr/local/bin/
+curl -LO https://github.com/sprklai/zenii/releases/latest/download/zenii-aarch64-apple-darwin.tar.gz
+tar xzf zenii-aarch64-apple-darwin.tar.gz
+sudo mv zenii-daemon zenii zenii-tui /usr/local/bin/
 
 # Intel
-curl -LO https://github.com/sprklai/mesoclaw/releases/latest/download/mesoclaw-x86_64-apple-darwin.tar.gz
-tar xzf mesoclaw-x86_64-apple-darwin.tar.gz
-sudo mv mesoclaw-daemon mesoclaw mesoclaw-tui /usr/local/bin/
+curl -LO https://github.com/sprklai/zenii/releases/latest/download/zenii-x86_64-apple-darwin.tar.gz
+tar xzf zenii-x86_64-apple-darwin.tar.gz
+sudo mv zenii-daemon zenii zenii-tui /usr/local/bin/
 ```
 
 **Desktop app:**
 
 ```bash
 # Download .dmg
-curl -LO https://github.com/sprklai/mesoclaw/releases/latest/download/MesoClaw.dmg
-open MesoClaw.dmg
+curl -LO https://github.com/sprklai/zenii/releases/latest/download/Zenii.dmg
+open Zenii.dmg
 # Drag to Applications
 ```
 
@@ -207,9 +207,9 @@ open MesoClaw.dmg
 # Prerequisites (Homebrew)
 brew install sqlite3 pkg-config
 
-git clone https://github.com/sprklai/mesoclaw.git
-cd mesoclaw
-cargo build --release -p mesoclaw-daemon -p mesoclaw-cli -p mesoclaw-tui
+git clone https://github.com/sprklai/zenii.git
+cd zenii
+cargo build --release -p zenii-daemon -p zenii-cli -p zenii-tui
 ```
 
 ### Windows
@@ -218,9 +218,9 @@ cargo build --release -p mesoclaw-daemon -p mesoclaw-cli -p mesoclaw-tui
 
 ```powershell
 # Download from GitHub Releases
-Invoke-WebRequest -Uri "https://github.com/sprklai/mesoclaw/releases/latest/download/mesoclaw-x86_64-pc-windows-msvc.zip" -OutFile mesoclaw.zip
-Expand-Archive mesoclaw.zip -DestinationPath C:\mesoclaw
-$env:Path += ";C:\mesoclaw"
+Invoke-WebRequest -Uri "https://github.com/sprklai/zenii/releases/latest/download/zenii-x86_64-pc-windows-msvc.zip" -OutFile zenii.zip
+Expand-Archive zenii.zip -DestinationPath C:\zenii
+$env:Path += ";C:\zenii"
 ```
 
 **Desktop app:**
@@ -231,9 +231,9 @@ Download the `.msi` or `.exe` (NSIS) installer from GitHub Releases and run it.
 
 ```powershell
 # Requires Visual Studio Build Tools + Rust
-git clone https://github.com/sprklai/mesoclaw.git
-cd mesoclaw
-cargo build --release -p mesoclaw-daemon -p mesoclaw-cli
+git clone https://github.com/sprklai/zenii.git
+cd zenii
+cargo build --release -p zenii-daemon -p zenii-cli
 ```
 
 ### Docker / Docker Compose
@@ -243,16 +243,16 @@ cargo build --release -p mesoclaw-daemon -p mesoclaw-cli
 #### Build from Source
 
 ```bash
-git clone https://github.com/sprklai/mesoclaw.git
-cd mesoclaw
-docker build -t mesoclaw .
+git clone https://github.com/sprklai/zenii.git
+cd zenii
+docker build -t zenii .
 docker run -d \
-  --name mesoclaw \
+  --name zenii \
   -p 18981:18981 \
-  -v mesoclaw-data:/data \
-  -e MESOCLAW_TOKEN=your-secret-token \
+  -v zenii-data:/data \
+  -e ZENII_TOKEN=your-secret-token \
   -e RUST_LOG=info \
-  mesoclaw
+  zenii
 ```
 
 #### Docker Compose
@@ -260,15 +260,15 @@ docker run -d \
 A `docker-compose.yml` is provided in the repository root:
 
 ```bash
-git clone https://github.com/sprklai/mesoclaw.git
-cd mesoclaw
-export MESOCLAW_TOKEN=your-secret-token
+git clone https://github.com/sprklai/zenii.git
+cd zenii
+export ZENII_TOKEN=your-secret-token
 docker compose up -d
 ```
 
 ---
 
-## Running MesoClaw
+## Running Zenii
 
 ### Desktop App (GUI)
 
@@ -276,10 +276,10 @@ The desktop app is a Tauri 2 application with an embedded Svelte frontend. It ru
 
 ```bash
 # Launch the desktop app
-mesoclaw-desktop
+zenii-desktop
 
 # Or from source during development
-cd crates/mesoclaw-desktop
+cd crates/zenii-desktop
 cargo tauri dev
 ```
 
@@ -291,7 +291,7 @@ cargo tauri dev
 - System tray with show/hide/quit
 - Close-to-tray behavior (quit via tray menu)
 
-The desktop app exposes the same gateway on `127.0.0.1:18981`, so you can use the CLI or custom scripts alongside it. To connect to an external daemon instead of the embedded one, set `MESOCLAW_GATEWAY_URL=http://host:port`.
+The desktop app exposes the same gateway on `127.0.0.1:18981`, so you can use the CLI or custom scripts alongside it. To connect to an external daemon instead of the embedded one, set `ZENII_GATEWAY_URL=http://host:port`.
 
 ### Daemon (Headless Server)
 
@@ -299,31 +299,31 @@ The daemon runs the gateway without any UI. Use it for servers, Docker, systemd 
 
 ```bash
 # Start with defaults
-mesoclaw-daemon
+zenii-daemon
 
 # Start with custom config
-mesoclaw-daemon --config /path/to/config.toml
+zenii-daemon --config /path/to/config.toml
 
 # Start with environment overrides
-MESOCLAW_TOKEN=secret RUST_LOG=debug mesoclaw-daemon
+ZENII_TOKEN=secret RUST_LOG=debug zenii-daemon
 ```
 
 **As a systemd service (Linux):**
 
 ```ini
-# /etc/systemd/system/mesoclaw.service
+# /etc/systemd/system/zenii.service
 [Unit]
-Description=MesoClaw AI Assistant Daemon
+Description=Zenii AI Assistant Daemon
 After=network.target
 
 [Service]
 Type=simple
-User=mesoclaw
-ExecStart=/usr/local/bin/mesoclaw-daemon
+User=zenii
+ExecStart=/usr/local/bin/zenii-daemon
 Restart=on-failure
 RestartSec=5
 Environment=RUST_LOG=info
-Environment=MESOCLAW_TOKEN=your-secret-token
+Environment=ZENII_TOKEN=your-secret-token
 
 [Install]
 WantedBy=multi-user.target
@@ -331,8 +331,8 @@ WantedBy=multi-user.target
 
 ```bash
 sudo systemctl daemon-reload
-sudo systemctl enable --now mesoclaw
-sudo journalctl -u mesoclaw -f
+sudo systemctl enable --now zenii
+sudo journalctl -u zenii -f
 ```
 
 ### CLI (Command Line)
@@ -341,60 +341,60 @@ The CLI is a thin HTTP/WS client that connects to a running daemon. Start the da
 
 ```bash
 # Start the daemon in the background
-mesoclaw-daemon &
+zenii-daemon &
 
 # Interactive chat (WebSocket streaming)
-mesoclaw chat
+zenii chat
 
 # Chat with a specific model
-mesoclaw chat --model anthropic/claude-sonnet-4-20250514
+zenii chat --model anthropic/claude-sonnet-4-20250514
 
 # Single prompt (non-interactive)
-mesoclaw run "Summarize the Rust ownership model in 3 sentences"
-mesoclaw run "Continue our discussion" --session my-project --model gpt-4o
+zenii run "Summarize the Rust ownership model in 3 sentences"
+zenii run "Continue our discussion" --session my-project --model gpt-4o
 
 # Session management
-mesoclaw chat --session my-project
+zenii chat --session my-project
 
 # Provider management
-mesoclaw provider list
-mesoclaw provider default openai gpt-4o
-mesoclaw key set openai sk-your-key
+zenii provider list
+zenii provider default openai gpt-4o
+zenii key set openai sk-your-key
 
 # Memory
-mesoclaw memory search "meeting notes"
-mesoclaw memory add "user-pref" "User prefers concise answers"
-mesoclaw memory remove "user-pref"
+zenii memory search "meeting notes"
+zenii memory add "user-pref" "User prefers concise answers"
+zenii memory remove "user-pref"
 
 # Daemon management
-mesoclaw daemon start
-mesoclaw daemon stop
-mesoclaw daemon status
+zenii daemon start
+zenii daemon stop
+zenii daemon status
 
 # Configuration
-mesoclaw config show
-mesoclaw config set log_level debug
+zenii config show
+zenii config set log_level debug
 
 # Scheduled jobs
-mesoclaw schedule list
-mesoclaw schedule create my-job --schedule-type interval --interval-secs 300
-mesoclaw schedule status
+zenii schedule list
+zenii schedule create my-job --schedule-type interval --interval-secs 300
+zenii schedule status
 
 # Plugins
-mesoclaw plugin list
-mesoclaw plugin install github.com/user/weather-plugin
-mesoclaw plugin remove weather
+zenii plugin list
+zenii plugin install github.com/user/weather-plugin
+zenii plugin remove weather
 
 # Channels
-mesoclaw channel list --source telegram
-mesoclaw channel messages <session-id>
+zenii channel list --source telegram
+zenii channel messages <session-id>
 
 # Embeddings
-mesoclaw embedding status
-mesoclaw embedding activate local
+zenii embedding status
+zenii embedding activate local
 
 # Connect to a remote daemon
-mesoclaw --host 192.168.1.100 --port 18981 --token secret chat
+zenii --host 192.168.1.100 --port 18981 --token secret chat
 ```
 
 ### TUI (Terminal UI)
@@ -403,20 +403,20 @@ mesoclaw --host 192.168.1.100 --port 18981 --token secret chat
 
 ```bash
 # Start TUI (connects to running daemon)
-mesoclaw-tui
+zenii-tui
 ```
 
 ---
 
 ## Configuration
 
-MesoClaw looks for `config.toml` in platform-specific directories:
+Zenii looks for `config.toml` in platform-specific directories:
 
 | Platform | Config Path |
 |----------|-------------|
-| Linux | `~/.config/mesoclaw/config.toml` |
-| macOS | `~/Library/Application Support/com.sprklai.mesoclaw/config.toml` |
-| Windows | `%APPDATA%\sprklai\mesoclaw\config\config.toml` |
+| Linux | `~/.config/zenii/config.toml` |
+| macOS | `~/Library/Application Support/com.sprklai.zenii/config.toml` |
+| Windows | `%APPDATA%\sprklai\zenii\config\config.toml` |
 | Docker | `/config/config.toml` (mount volume, pass `--config /config/config.toml`) |
 
 **Essential config fields:**
@@ -446,7 +446,7 @@ See [docs/configuration.md](configuration.md) for the full field reference.
 
 ## HTTP API Integration
 
-MesoClaw exposes a REST API on port 18981. Any language with an HTTP client can integrate.
+Zenii exposes a REST API on port 18981. Any language with an HTTP client can integrate.
 
 **Base URL:** `http://127.0.0.1:18981`
 
@@ -623,7 +623,7 @@ require 'uri'
 BASE = "http://127.0.0.1:18981"
 TOKEN = "your-token"
 
-def mesoclaw_request(method, path, body = nil)
+def zenii_request(method, path, body = nil)
   uri = URI("#{BASE}#{path}")
   http = Net::HTTP.new(uri.host, uri.port)
 
@@ -640,11 +640,11 @@ def mesoclaw_request(method, path, body = nil)
 end
 
 # Chat
-result = mesoclaw_request(:post, "/chat", { prompt: "Hello from Ruby!" })
+result = zenii_request(:post, "/chat", { prompt: "Hello from Ruby!" })
 puts result["response"]
 
 # List sessions
-sessions = mesoclaw_request(:get, "/sessions")
+sessions = zenii_request(:get, "/sessions")
 sessions.each { |s| puts "#{s['id']}: #{s['title']}" }
 ```
 
@@ -655,7 +655,7 @@ import java.net.URI;
 import java.net.http.*;
 import com.google.gson.*;
 
-public class MesoClawClient {
+public class ZeniiClient {
     static final String BASE = "http://127.0.0.1:18981";
     static final String TOKEN = "your-token";
     static final HttpClient client = HttpClient.newHttpClient();
@@ -997,7 +997,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ## Linux Single-Board Computers
 
-MesoClaw runs well on ARM-based Linux boards as a headless daemon.
+Zenii runs well on ARM-based Linux boards as a headless daemon.
 
 ### Raspberry Pi 4/5 (ARM64)
 
@@ -1005,13 +1005,13 @@ Recommended setup — 4GB+ RAM, 64-bit Raspberry Pi OS.
 
 ```bash
 # Install pre-built ARM64 binary
-curl -LO https://github.com/sprklai/mesoclaw/releases/latest/download/mesoclaw-aarch64-unknown-linux-gnu.tar.gz
-tar xzf mesoclaw-aarch64-unknown-linux-gnu.tar.gz
-sudo mv mesoclaw-daemon mesoclaw /usr/local/bin/
+curl -LO https://github.com/sprklai/zenii/releases/latest/download/zenii-aarch64-unknown-linux-gnu.tar.gz
+tar xzf zenii-aarch64-unknown-linux-gnu.tar.gz
+sudo mv zenii-daemon zenii /usr/local/bin/
 
 # Create config
-mkdir -p ~/.config/mesoclaw
-cat > ~/.config/mesoclaw/config.toml <<'EOF'
+mkdir -p ~/.config/zenii
+cat > ~/.config/zenii/config.toml <<'EOF'
 gateway_host = "0.0.0.0"
 gateway_port = 18981
 provider_name = "openai"
@@ -1021,8 +1021,8 @@ gateway_auth_token = "your-secret-token"
 EOF
 
 # Start as systemd service
-sudo cp mesoclaw.service /etc/systemd/system/
-sudo systemctl enable --now mesoclaw
+sudo cp zenii.service /etc/systemd/system/
+sudo systemctl enable --now zenii
 ```
 
 ### Raspberry Pi 3 / Zero 2W (ARMv7)
@@ -1031,12 +1031,12 @@ Limited RAM (512MB-1GB). Use minimal features.
 
 ```bash
 # ARMv7 binary
-curl -LO https://github.com/sprklai/mesoclaw/releases/latest/download/mesoclaw-armv7-unknown-linux-gnueabihf.tar.gz
-tar xzf mesoclaw-armv7-unknown-linux-gnueabihf.tar.gz
-sudo mv mesoclaw-daemon /usr/local/bin/
+curl -LO https://github.com/sprklai/zenii/releases/latest/download/zenii-armv7-unknown-linux-gnueabihf.tar.gz
+tar xzf zenii-armv7-unknown-linux-gnueabihf.tar.gz
+sudo mv zenii-daemon /usr/local/bin/
 
 # Build from source without optional features (smaller binary)
-cargo build --release -p mesoclaw-daemon --no-default-features
+cargo build --release -p zenii-daemon --no-default-features
 ```
 
 ### NVIDIA Jetson
@@ -1044,15 +1044,15 @@ cargo build --release -p mesoclaw-daemon --no-default-features
 Jetson Nano/Xavier/Orin run Ubuntu ARM64. Use the standard ARM64 binary:
 
 ```bash
-curl -LO https://github.com/sprklai/mesoclaw/releases/latest/download/mesoclaw-aarch64-unknown-linux-gnu.tar.gz
-tar xzf mesoclaw-aarch64-unknown-linux-gnu.tar.gz
-sudo mv mesoclaw-daemon mesoclaw /usr/local/bin/
+curl -LO https://github.com/sprklai/zenii/releases/latest/download/zenii-aarch64-unknown-linux-gnu.tar.gz
+tar xzf zenii-aarch64-unknown-linux-gnu.tar.gz
+sudo mv zenii-daemon zenii /usr/local/bin/
 ```
 
 If you want to use local embeddings (fastembed), build with the `local-embeddings` feature:
 
 ```bash
-cargo build --release -p mesoclaw-daemon --features local-embeddings
+cargo build --release -p zenii-daemon --features local-embeddings
 ```
 
 ### Orange Pi / Rock Pi / Pine64
@@ -1099,15 +1099,15 @@ The default `docker-compose.yml` included in the repo:
 
 ```yaml
 services:
-  mesoclaw:
+  zenii:
     build: .
     ports:
       - "18981:18981"
     volumes:
       - ./config:/config:ro
-      - mesoclaw-data:/data
+      - zenii-data:/data
     environment:
-      - MESOCLAW_TOKEN=${MESOCLAW_TOKEN:-}
+      - ZENII_TOKEN=${ZENII_TOKEN:-}
       - RUST_LOG=info
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:18981/health"]
@@ -1117,22 +1117,22 @@ services:
     restart: unless-stopped
 
 volumes:
-  mesoclaw-data:
+  zenii-data:
 ```
 
 ### With Reverse Proxy (Caddy)
 
-Expose MesoClaw over HTTPS with automatic TLS:
+Expose Zenii over HTTPS with automatic TLS:
 
 ```yaml
 services:
-  mesoclaw:
+  zenii:
     build: .
     volumes:
       - ./config:/config:ro
-      - mesoclaw-data:/data
+      - zenii-data:/data
     environment:
-      - MESOCLAW_TOKEN=${MESOCLAW_TOKEN}
+      - ZENII_TOKEN=${ZENII_TOKEN}
       - RUST_LOG=info
     restart: unless-stopped
     # No ports exposed — Caddy handles external access
@@ -1148,25 +1148,25 @@ services:
     restart: unless-stopped
 
 volumes:
-  mesoclaw-data:
+  zenii-data:
   caddy-data:
 ```
 
 **Caddyfile:**
 
 ```
-mesoclaw.example.com {
-    reverse_proxy mesoclaw:18981
+zenii.example.com {
+    reverse_proxy zenii:18981
 }
 ```
 
 ### Multi-Instance
 
-Run separate MesoClaw instances for different use cases:
+Run separate Zenii instances for different use cases:
 
 ```yaml
 services:
-  mesoclaw-work:
+  zenii-work:
     build: .
     ports:
       - "18981:18981"
@@ -1174,10 +1174,10 @@ services:
       - ./config/work:/config:ro
       - work-data:/data
     environment:
-      - MESOCLAW_TOKEN=${WORK_TOKEN}
+      - ZENII_TOKEN=${WORK_TOKEN}
     restart: unless-stopped
 
-  mesoclaw-personal:
+  zenii-personal:
     build: .
     ports:
       - "18982:18981"
@@ -1185,7 +1185,7 @@ services:
       - ./config/personal:/config:ro
       - personal-data:/data
     environment:
-      - MESOCLAW_TOKEN=${PERSONAL_TOKEN}
+      - ZENII_TOKEN=${PERSONAL_TOKEN}
     restart: unless-stopped
 
 volumes:
@@ -1197,7 +1197,7 @@ volumes:
 
 ## Cloud and Virtual Machine Deployment
 
-MesoClaw runs on any Linux VM, container service, or VPS. The daemon is a single statically-linked binary with an embedded SQLite database — no external database or message queue required. This makes it straightforward to deploy anywhere.
+Zenii runs on any Linux VM, container service, or VPS. The daemon is a single statically-linked binary with an embedded SQLite database — no external database or message queue required. This makes it straightforward to deploy anywhere.
 
 **Minimum requirements:**
 - 1 vCPU, 512MB RAM (lightweight usage)
@@ -1206,7 +1206,7 @@ MesoClaw runs on any Linux VM, container service, or VPS. The daemon is a single
 
 ### AWS (EC2)
 
-**Launch an EC2 instance and run MesoClaw as a systemd service.**
+**Launch an EC2 instance and run Zenii as a systemd service.**
 
 ```bash
 # 1. Launch an EC2 instance (Amazon Linux 2023 or Ubuntu 24.04)
@@ -1216,14 +1216,14 @@ MesoClaw runs on any Linux VM, container service, or VPS. The daemon is a single
 # 2. SSH into the instance
 ssh -i your-key.pem ec2-user@<instance-ip>
 
-# 3. Install MesoClaw
-curl -LO https://github.com/sprklai/mesoclaw/releases/latest/download/mesoclaw-x86_64-unknown-linux-gnu.tar.gz
-tar xzf mesoclaw-x86_64-unknown-linux-gnu.tar.gz
-sudo mv mesoclaw-daemon mesoclaw /usr/local/bin/
+# 3. Install Zenii
+curl -LO https://github.com/sprklai/zenii/releases/latest/download/zenii-x86_64-unknown-linux-gnu.tar.gz
+tar xzf zenii-x86_64-unknown-linux-gnu.tar.gz
+sudo mv zenii-daemon zenii /usr/local/bin/
 
 # 4. Configure
-mkdir -p ~/.config/mesoclaw
-cat > ~/.config/mesoclaw/config.toml <<'EOF'
+mkdir -p ~/.config/zenii
+cat > ~/.config/zenii/config.toml <<'EOF'
 gateway_host = "0.0.0.0"
 gateway_port = 18981
 provider_name = "openai"
@@ -1233,15 +1233,15 @@ gateway_auth_token = "generate-a-strong-token-here"
 EOF
 
 # 5. Create systemd service
-sudo tee /etc/systemd/system/mesoclaw.service <<'EOF'
+sudo tee /etc/systemd/system/zenii.service <<'EOF'
 [Unit]
-Description=MesoClaw AI Assistant
+Description=Zenii AI Assistant
 After=network.target
 
 [Service]
 Type=simple
 User=ec2-user
-ExecStart=/usr/local/bin/mesoclaw-daemon
+ExecStart=/usr/local/bin/zenii-daemon
 Restart=on-failure
 RestartSec=5
 Environment=RUST_LOG=info
@@ -1251,7 +1251,7 @@ WantedBy=multi-user.target
 EOF
 
 sudo systemctl daemon-reload
-sudo systemctl enable --now mesoclaw
+sudo systemctl enable --now zenii
 
 # 6. Verify
 curl http://localhost:18981/health
@@ -1269,7 +1269,7 @@ curl http://localhost:18981/health
 ```bash
 # Use a t4g.micro/small instance (ARM64 Graviton, ~20% cheaper)
 # Download the ARM64 binary instead:
-curl -LO https://github.com/sprklai/mesoclaw/releases/latest/download/mesoclaw-aarch64-unknown-linux-gnu.tar.gz
+curl -LO https://github.com/sprklai/zenii/releases/latest/download/zenii-aarch64-unknown-linux-gnu.tar.gz
 ```
 
 ### AWS (ECS Fargate)
@@ -1278,27 +1278,27 @@ curl -LO https://github.com/sprklai/mesoclaw/releases/latest/download/mesoclaw-a
 
 ```bash
 # 1. Push image to ECR
-aws ecr create-repository --repository-name mesoclaw
+aws ecr create-repository --repository-name zenii
 aws ecr get-login-password | docker login --username AWS --password-stdin <account-id>.dkr.ecr.<region>.amazonaws.com
 
-docker build -t mesoclaw .
-docker tag mesoclaw:latest <account-id>.dkr.ecr.<region>.amazonaws.com/mesoclaw:latest
-docker push <account-id>.dkr.ecr.<region>.amazonaws.com/mesoclaw:latest
+docker build -t zenii .
+docker tag zenii:latest <account-id>.dkr.ecr.<region>.amazonaws.com/zenii:latest
+docker push <account-id>.dkr.ecr.<region>.amazonaws.com/zenii:latest
 ```
 
-**Task definition (`mesoclaw-task.json`):**
+**Task definition (`zenii-task.json`):**
 
 ```json
 {
-  "family": "mesoclaw",
+  "family": "zenii",
   "networkMode": "awsvpc",
   "requiresCompatibilities": ["FARGATE"],
   "cpu": "512",
   "memory": "1024",
   "containerDefinitions": [
     {
-      "name": "mesoclaw",
-      "image": "<account-id>.dkr.ecr.<region>.amazonaws.com/mesoclaw:latest",
+      "name": "zenii",
+      "image": "<account-id>.dkr.ecr.<region>.amazonaws.com/zenii:latest",
       "portMappings": [
         { "containerPort": 18981, "protocol": "tcp" }
       ],
@@ -1307,8 +1307,8 @@ docker push <account-id>.dkr.ecr.<region>.amazonaws.com/mesoclaw:latest
       ],
       "secrets": [
         {
-          "name": "MESOCLAW_TOKEN",
-          "valueFrom": "arn:aws:secretsmanager:<region>:<account>:secret:mesoclaw-token"
+          "name": "ZENII_TOKEN",
+          "valueFrom": "arn:aws:secretsmanager:<region>:<account>:secret:zenii-token"
         }
       ],
       "healthCheck": {
@@ -1320,9 +1320,9 @@ docker push <account-id>.dkr.ecr.<region>.amazonaws.com/mesoclaw:latest
       "logConfiguration": {
         "logDriver": "awslogs",
         "options": {
-          "awslogs-group": "/ecs/mesoclaw",
+          "awslogs-group": "/ecs/zenii",
           "awslogs-region": "<region>",
-          "awslogs-stream-prefix": "mesoclaw"
+          "awslogs-stream-prefix": "zenii"
         }
       }
     }
@@ -1332,11 +1332,11 @@ docker push <account-id>.dkr.ecr.<region>.amazonaws.com/mesoclaw:latest
 
 ```bash
 # Register and run
-aws ecs register-task-definition --cli-input-json file://mesoclaw-task.json
+aws ecs register-task-definition --cli-input-json file://zenii-task.json
 aws ecs create-service \
   --cluster default \
-  --service-name mesoclaw \
-  --task-definition mesoclaw \
+  --service-name zenii \
+  --task-definition zenii \
   --desired-count 1 \
   --launch-type FARGATE \
   --network-configuration "awsvpcConfiguration={subnets=[subnet-xxx],securityGroups=[sg-xxx],assignPublicIp=ENABLED}"
@@ -1362,20 +1362,20 @@ ssh ubuntu@<lightsail-ip>
 
 ```bash
 # 1. Create a VM
-gcloud compute instances create mesoclaw-vm \
+gcloud compute instances create zenii-vm \
   --zone=us-central1-a \
   --machine-type=e2-micro \
   --image-family=ubuntu-2404-lts-amd64 \
   --image-project=ubuntu-os-cloud \
-  --tags=mesoclaw
+  --tags=zenii
 
 # 2. Open firewall
-gcloud compute firewall-rules create mesoclaw-allow \
+gcloud compute firewall-rules create zenii-allow \
   --allow=tcp:18981 \
-  --target-tags=mesoclaw
+  --target-tags=zenii
 
 # 3. SSH and install
-gcloud compute ssh mesoclaw-vm --zone=us-central1-a
+gcloud compute ssh zenii-vm --zone=us-central1-a
 # ... install binary, configure, create systemd service (same as EC2)
 ```
 
@@ -1385,19 +1385,19 @@ gcloud compute ssh mesoclaw-vm --zone=us-central1-a
 
 ```bash
 # 1. Build and push to Artifact Registry
-gcloud artifacts repositories create mesoclaw --repository-format=docker --location=us-central1
-gcloud builds submit --tag us-central1-docker.pkg.dev/<project>/mesoclaw/mesoclaw:latest
+gcloud artifacts repositories create zenii --repository-format=docker --location=us-central1
+gcloud builds submit --tag us-central1-docker.pkg.dev/<project>/zenii/zenii:latest
 
 # 2. Deploy
-gcloud run deploy mesoclaw \
-  --image us-central1-docker.pkg.dev/<project>/mesoclaw/mesoclaw:latest \
+gcloud run deploy zenii \
+  --image us-central1-docker.pkg.dev/<project>/zenii/zenii:latest \
   --port 18981 \
   --memory 1Gi \
   --cpu 1 \
   --min-instances 0 \
   --max-instances 1 \
   --set-env-vars "RUST_LOG=info" \
-  --set-secrets "MESOCLAW_TOKEN=mesoclaw-token:latest" \
+  --set-secrets "ZENII_TOKEN=zenii-token:latest" \
   --allow-unauthenticated
 ```
 
@@ -1408,15 +1408,15 @@ gcloud run deploy mesoclaw \
 ```bash
 # 1. Create a VM
 az vm create \
-  --resource-group mesoclaw-rg \
-  --name mesoclaw-vm \
+  --resource-group zenii-rg \
+  --name zenii-vm \
   --image Ubuntu2404 \
   --size Standard_B1s \
   --admin-username azureuser \
   --generate-ssh-keys
 
 # 2. Open port
-az vm open-port --resource-group mesoclaw-rg --name mesoclaw-vm --port 18981
+az vm open-port --resource-group zenii-rg --name zenii-vm --port 18981
 
 # 3. SSH and install
 ssh azureuser@<vm-ip>
@@ -1429,19 +1429,19 @@ ssh azureuser@<vm-ip>
 
 ```bash
 # 1. Create container registry and push image
-az acr create --resource-group mesoclaw-rg --name mesoclawregistry --sku Basic
-az acr build --registry mesoclawregistry --image mesoclaw:latest .
+az acr create --resource-group zenii-rg --name zeniiregistry --sku Basic
+az acr build --registry zeniiregistry --image zenii:latest .
 
 # 2. Deploy container
 az container create \
-  --resource-group mesoclaw-rg \
-  --name mesoclaw \
-  --image mesoclawregistry.azurecr.io/mesoclaw:latest \
+  --resource-group zenii-rg \
+  --name zenii \
+  --image zeniiregistry.azurecr.io/zenii:latest \
   --cpu 1 \
   --memory 1 \
   --ports 18981 \
   --environment-variables RUST_LOG=info \
-  --secure-environment-variables MESOCLAW_TOKEN=your-secret-token \
+  --secure-environment-variables ZENII_TOKEN=your-secret-token \
   --ip-address Public
 ```
 
@@ -1449,7 +1449,7 @@ az container create \
 
 ```bash
 # 1. Create a droplet ($4/mo for 512MB, $6/mo for 1GB)
-doctl compute droplet create mesoclaw \
+doctl compute droplet create zenii \
   --region nyc3 \
   --size s-1vcpu-512mb-10gb \
   --image ubuntu-24-04-x64 \
@@ -1476,13 +1476,13 @@ Excellent value — ARM64 CAX servers start at ~$4/mo.
 ssh root@<server-ip>
 
 # For ARM64 (CAX):
-curl -LO https://github.com/sprklai/mesoclaw/releases/latest/download/mesoclaw-aarch64-unknown-linux-gnu.tar.gz
+curl -LO https://github.com/sprklai/zenii/releases/latest/download/zenii-aarch64-unknown-linux-gnu.tar.gz
 
 # For x86 (CX):
-curl -LO https://github.com/sprklai/mesoclaw/releases/latest/download/mesoclaw-x86_64-unknown-linux-gnu.tar.gz
+curl -LO https://github.com/sprklai/zenii/releases/latest/download/zenii-x86_64-unknown-linux-gnu.tar.gz
 
-tar xzf mesoclaw-*.tar.gz
-mv mesoclaw-daemon mesoclaw /usr/local/bin/
+tar xzf zenii-*.tar.gz
+mv zenii-daemon zenii /usr/local/bin/
 
 # ... configure and create systemd service
 ```
@@ -1496,7 +1496,7 @@ linode-cli linodes create \
   --region us-east \
   --image linode/ubuntu24.04 \
   --root_pass <password> \
-  --label mesoclaw
+  --label zenii
 
 # 2. SSH and install
 ssh root@<linode-ip>
@@ -1514,9 +1514,9 @@ Oracle offers always-free ARM64 instances — up to 4 OCPU and 24GB RAM.
 
 # 2. SSH and install ARM64 binary
 ssh ubuntu@<instance-ip>
-curl -LO https://github.com/sprklai/mesoclaw/releases/latest/download/mesoclaw-aarch64-unknown-linux-gnu.tar.gz
-tar xzf mesoclaw-aarch64-unknown-linux-gnu.tar.gz
-sudo mv mesoclaw-daemon mesoclaw /usr/local/bin/
+curl -LO https://github.com/sprklai/zenii/releases/latest/download/zenii-aarch64-unknown-linux-gnu.tar.gz
+tar xzf zenii-aarch64-unknown-linux-gnu.tar.gz
+sudo mv zenii-daemon zenii /usr/local/bin/
 
 # 3. Open port in OCI security list
 #    Network > Virtual Cloud Networks > Security Lists > Add Ingress Rule
@@ -1532,7 +1532,7 @@ sudo mv mesoclaw-daemon mesoclaw /usr/local/bin/
 Create `fly.toml`:
 
 ```toml
-app = "mesoclaw"
+app = "zenii"
 primary_region = "iad"
 
 [build]
@@ -1549,7 +1549,7 @@ primary_region = "iad"
   min_machines_running = 0
 
 [mounts]
-  source = "mesoclaw_data"
+  source = "zenii_data"
   destination = "/data"
 
 [[vm]]
@@ -1559,12 +1559,12 @@ primary_region = "iad"
 
 ```bash
 fly launch --no-deploy
-fly secrets set MESOCLAW_TOKEN=your-secret-token
-fly volumes create mesoclaw_data --size 1 --region iad
+fly secrets set ZENII_TOKEN=your-secret-token
+fly volumes create zenii_data --size 1 --region iad
 fly deploy
 
-# Your app is at: https://mesoclaw.fly.dev
-curl https://mesoclaw.fly.dev/health
+# Your app is at: https://zenii.fly.dev
+curl https://zenii.fly.dev/health
 ```
 
 ### Railway
@@ -1580,7 +1580,7 @@ railway login
 railway init
 
 # 3. Set variables
-railway variables set MESOCLAW_TOKEN=your-secret-token
+railway variables set ZENII_TOKEN=your-secret-token
 railway variables set RUST_LOG=info
 
 # 4. Deploy (auto-detects Dockerfile)
@@ -1599,16 +1599,16 @@ ssh user@<server-ip>
 
 # 2. Download the binary (pick your architecture)
 # x86_64:
-curl -LO https://github.com/sprklai/mesoclaw/releases/latest/download/mesoclaw-x86_64-unknown-linux-gnu.tar.gz
+curl -LO https://github.com/sprklai/zenii/releases/latest/download/zenii-x86_64-unknown-linux-gnu.tar.gz
 # ARM64:
-curl -LO https://github.com/sprklai/mesoclaw/releases/latest/download/mesoclaw-aarch64-unknown-linux-gnu.tar.gz
+curl -LO https://github.com/sprklai/zenii/releases/latest/download/zenii-aarch64-unknown-linux-gnu.tar.gz
 
-tar xzf mesoclaw-*.tar.gz
-sudo mv mesoclaw-daemon mesoclaw /usr/local/bin/
+tar xzf zenii-*.tar.gz
+sudo mv zenii-daemon zenii /usr/local/bin/
 
 # 3. Configure
-mkdir -p ~/.config/mesoclaw
-cat > ~/.config/mesoclaw/config.toml <<'EOF'
+mkdir -p ~/.config/zenii
+cat > ~/.config/zenii/config.toml <<'EOF'
 gateway_host = "0.0.0.0"
 gateway_port = 18981
 provider_name = "openai"
@@ -1618,15 +1618,15 @@ gateway_auth_token = "$(openssl rand -hex 32)"
 EOF
 
 # 4. Create systemd service
-sudo tee /etc/systemd/system/mesoclaw.service <<'EOF'
+sudo tee /etc/systemd/system/zenii.service <<'EOF'
 [Unit]
-Description=MesoClaw AI Assistant
+Description=Zenii AI Assistant
 After=network.target
 
 [Service]
 Type=simple
 User=nobody
-ExecStart=/usr/local/bin/mesoclaw-daemon
+ExecStart=/usr/local/bin/zenii-daemon
 Restart=on-failure
 RestartSec=5
 Environment=RUST_LOG=info
@@ -1636,7 +1636,7 @@ WantedBy=multi-user.target
 EOF
 
 sudo systemctl daemon-reload
-sudo systemctl enable --now mesoclaw
+sudo systemctl enable --now zenii
 
 # 5. Verify
 curl http://localhost:18981/health
@@ -1655,15 +1655,15 @@ curl -X POST http://localhost:18981/credentials \
 curl -fsSL https://get.docker.com | sh
 
 # Clone and run
-git clone https://github.com/sprklai/mesoclaw.git
-cd mesoclaw
-echo "MESOCLAW_TOKEN=$(openssl rand -hex 32)" > .env
+git clone https://github.com/sprklai/zenii.git
+cd zenii
+echo "ZENII_TOKEN=$(openssl rand -hex 32)" > .env
 docker compose up -d
 ```
 
 ### Security Hardening for Cloud
 
-When exposing MesoClaw to the internet, follow these practices:
+When exposing Zenii to the internet, follow these practices:
 
 **1. Always set an auth token:**
 
@@ -1679,7 +1679,7 @@ Generate one with: `openssl rand -hex 32`
 # Caddy (auto-HTTPS)
 sudo apt install caddy
 cat > /etc/caddy/Caddyfile <<'EOF'
-mesoclaw.yourdomain.com {
+zenii.yourdomain.com {
     reverse_proxy localhost:18981
 }
 EOF
@@ -1691,10 +1691,10 @@ Or with nginx:
 ```nginx
 server {
     listen 443 ssl;
-    server_name mesoclaw.yourdomain.com;
+    server_name zenii.yourdomain.com;
 
-    ssl_certificate /etc/letsencrypt/live/mesoclaw.yourdomain.com/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/mesoclaw.yourdomain.com/privkey.pem;
+    ssl_certificate /etc/letsencrypt/live/zenii.yourdomain.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/zenii.yourdomain.com/privkey.pem;
 
     location / {
         proxy_pass http://127.0.0.1:18981;
@@ -1725,15 +1725,15 @@ sudo iptables -A INPUT -p tcp --dport 18981 -j DROP
 **4. Restrict CORS origins:**
 
 ```toml
-gateway_cors_origins = ["https://mesoclaw.yourdomain.com"]
+gateway_cors_origins = ["https://zenii.yourdomain.com"]
 ```
 
 **5. Run as a non-root user:**
 
 ```bash
-sudo useradd --system --no-create-home mesoclaw
-sudo chown -R mesoclaw:mesoclaw /home/mesoclaw/.config/mesoclaw /home/mesoclaw/.local/share/mesoclaw
-# Update systemd service to use User=mesoclaw
+sudo useradd --system --no-create-home zenii
+sudo chown -R zenii:zenii /home/zenii/.config/zenii /home/zenii/.local/share/zenii
+# Update systemd service to use User=zenii
 ```
 
 **6. Regular backups:**
@@ -1741,7 +1741,7 @@ sudo chown -R mesoclaw:mesoclaw /home/mesoclaw/.config/mesoclaw /home/mesoclaw/.
 ```bash
 # SQLite databases are in the data directory
 # Back up daily with cron
-0 2 * * * sqlite3 ~/.local/share/mesoclaw/mesoclaw.db ".backup /backups/mesoclaw-$(date +\%Y\%m\%d).db"
+0 2 * * * sqlite3 ~/.local/share/zenii/zenii.db ".backup /backups/zenii-$(date +\%Y\%m\%d).db"
 ```
 
 ---
@@ -1749,7 +1749,7 @@ sudo chown -R mesoclaw:mesoclaw /home/mesoclaw/.config/mesoclaw /home/mesoclaw/.
 ## Troubleshooting
 
 **Connection refused on port 18981:**
-- Is the daemon running? `mesoclaw-daemon` or `docker compose ps`
+- Is the daemon running? `zenii-daemon` or `docker compose ps`
 - Check if another process uses the port: `ss -tlnp | grep 18981`
 - If using Docker, ensure `gateway_host = "0.0.0.0"` in config (not `127.0.0.1`)
 
@@ -1760,10 +1760,10 @@ sudo chown -R mesoclaw:mesoclaw /home/mesoclaw/.config/mesoclaw /home/mesoclaw/.
 
 **WebSocket disconnects immediately:**
 - Verify the token is passed as query parameter: `ws://host:18981/ws/chat?token=<token>`
-- Check server logs: `RUST_LOG=debug mesoclaw-daemon`
+- Check server logs: `RUST_LOG=debug zenii-daemon`
 
 **Docker: container exits immediately:**
-- Check logs: `docker compose logs mesoclaw`
+- Check logs: `docker compose logs zenii`
 - Ensure config volume is mounted correctly
 - Verify config.toml syntax: valid TOML with correct field names
 
@@ -1772,7 +1772,7 @@ sudo chown -R mesoclaw:mesoclaw /home/mesoclaw/.config/mesoclaw /home/mesoclaw/.
 - Or use Docker-based cross-compilation: `./scripts/build.sh --target linux-arm64 --docker`
 
 **Keyring not available (headless/Docker):**
-- MesoClaw falls back to in-memory credential storage automatically
+- Zenii falls back to in-memory credential storage automatically
 - Set API keys via the HTTP API after startup:
   ```bash
   curl -X POST http://localhost:18981/credentials \
@@ -1782,4 +1782,4 @@ sudo chown -R mesoclaw:mesoclaw /home/mesoclaw/.config/mesoclaw /home/mesoclaw/.
   ```
 
 **OpenAPI docs not available at /api-docs:**
-- Built without the `api-docs` feature. Rebuild with: `cargo build -p mesoclaw-daemon` (enabled by default)
+- Built without the `api-docs` feature. Rebuild with: `cargo build -p zenii-daemon` (enabled by default)

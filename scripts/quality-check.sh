@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# MesoClaw -- Local Quality Gate Script
+# Zenii -- Local Quality Gate Script
 # Usage: ./scripts/quality-check.sh
 #
 # Runs formatting, linting, tests, and banned pattern checks.
@@ -39,7 +39,7 @@ run_check() {
 
 echo ""
 echo "========================================"
-echo "  MesoClaw Quality Gates"
+echo "  Zenii Quality Gates"
 echo "========================================"
 echo ""
 
@@ -55,7 +55,7 @@ run_check "cargo test" cargo test --workspace
 # ── 4. Banned Pattern Checks ──────────────────────────────────────────
 info "Checking for banned patterns in non-test code..."
 
-CORE_SRC="crates/mesoclaw-core/src"
+CORE_SRC="crates/zenii-core/src"
 CRATES_DIR="crates"
 
 # Helper: search for a pattern in non-test Rust source files.
@@ -115,7 +115,7 @@ check_banned_pattern 'block_on(' "$CRATES_DIR" "block_on() in crates (use .await
 check_banned_pattern 'println!' "$CORE_SRC" "println!() in core (use tracing macros)" "error"
 
 # 4d. Result<T, String> in core (not in test code)
-check_banned_pattern 'Result<.*String>' "$CORE_SRC" "Result<T, String> in core (use MesoError)" "error"
+check_banned_pattern 'Result<.*String>' "$CORE_SRC" "Result<T, String> in core (use ZeniiError)" "error"
 
 # 4e. .unwrap() in non-test code (warning only)
 check_banned_pattern '\.unwrap()' "$CORE_SRC" ".unwrap() in core (prefer ? or expect)" "warning"

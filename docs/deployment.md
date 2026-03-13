@@ -1,8 +1,8 @@
-# MesoClaw Deployment Guide
+# Zenii Deployment Guide
 
-This document covers deploying MesoClaw in various environments: native binaries, Docker containers, Raspberry Pi, and behind reverse proxies.
+This document covers deploying Zenii in various environments: native binaries, Docker containers, Raspberry Pi, and behind reverse proxies.
 
-> **Note**: This document was generated with AI assistance and may contain inaccuracies. If you find errors, please [report an issue](https://github.com/sprklai/mesoclaw/issues).
+> **Note**: This document was generated with AI assistance and may contain inaccuracies. If you find errors, please [report an issue](https://github.com/sprklai/zenii/issues).
 
 ## Table of Contents
 
@@ -25,36 +25,36 @@ Download the appropriate binary for your platform from GitHub Releases:
 
 | Platform       | Binary Name        | Architecture |
 |----------------|--------------------|--------------|
-| Linux x86_64   | `mesoclaw-daemon`  | x86_64       |
-| Linux ARM64    | `mesoclaw-daemon`  | aarch64      |
-| macOS x86_64   | `mesoclaw-daemon`  | x86_64       |
-| macOS ARM      | `mesoclaw-daemon`  | aarch64      |
-| Windows        | `mesoclaw-daemon.exe` | x86_64    |
+| Linux x86_64   | `zenii-daemon`  | x86_64       |
+| Linux ARM64    | `zenii-daemon`  | aarch64      |
+| macOS x86_64   | `zenii-daemon`  | x86_64       |
+| macOS ARM      | `zenii-daemon`  | aarch64      |
+| Windows        | `zenii-daemon.exe` | x86_64    |
 
 ### 2. Set Permissions (Linux/macOS)
 
 ```bash
-chmod +x mesoclaw-daemon
-sudo mv mesoclaw-daemon /usr/local/bin/
+chmod +x zenii-daemon
+sudo mv zenii-daemon /usr/local/bin/
 ```
 
 ### 3. Create Configuration
 
-MesoClaw uses platform-specific config directories:
+Zenii uses platform-specific config directories:
 
 | Platform | Config Path |
 |----------|-------------|
-| Linux    | `~/.config/mesoclaw/config.toml` |
-| macOS    | `~/Library/Application Support/com.sprklai.mesoclaw/config.toml` |
-| Windows  | `%APPDATA%\sprklai\mesoclaw\config\config.toml` |
+| Linux    | `~/.config/zenii/config.toml` |
+| macOS    | `~/Library/Application Support/com.sprklai.zenii/config.toml` |
+| Windows  | `%APPDATA%\sprklai\zenii\config\config.toml` |
 
 Data directories (databases, identity files, skills):
 
 | Platform | Data Path |
 |----------|-----------|
-| Linux    | `~/.local/share/mesoclaw/` |
-| macOS    | `~/Library/Application Support/com.sprklai.mesoclaw/` |
-| Windows  | `%APPDATA%\sprklai\mesoclaw\data\` |
+| Linux    | `~/.local/share/zenii/` |
+| macOS    | `~/Library/Application Support/com.sprklai.zenii/` |
+| Windows  | `%APPDATA%\sprklai\zenii\data\` |
 
 Create a minimal `config.toml`:
 
@@ -74,11 +74,11 @@ gateway_auth_token = "your-secret-token"
 
 ### 4. Set API Keys
 
-Store your AI provider API key in the OS keyring. MesoClaw uses the keyring service ID `com.sprklai.mesoclaw` with key format `api_key:{provider_id}`:
+Store your AI provider API key in the OS keyring. Zenii uses the keyring service ID `com.sprklai.zenii` with key format `api_key:{provider_id}`:
 
 ```bash
 # The daemon will prompt or you can use the CLI:
-mesoclaw key set openai
+zenii key set openai
 # Or set via the gateway API after startup:
 curl -X PUT http://localhost:18981/credentials/api_key:openai \
   -H "Authorization: Bearer your-secret-token" \
@@ -89,9 +89,9 @@ curl -X PUT http://localhost:18981/credentials/api_key:openai \
 ### 5. Start the Daemon
 
 ```bash
-mesoclaw-daemon
+zenii-daemon
 # Or with a custom config path:
-mesoclaw-daemon --config /path/to/config.toml
+zenii-daemon --config /path/to/config.toml
 ```
 
 The daemon starts the HTTP+WebSocket gateway on `127.0.0.1:18981` by default.
@@ -109,60 +109,60 @@ curl http://localhost:18981/health
 ### 1. Create a Service User
 
 ```bash
-sudo useradd --system --no-create-home --shell /usr/sbin/nologin mesoclaw
-sudo mkdir -p /var/lib/mesoclaw
-sudo chown mesoclaw:mesoclaw /var/lib/mesoclaw
+sudo useradd --system --no-create-home --shell /usr/sbin/nologin zenii
+sudo mkdir -p /var/lib/zenii
+sudo chown zenii:zenii /var/lib/zenii
 ```
 
 ### 2. Install the Binary
 
 ```bash
-sudo cp mesoclaw-daemon /usr/local/bin/mesoclaw-daemon
-sudo chmod +x /usr/local/bin/mesoclaw-daemon
+sudo cp zenii-daemon /usr/local/bin/zenii-daemon
+sudo chmod +x /usr/local/bin/zenii-daemon
 ```
 
 ### 3. Create Configuration
 
 ```bash
-sudo mkdir -p /etc/mesoclaw
-sudo tee /etc/mesoclaw/config.toml > /dev/null <<'EOF'
+sudo mkdir -p /etc/zenii
+sudo tee /etc/zenii/config.toml > /dev/null <<'EOF'
 gateway_host = "127.0.0.1"
 gateway_port = 18981
 log_level = "info"
-data_dir = "/var/lib/mesoclaw"
-db_path = "/var/lib/mesoclaw/mesoclaw.db"
-memory_db_path = "/var/lib/mesoclaw/memory_vec.db"
+data_dir = "/var/lib/zenii"
+db_path = "/var/lib/zenii/zenii.db"
+memory_db_path = "/var/lib/zenii/memory_vec.db"
 
 provider_name = "openai"
 provider_model_id = "gpt-4o"
 EOF
-sudo chown mesoclaw:mesoclaw /etc/mesoclaw/config.toml
+sudo chown zenii:zenii /etc/zenii/config.toml
 ```
 
 ### 4. Create the Unit File
 
-Save to `/etc/systemd/system/mesoclaw.service`:
+Save to `/etc/systemd/system/zenii.service`:
 
 ```ini
 [Unit]
-Description=MesoClaw AI Agent Daemon
+Description=Zenii AI Agent Daemon
 After=network.target
 
 [Service]
 Type=simple
-User=mesoclaw
-ExecStart=/usr/local/bin/mesoclaw-daemon --config /etc/mesoclaw/config.toml
+User=zenii
+ExecStart=/usr/local/bin/zenii-daemon --config /etc/zenii/config.toml
 Restart=on-failure
 RestartSec=5
-Environment=MESOCLAW_TOKEN=your-secret-token
+Environment=ZENII_TOKEN=your-secret-token
 Environment=RUST_LOG=info
-WorkingDirectory=/var/lib/mesoclaw
+WorkingDirectory=/var/lib/zenii
 
 # Hardening
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true
-ReadWritePaths=/var/lib/mesoclaw
+ReadWritePaths=/var/lib/zenii
 PrivateTmp=true
 
 [Install]
@@ -173,21 +173,21 @@ WantedBy=multi-user.target
 
 ```bash
 sudo systemctl daemon-reload
-sudo systemctl enable mesoclaw
-sudo systemctl start mesoclaw
+sudo systemctl enable zenii
+sudo systemctl start zenii
 ```
 
 ### 6. View Logs
 
 ```bash
 # Follow logs in real time
-sudo journalctl -u mesoclaw -f
+sudo journalctl -u zenii -f
 
 # View last 100 lines
-sudo journalctl -u mesoclaw -n 100
+sudo journalctl -u zenii -n 100
 
 # View logs since last boot
-sudo journalctl -u mesoclaw -b
+sudo journalctl -u zenii -b
 ```
 
 ---
@@ -199,21 +199,21 @@ sudo journalctl -u mesoclaw -b
 Pre-built Docker images are not currently published. Build from the repository:
 
 ```bash
-git clone https://github.com/sprklai/mesoclaw.git
-cd mesoclaw
-docker build -t mesoclaw .
+git clone https://github.com/sprklai/zenii.git
+cd zenii
+docker build -t zenii .
 ```
 
 ### Quick Start
 
 ```bash
 docker run -d \
-  --name mesoclaw \
+  --name zenii \
   -p 18981:18981 \
-  -v mesoclaw-data:/data \
-  -e MESOCLAW_TOKEN=your-secret-token \
+  -v zenii-data:/data \
+  -e ZENII_TOKEN=your-secret-token \
   -e RUST_LOG=info \
-  mesoclaw
+  zenii
 ```
 
 ### Docker Compose
@@ -221,13 +221,13 @@ docker run -d \
 A `docker-compose.yml` is provided in the repository root:
 
 ```bash
-git clone https://github.com/sprklai/mesoclaw.git
-cd mesoclaw
-export MESOCLAW_TOKEN=your-secret-token
+git clone https://github.com/sprklai/zenii.git
+cd zenii
+export ZENII_TOKEN=your-secret-token
 docker compose up -d
 
 # View logs
-docker compose logs -f mesoclaw
+docker compose logs -f zenii
 
 # Stop
 docker compose down
@@ -239,12 +239,12 @@ Mount a config file and data directory:
 
 ```bash
 docker run -d \
-  --name mesoclaw \
+  --name zenii \
   -p 18981:18981 \
   -v /path/to/config.toml:/config/config.toml:ro \
-  -v mesoclaw-data:/data \
-  -e MESOCLAW_TOKEN=your-secret-token \
-  mesoclaw \
+  -v zenii-data:/data \
+  -e ZENII_TOKEN=your-secret-token \
+  zenii \
   --config /config/config.toml
 ```
 
@@ -252,29 +252,29 @@ docker run -d \
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `MESOCLAW_TOKEN` | Bearer token for API auth | (none) |
+| `ZENII_TOKEN` | Bearer token for API auth | (none) |
 | `RUST_LOG` | Log level filter | `info` |
 
 ---
 
 ## Raspberry Pi Deployment
 
-MesoClaw runs well on Raspberry Pi 4/5 with ARM64 (aarch64). SQLite is the only database dependency -- no external services needed.
+Zenii runs well on Raspberry Pi 4/5 with ARM64 (aarch64). SQLite is the only database dependency -- no external services needed.
 
 ### 1. Download ARM64 Binary
 
 ```bash
 # Download the aarch64 build from releases
-wget https://github.com/nsrtech/mesoclaw/releases/latest/download/mesoclaw-daemon-linux-arm64
-chmod +x mesoclaw-daemon-linux-arm64
-sudo mv mesoclaw-daemon-linux-arm64 /usr/local/bin/mesoclaw-daemon
+wget https://github.com/nsrtech/zenii/releases/latest/download/zenii-daemon-linux-arm64
+chmod +x zenii-daemon-linux-arm64
+sudo mv zenii-daemon-linux-arm64 /usr/local/bin/zenii-daemon
 ```
 
 ### 2. Create Configuration
 
 ```bash
-mkdir -p ~/.config/mesoclaw
-cat > ~/.config/mesoclaw/config.toml <<'EOF'
+mkdir -p ~/.config/zenii
+cat > ~/.config/zenii/config.toml <<'EOF'
 gateway_host = "0.0.0.0"
 gateway_port = 18981
 log_level = "warn"
@@ -303,34 +303,34 @@ EOF
 Use the same systemd unit file from the [systemd section](#systemd-service), adjusting paths as needed. On Raspberry Pi OS:
 
 ```bash
-sudo cp mesoclaw.service /etc/systemd/system/
+sudo cp zenii.service /etc/systemd/system/
 sudo systemctl daemon-reload
-sudo systemctl enable mesoclaw
-sudo systemctl start mesoclaw
+sudo systemctl enable zenii
+sudo systemctl start zenii
 ```
 
 ---
 
 ## Reverse Proxy
 
-MesoClaw uses both HTTP and WebSocket connections on the same port (default 18981). Your reverse proxy must handle WebSocket upgrade headers.
+Zenii uses both HTTP and WebSocket connections on the same port (default 18981). Your reverse proxy must handle WebSocket upgrade headers.
 
 ### nginx
 
 ```nginx
-upstream mesoclaw {
+upstream zenii {
     server 127.0.0.1:18981;
 }
 
 server {
     listen 443 ssl http2;
-    server_name mesoclaw.example.com;
+    server_name zenii.example.com;
 
-    ssl_certificate     /etc/ssl/certs/mesoclaw.pem;
-    ssl_certificate_key /etc/ssl/private/mesoclaw.key;
+    ssl_certificate     /etc/ssl/certs/zenii.pem;
+    ssl_certificate_key /etc/ssl/private/zenii.key;
 
     location / {
-        proxy_pass http://mesoclaw;
+        proxy_pass http://zenii;
         proxy_http_version 1.1;
 
         # WebSocket support
@@ -355,7 +355,7 @@ server {
 Caddy handles HTTPS certificates automatically and supports WebSocket proxying out of the box:
 
 ```
-mesoclaw.example.com {
+zenii.example.com {
     reverse_proxy localhost:18981
 }
 ```
@@ -370,7 +370,7 @@ No additional WebSocket configuration is needed -- Caddy handles upgrade headers
 
 | Item | Location | Description |
 |------|----------|-------------|
-| Main database | `{data_dir}/mesoclaw.db` | Sessions, messages, providers, user observations, scheduler jobs |
+| Main database | `{data_dir}/zenii.db` | Sessions, messages, providers, user observations, scheduler jobs |
 | Vector database | `{data_dir}/memory_vec.db` | Memory embeddings |
 | Config file | `{config_dir}/config.toml` | All settings |
 | Identity files | `{data_dir}/identity/` | Soul, identity, user markdown files |
@@ -382,28 +382,28 @@ Use SQLite's online backup API for a consistent snapshot while the daemon is run
 
 ```bash
 # Stop the daemon for a clean backup (recommended)
-sudo systemctl stop mesoclaw
-cp /var/lib/mesoclaw/mesoclaw.db /backup/mesoclaw-$(date +%Y%m%d).db
-cp /var/lib/mesoclaw/memory_vec.db /backup/memory_vec-$(date +%Y%m%d).db
-sudo systemctl start mesoclaw
+sudo systemctl stop zenii
+cp /var/lib/zenii/zenii.db /backup/zenii-$(date +%Y%m%d).db
+cp /var/lib/zenii/memory_vec.db /backup/memory_vec-$(date +%Y%m%d).db
+sudo systemctl start zenii
 
 # Or use sqlite3 .backup for online backup (daemon can stay running)
-sqlite3 /var/lib/mesoclaw/mesoclaw.db ".backup /backup/mesoclaw-$(date +%Y%m%d).db"
-sqlite3 /var/lib/mesoclaw/memory_vec.db ".backup /backup/memory_vec-$(date +%Y%m%d).db"
+sqlite3 /var/lib/zenii/zenii.db ".backup /backup/zenii-$(date +%Y%m%d).db"
+sqlite3 /var/lib/zenii/memory_vec.db ".backup /backup/memory_vec-$(date +%Y%m%d).db"
 ```
 
 ### Full Backup Script
 
 ```bash
 #!/bin/bash
-BACKUP_DIR="/backup/mesoclaw/$(date +%Y%m%d-%H%M%S)"
-DATA_DIR="/var/lib/mesoclaw"
-CONFIG_DIR="/etc/mesoclaw"
+BACKUP_DIR="/backup/zenii/$(date +%Y%m%d-%H%M%S)"
+DATA_DIR="/var/lib/zenii"
+CONFIG_DIR="/etc/zenii"
 
 mkdir -p "$BACKUP_DIR"
 
 # Databases (online backup)
-sqlite3 "$DATA_DIR/mesoclaw.db" ".backup $BACKUP_DIR/mesoclaw.db"
+sqlite3 "$DATA_DIR/zenii.db" ".backup $BACKUP_DIR/zenii.db"
 sqlite3 "$DATA_DIR/memory_vec.db" ".backup $BACKUP_DIR/memory_vec.db"
 
 # Config and identity files
@@ -417,14 +417,14 @@ echo "Backup complete: $BACKUP_DIR"
 ### Restore
 
 ```bash
-sudo systemctl stop mesoclaw
-cp /backup/mesoclaw.db /var/lib/mesoclaw/mesoclaw.db
-cp /backup/memory_vec.db /var/lib/mesoclaw/memory_vec.db
-cp /backup/config.toml /etc/mesoclaw/config.toml
-cp -r /backup/identity /var/lib/mesoclaw/ 2>/dev/null || true
-cp -r /backup/skills /var/lib/mesoclaw/ 2>/dev/null || true
-sudo chown -R mesoclaw:mesoclaw /var/lib/mesoclaw
-sudo systemctl start mesoclaw
+sudo systemctl stop zenii
+cp /backup/zenii.db /var/lib/zenii/zenii.db
+cp /backup/memory_vec.db /var/lib/zenii/memory_vec.db
+cp /backup/config.toml /etc/zenii/config.toml
+cp -r /backup/identity /var/lib/zenii/ 2>/dev/null || true
+cp -r /backup/skills /var/lib/zenii/ 2>/dev/null || true
+sudo chown -R zenii:zenii /var/lib/zenii
+sudo systemctl start zenii
 ```
 
 ### Credential Migration
@@ -432,7 +432,7 @@ sudo systemctl start mesoclaw
 OS keyring credentials (API keys stored via `keyring` crate) cannot be exported directly. When migrating to a new machine:
 
 1. Back up your config and databases as described above
-2. On the new machine, re-enter API keys via the CLI (`mesoclaw key set openai`) or the gateway API
+2. On the new machine, re-enter API keys via the CLI (`zenii key set openai`) or the gateway API
 3. Provider configurations (names, base URLs, model lists) are stored in the database and will transfer with the backup
 
 ---
@@ -468,8 +468,8 @@ Control verbosity via the `log_level` config field or `RUST_LOG` environment var
 The `RUST_LOG` environment variable overrides `log_level` in config and supports per-module filtering:
 
 ```bash
-# Only show warnings from dependencies, debug for mesoclaw
-RUST_LOG=warn,mesoclaw_core=debug mesoclaw-daemon
+# Only show warnings from dependencies, debug for zenii
+RUST_LOG=warn,zenii_core=debug zenii-daemon
 ```
 
 ### systemd Watchdog
@@ -478,17 +478,17 @@ For systemd deployments, monitor the service status:
 
 ```bash
 # Check if running
-systemctl is-active mesoclaw
+systemctl is-active zenii
 
 # Automated restart monitoring
-systemctl show mesoclaw --property=NRestarts
+systemctl show zenii --property=NRestarts
 ```
 
 Combine with the health endpoint for external monitoring:
 
 ```bash
 # Cron job: restart if health check fails
-*/5 * * * * curl -sf http://localhost:18981/health || systemctl restart mesoclaw
+*/5 * * * * curl -sf http://localhost:18981/health || systemctl restart zenii
 ```
 
 ---
@@ -498,13 +498,13 @@ Combine with the health endpoint for external monitoring:
 ### Binary Upgrade
 
 1. Download the new binary
-2. Stop the daemon: `sudo systemctl stop mesoclaw`
-3. Replace the binary: `sudo cp mesoclaw-daemon /usr/local/bin/`
-4. Start the daemon: `sudo systemctl start mesoclaw`
+2. Stop the daemon: `sudo systemctl stop zenii`
+3. Replace the binary: `sudo cp zenii-daemon /usr/local/bin/`
+4. Start the daemon: `sudo systemctl start zenii`
 
 ### Database Migrations
 
-MesoClaw runs database migrations automatically on startup. No manual migration steps are needed. The migration system:
+Zenii runs database migrations automatically on startup. No manual migration steps are needed. The migration system:
 
 - Tracks the current schema version in a `migrations` table
 - Applies pending migrations in order within transactions
@@ -513,9 +513,9 @@ MesoClaw runs database migrations automatically on startup. No manual migration 
 ### Docker Upgrade
 
 ```bash
-cd mesoclaw
+cd zenii
 git pull
-docker build -t mesoclaw .
+docker build -t zenii .
 docker compose up -d
 ```
 

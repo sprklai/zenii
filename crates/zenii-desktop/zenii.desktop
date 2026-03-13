@@ -1,0 +1,11 @@
+[Desktop Entry]
+Name=Zenii
+GenericName=AI Assistant
+Comment=AI-powered personal assistant
+Exec=zenii-desktop
+Icon=zenii-desktop
+Terminal=false
+Type=Application
+Categories=Utility;Office;
+Keywords=ai;assistant;chat;llm;
+StartupWMClass=Zenii

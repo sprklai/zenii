@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to MesoClaw will be documented in this file.
+All notable changes to Zenii will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
@@ -90,7 +90,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.0.10] - 2026-03-10
 
 ### Fixed
-- Fix release asset name collisions: standalone binaries now use platform-specific names (mesoclaw-linux, mesoclaw-macos) to prevent duplicate upload failures
+- Fix release asset name collisions: standalone binaries now use platform-specific names (zenii-linux, zenii-macos) to prevent duplicate upload failures
 
 ## [0.0.9] - 2026-03-10
 
@@ -155,7 +155,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Core foundation: error handling (MesoError with thiserror), TOML config, SQLite database with WAL mode and migrations
+- Core foundation: error handling (ZeniiError with thiserror), TOML config, SQLite database with WAL mode and migrations
 - Memory system with FTS5 full-text search and sqlite-vec vector embeddings
 - Security policy enforcement with autonomy levels (supervised/autonomous/strict) and rate limiting
 - 11 built-in agent tools: websearch, sysinfo, shell, file read/write/list/search, patch, process, learn, skill_proposal

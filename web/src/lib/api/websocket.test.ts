@@ -61,7 +61,7 @@ describe("WebSocket chat streaming", () => {
 
   // 6.3: WebSocket manager connects and parses messages
   it("connects to WS URL with token", () => {
-    store["mesoclaw_token"] = "ws-token";
+    store["zenii_token"] = "ws-token";
     createChatStream("hello", "sess-1", callbacks);
 
     const ws = MockWebSocket.instances[0];

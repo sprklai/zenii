@@ -1,6 +1,6 @@
-# MesoClaw Configuration Reference
+# Zenii Configuration Reference
 
-> **Note**: This document was generated with AI assistance and may contain inaccuracies. If you find errors, please [report an issue](https://github.com/sprklai/mesoclaw/issues).
+> **Note**: This document was generated with AI assistance and may contain inaccuracies. If you find errors, please [report an issue](https://github.com/sprklai/zenii/issues).
 
 ## Table of Contents
 
@@ -36,23 +36,23 @@
 
 ## File Location
 
-MesoClaw uses the `directories` crate with the reverse-domain identifier `com.sprklai.mesoclaw` to determine platform-correct paths:
+Zenii uses the `directories` crate with the reverse-domain identifier `com.sprklai.zenii` to determine platform-correct paths:
 
 | Platform | Config File Path |
 |---|---|
-| Linux | `~/.config/mesoclaw/config.toml` |
-| macOS | `~/Library/Application Support/com.sprklai.mesoclaw/config.toml` |
-| Windows | `%APPDATA%\sprklai\mesoclaw\config\config.toml` |
+| Linux | `~/.config/zenii/config.toml` |
+| macOS | `~/Library/Application Support/com.sprklai.zenii/config.toml` |
+| Windows | `%APPDATA%\sprklai\zenii\config\config.toml` |
 
 Data files (databases, identity, skills) default to:
 
 | Platform | Data Directory |
 |---|---|
-| Linux | `~/.local/share/mesoclaw/` |
-| macOS | `~/Library/Application Support/com.sprklai.mesoclaw/` |
-| Windows | `%APPDATA%\sprklai\mesoclaw\data\` |
+| Linux | `~/.local/share/zenii/` |
+| macOS | `~/Library/Application Support/com.sprklai.zenii/` |
+| Windows | `%APPDATA%\sprklai\zenii\data\` |
 
-If the config file does not exist on startup, MesoClaw uses all default values.
+If the config file does not exist on startup, Zenii uses all default values.
 
 ---
 
@@ -83,13 +83,13 @@ ws_max_connections = 32
 | Field | Type | Default | Description |
 |---|---|---|---|
 | `data_dir` | Option\<String\> | Platform default (see above) | Root directory for all data files |
-| `db_path` | Option\<String\> | `{data_dir}/mesoclaw.db` | Path to main SQLite database (app + FTS5) |
+| `db_path` | Option\<String\> | `{data_dir}/zenii.db` | Path to main SQLite database (app + FTS5) |
 | `memory_db_path` | Option\<String\> | `{data_dir}/memory_vec.db` | Path to vector memory SQLite database (sqlite-vec) |
 
 ```toml
-data_dir = "/home/user/.mesoclaw"
-db_path = "/home/user/.mesoclaw/mesoclaw.db"
-memory_db_path = "/home/user/.mesoclaw/memory_vec.db"
+data_dir = "/home/user/.zenii"
+db_path = "/home/user/.zenii/zenii.db"
+memory_db_path = "/home/user/.zenii/memory_vec.db"
 ```
 
 ### Memory
@@ -156,14 +156,14 @@ agent_system_prompt = "Always respond concisely."
 
 | Field | Type | Default | Description |
 |---|---|---|---|
-| `identity_name` | String | `"MesoClaw"` | Display name of the AI assistant |
+| `identity_name` | String | `"Zenii"` | Display name of the AI assistant |
 | `identity_description` | String | `"AI-powered assistant"` | Short description of the assistant |
 | `identity_dir` | Option\<String\> | `{data_dir}/identity/` | Directory containing identity/persona markdown files |
 
 ```toml
-identity_name = "MesoClaw"
+identity_name = "Zenii"
 identity_description = "AI-powered assistant"
-identity_dir = "/home/user/.mesoclaw/identity"
+identity_dir = "/home/user/.zenii/identity"
 ```
 
 ### Skills
@@ -175,7 +175,7 @@ identity_dir = "/home/user/.mesoclaw/identity"
 | `skill_proposal_expiry_days` | u32 | `7` | Days before pending skill proposals expire |
 
 ```toml
-skills_dir = "/home/user/.mesoclaw/skills"
+skills_dir = "/home/user/.zenii/skills"
 skill_max_content_size = 100000
 skill_proposal_expiry_days = 7
 ```
@@ -256,7 +256,7 @@ prompt_compact_identity = true
 prompt_max_preamble_tokens = 1500
 ```
 
-When `prompt_compact_identity` is `true` (default), MesoClaw uses a 4-layer compact format:
+When `prompt_compact_identity` is `true` (default), Zenii uses a 4-layer compact format:
 - **Layer 0**: Core identity (~80 tokens) -- name, version, location, OS, capabilities
 - **Layer 1**: Runtime state (~60 tokens) -- date, model, session, compact reasoning axioms
 - **Layer 2**: Dynamic context (variable) -- memories, user observations, skills, domain-specific details
@@ -403,17 +403,17 @@ scheduler_stuck_threshold_secs = 120
 scheduler_error_backoff_secs = [30, 60, 300, 900, 3600]
 scheduler_max_history_per_job = 100
 scheduler_agent_turn_timeout_secs = 120
-scheduler_heartbeat_file = "/tmp/mesoclaw-heartbeat"
+scheduler_heartbeat_file = "/tmp/zenii-heartbeat"
 ```
 
 ### Credentials
 
 | Field | Type | Default | Description |
 |---|---|---|---|
-| `keyring_service_id` | String | `"com.sprklai.mesoclaw"` | OS keyring service identifier for credential storage |
+| `keyring_service_id` | String | `"com.sprklai.zenii"` | OS keyring service identifier for credential storage |
 
 ```toml
-keyring_service_id = "com.sprklai.mesoclaw"
+keyring_service_id = "com.sprklai.zenii"
 ```
 
 ### Self-Evolution
@@ -460,8 +460,8 @@ log_level = "info"
 
 | Variable | Description | Maps To |
 |---|---|---|
-| `MESOCLAW_TOKEN` | Gateway authentication token | `gateway_auth_token` |
-| `MESOCLAW_GATEWAY_URL` | Gateway URL override (used by CLI and desktop app to connect to an external daemon instead of starting an embedded one) | N/A (runtime override, not a config field) |
+| `ZENII_TOKEN` | Gateway authentication token | `gateway_auth_token` |
+| `ZENII_GATEWAY_URL` | Gateway URL override (used by CLI and desktop app to connect to an external daemon instead of starting an embedded one) | N/A (runtime override, not a config field) |
 
 Environment variables take precedence over config file values when supported.
 
@@ -498,7 +498,7 @@ ws_max_connections = 32
 log_level = "info"
 
 # Database
-# data_dir = "~/.local/share/mesoclaw"  # uses platform default if unset
+# data_dir = "~/.local/share/zenii"  # uses platform default if unset
 
 # AI Agent
 provider_name = "openai"
@@ -507,7 +507,7 @@ agent_max_turns = 4
 agent_max_tokens = 4096
 
 # Identity
-identity_name = "MesoClaw"
+identity_name = "Zenii"
 identity_description = "AI-powered assistant"
 
 # Memory
@@ -568,7 +568,7 @@ telegram_dm_policy = "allowlist"
 scheduler_tick_interval_secs = 1
 
 # Credentials
-keyring_service_id = "com.sprklai.mesoclaw"
+keyring_service_id = "com.sprklai.zenii"
 
 # Self-Evolution
 self_evolution_enabled = true

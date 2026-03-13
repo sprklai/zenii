@@ -1,0 +1,34 @@
+[package]
+name = "zenii-desktop"
+version.workspace = true
+edition.workspace = true
+
+[build-dependencies]
+tauri-build = { version = "2.5", features = [] }
+
+[dependencies]
+zenii-core = { workspace = true, features = ["gateway", "ai", "keyring", "channels", "channels-telegram", "channels-slack", "channels-discord"] }
+tauri = { version = "2.10", features = ["tray-icon"] }
+tauri-plugin-window-state = "2.4"
+tauri-plugin-single-instance = "2.4"
+tauri-plugin-opener = "2.5"
+tauri-plugin-devtools = { version = "2.0", optional = true }
+tauri-plugin-notification = "2.3"
+tokio = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+url = "2"
+opener = "0.8"
+
+[lints]
+workspace = true
+
+[features]
+default = ["channels", "scheduler", "api-docs"]
+api-docs = ["zenii-core/api-docs"]
+devtools = ["dep:tauri-plugin-devtools"]
+scheduler = ["zenii-core/scheduler"]
+channels = ["zenii-core/channels"]
+local-embeddings = ["zenii-core/local-embeddings"]

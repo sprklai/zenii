@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# ram-usage.sh — Measure RAM usage of MesoClaw processes
+# ram-usage.sh — Measure RAM usage of Zenii processes
 # Works on Linux, macOS, and Windows (Git Bash / MSYS2 / WSL)
 #
 # Usage:
-#   ./scripts/ram-usage.sh              # Show all mesoclaw processes
+#   ./scripts/ram-usage.sh              # Show all zenii processes
 #   ./scripts/ram-usage.sh daemon       # Filter to daemon only
 #   ./scripts/ram-usage.sh desktop      # Filter to desktop only
 #   ./scripts/ram-usage.sh --watch      # Refresh every 2 seconds
@@ -12,7 +12,7 @@
 
 set -euo pipefail
 
-BINARIES=("mesoclaw-daemon" "mesoclaw-desktop" "mesoclaw-cli" "mesoclaw-tui")
+BINARIES=("zenii-daemon" "zenii-desktop" "zenii-cli" "zenii-tui")
 FILTER=""
 WATCH=false
 WATCH_INTERVAL=2
@@ -34,7 +34,7 @@ while [[ $# -gt 0 ]]; do
             shift
             ;;
         daemon|desktop|cli|tui)
-            FILTER="mesoclaw-$1"
+            FILTER="zenii-$1"
             shift
             ;;
         -h|--help)
@@ -98,7 +98,7 @@ get_processes() {
     case "$OS" in
         linux|macos)
             # Use 'args' instead of 'comm' — comm truncates to 15 chars on Linux
-            # which cuts "mesoclaw-desktop" to "mesoclaw-deskto"
+            # which cuts "zenii-desktop" to "zenii-deskto"
             ps -eo pid=,rss=,args= 2>/dev/null | while read -r pid rss args; do
                 local name
                 # Extract binary name from full path (first word of args)
@@ -178,7 +178,7 @@ print_report() {
     done
 
     # In dev mode, also capture Vite dev server + esbuild spawned by cargo tauri dev
-    if [[ -z "$FILTER" || "$FILTER" == "mesoclaw-desktop" ]]; then
+    if [[ -z "$FILTER" || "$FILTER" == "zenii-desktop" ]]; then
         local project_root
         project_root="$(cd "$(dirname "$0")/.." && pwd)"
         while read -r pid rss args; do
@@ -195,13 +195,13 @@ print_report() {
         done < <(ps -eo pid=,rss=,args= 2>/dev/null)
     fi
 
-    # Also check for WebView/webkit processes that are children of mesoclaw-desktop
-    if [[ -z "$FILTER" || "$FILTER" == "mesoclaw-desktop" ]]; then
+    # Also check for WebView/webkit processes that are children of zenii-desktop
+    if [[ -z "$FILTER" || "$FILTER" == "zenii-desktop" ]]; then
         local desktop_pids=()
         while read -r pid rss name; do
             [[ -z "$pid" ]] && continue
             desktop_pids+=("$pid")
-        done < <(get_processes "mesoclaw-desktop")
+        done < <(get_processes "zenii-desktop")
 
         if [[ ${#desktop_pids[@]} -gt 0 ]]; then
             for wv_pattern in "WebKitWebProcess" "webkit" "webview" "msedgewebview"; do
@@ -245,7 +245,7 @@ print_report() {
 
     # Print
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "  MesoClaw RAM Usage — $(date '+%H:%M:%S') — $OS"
+    echo "  Zenii RAM Usage — $(date '+%H:%M:%S') — $OS"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     printf "  %-8s  %-22s  %s\n" "PID" "PROCESS" "$mem_label"
     echo "──────────────────────────────────────────────────────"
@@ -257,7 +257,7 @@ print_report() {
         echo "──────────────────────────────────────────────────────"
         echo "  TOTAL                             $(human_size "$total_mem")"
     else
-        echo "  (no mesoclaw processes found)"
+        echo "  (no zenii processes found)"
     fi
 
     if $USE_PSS && [[ "$OS" == "linux" ]]; then

@@ -1,6 +1,6 @@
 export type Theme = "light" | "dark" | "system";
 
-const THEME_KEY = "mesoclaw_theme";
+const THEME_KEY = "zenii_theme";
 
 function getInitialTheme(): Theme {
   if (typeof window === "undefined") return "system";

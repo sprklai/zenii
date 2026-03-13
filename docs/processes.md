@@ -1,4 +1,4 @@
-# MesoClaw Process Flows
+# Zenii Process Flows
 
 ## Table of Contents
 
@@ -115,7 +115,7 @@ sequenceDiagram
     else Mobile (future release)
         App->>App: Open Tauri mobile view (in-process gateway)
     else CLI
-        App->>App: Connect to daemon via HTTP/WS (MesoClient)
+        App->>App: Connect to daemon via HTTP/WS (ZeniiClient)
     else TUI (future release)
         App->>App: Render ratatui UI
     else Daemon
@@ -125,18 +125,18 @@ sequenceDiagram
 
 ## Default Paths by OS
 
-Resolved via `directories::ProjectDirs::from("com", "sprklai", "mesoclaw")`:
+Resolved via `directories::ProjectDirs::from("com", "sprklai", "zenii")`:
 
 | OS | Config Path | Data Dir / DB Path |
 |---|---|---|
-| **Linux** | `~/.config/mesoclaw/config.toml` | `~/.local/share/mesoclaw/mesoclaw.db` |
-| **macOS** | `~/Library/Application Support/com.sprklai.mesoclaw/config.toml` | `~/Library/Application Support/com.sprklai.mesoclaw/mesoclaw.db` |
-| **Windows** | `%APPDATA%\sprklai\mesoclaw\config\config.toml` | `%APPDATA%\sprklai\mesoclaw\data\mesoclaw.db` |
+| **Linux** | `~/.config/zenii/config.toml` | `~/.local/share/zenii/zenii.db` |
+| **macOS** | `~/Library/Application Support/com.sprklai.zenii/config.toml` | `~/Library/Application Support/com.sprklai.zenii/zenii.db` |
+| **Windows** | `%APPDATA%\sprklai\zenii\config\config.toml` | `%APPDATA%\sprklai\zenii\data\zenii.db` |
 
 Override via `config.toml`:
 ```toml
 data_dir = "/custom/data/path"        # overrides default data directory
-db_path = "/custom/path/mesoclaw.db"  # overrides database file directly
+db_path = "/custom/path/zenii.db"  # overrides database file directly
 ```
 
 ## Error Handling Flow
@@ -145,16 +145,16 @@ db_path = "/custom/path/mesoclaw.db"  # overrides database file directly
 flowchart TD
     Call[Function Call] --> Result{Operation Result}
     Result -->|Ok| ReturnValue[Return value]
-    Result -->|Err| Match{Match MesoError variant}
-    Match -->|NotFound| NF["404 MESO_NOT_FOUND"]
-    Match -->|Auth| Auth["401 MESO_AUTH_REQUIRED"]
-    Match -->|PolicyDenied| PD["403 MESO_POLICY_DENIED"]
-    Match -->|Serialization| Ser["400 MESO_BAD_REQUEST"]
-    Match -->|Config| Cfg["422 MESO_CONFIG_ERROR"]
-    Match -->|RateLimited| RL["429 MESO_RATE_LIMITED"]
-    Match -->|Agent| AI["502 MESO_AGENT_ERROR"]
-    Match -->|Database| DB["503 MESO_DB_ERROR"]
-    Match -->|Tool / Gateway| TG["500 MESO_TOOL_ERROR /<br>MESO_GATEWAY_ERROR"]
+    Result -->|Err| Match{Match ZeniiError variant}
+    Match -->|NotFound| NF["404 ZENII_NOT_FOUND"]
+    Match -->|Auth| Auth["401 ZENII_AUTH_REQUIRED"]
+    Match -->|PolicyDenied| PD["403 ZENII_POLICY_DENIED"]
+    Match -->|Serialization| Ser["400 ZENII_BAD_REQUEST"]
+    Match -->|Config| Cfg["422 ZENII_CONFIG_ERROR"]
+    Match -->|RateLimited| RL["429 ZENII_RATE_LIMITED"]
+    Match -->|Agent| AI["502 ZENII_AGENT_ERROR"]
+    Match -->|Database| DB["503 ZENII_DB_ERROR"]
+    Match -->|Tool / Gateway| TG["500 ZENII_TOOL_ERROR /<br>ZENII_GATEWAY_ERROR"]
 ```
 
 ## Database Operation Flow (async-safe)
@@ -163,7 +163,7 @@ flowchart TD
 flowchart TD
     Async[Async Context] --> Spawn["tokio::task::spawn_blocking#40;move || { ... }#41;"]
     Spawn --> SQLite["rusqlite operation<br>#40;runs on blocking thread pool,<br>NOT on async executor#41;"]
-    SQLite --> Result["Result of T or MesoError"]
+    SQLite --> Result["Result of T or ZeniiError"]
     Result --> Await[".await -- resumes async context"]
     Await --> Handle[Handle Result]
 ```
@@ -177,7 +177,7 @@ sequenceDiagram
 
     C->>S: WS Connect /ws/chat?token=xxx
     C->>S: { "prompt": "hello", "session_id": "optional-uuid" }
-    Note over S: Validate JSON, check agent, call MesoAgent.prompt
+    Note over S: Validate JSON, check agent, call ZeniiAgent.prompt
     S-->>C: { "type": "text", "content": "Hi there!" }
     S-->>C: { "type": "done" }
     Note over C,S: Error cases
@@ -343,7 +343,7 @@ flowchart TD
 
 ## Desktop Boot Flow
 
-The desktop app uses a hybrid gateway model. By default it starts an embedded gateway; if `MESOCLAW_GATEWAY_URL` is set, it connects to an external daemon instead.
+The desktop app uses a hybrid gateway model. By default it starts an embedded gateway; if `ZENII_GATEWAY_URL` is set, it connects to an external daemon instead.
 
 ```mermaid
 sequenceDiagram
@@ -351,7 +351,7 @@ sequenceDiagram
     participant Lib as lib.rs Builder
     participant Tray as tray.rs
     participant Cmd as commands.rs
-    participant Core as mesoclaw-core
+    participant Core as zenii-core
     participant GW as Gateway
 
     Main->>Main: Linux: set WEBKIT_DISABLE_DMABUF_RENDERER
@@ -368,7 +368,7 @@ sequenceDiagram
     Lib->>Cmd: boot_gateway#40;app#41;
     Cmd->>Cmd: resolve_gateway_mode#40;#41;
 
-    alt MESOCLAW_GATEWAY_URL set
+    alt ZENII_GATEWAY_URL set
         Cmd->>Cmd: Validate URL, store external mode
     else No env var or empty
         Cmd->>Core: load_or_create_config#40;#41;
@@ -397,8 +397,8 @@ sequenceDiagram
     participant AG as Rig Agent
 
     Note over User,KR: Setting credentials
-    User->>CLI: mesoclaw key set openai <key>
-    CLI->>KS: KeyringStore.set("mesoclaw.openai", key)
+    User->>CLI: zenii key set openai <key>
+    CLI->>KS: KeyringStore.set("zenii.openai", key)
     KS->>KR: Store in OS keyring
 
     Note over User,KR: Desktop settings
@@ -412,7 +412,7 @@ sequenceDiagram
     KR-->>KS: API keys
 
     Note over AG,CS: Runtime key access
-    AG->>CS: CredentialStore.get("mesoclaw.openai")
+    AG->>CS: CredentialStore.get("zenii.openai")
     CS->>KS: Lookup key
     KS-->>CS: API key value
     CS-->>AG: API key
@@ -486,7 +486,7 @@ flowchart TD
     Full --> ComposeFull["Compose: overall summary +<br>boot context + runtime +<br>identity + user + capabilities +<br>config override"]
     Minimal --> ComposeMin["Compose: one-liner<br>name + date + OS + model"]
     SummaryLevel --> ComposeSum["Compose: full context +<br>prior conversation summary"]
-    Fallback --> Agent["Build MesoAgent with preamble"]
+    Fallback --> Agent["Build ZeniiAgent with preamble"]
     ComposeFull --> Agent
     ComposeMin --> Agent
     ComposeSum --> Agent
@@ -545,7 +545,7 @@ sequenceDiagram
     participant WS as WS /ws/notifications
     participant Web as Frontend (toast)
     participant Desk as Desktop (OS notification)
-    participant Agent as MesoAgent
+    participant Agent as ZeniiAgent
     participant Chan as ChannelRegistry
 
     Note over Sched: 1s tick loop finds due job
@@ -619,7 +619,7 @@ sequenceDiagram
 sequenceDiagram
     participant Caller as Chat Handler
     participant RE as ReasoningEngine
-    participant Agent as MesoAgent
+    participant Agent as ZeniiAgent
     participant LLM as LLM Provider
 
     Caller->>RE: chat(agent, prompt, session)

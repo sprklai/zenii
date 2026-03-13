@@ -4,7 +4,7 @@
 
 ### `build.sh` -- Cross-Platform Build Script
 
-Builds MesoClaw binaries for any supported platform, with optional Tauri desktop bundling.
+Builds Zenii binaries for any supported platform, with optional Tauri desktop bundling.
 
 ```bash
 # Build native debug binaries
@@ -17,7 +17,7 @@ Builds MesoClaw binaries for any supported platform, with optional Tauri desktop
 ./scripts/build.sh --tauri --bundle deb,appimage --release
 
 # Build only the daemon with all features
-./scripts/build.sh --target native --release --crates mesoclaw-daemon --all-features
+./scripts/build.sh --target native --release --crates zenii-daemon --all-features
 
 # List all available targets
 ./scripts/build.sh --list-targets
@@ -39,7 +39,7 @@ Cross-compiles binaries using Docker containers. Useful for building Linux/Windo
 ./scripts/docker-build.sh --target windows --profile ci-release
 
 # Build specific crates only
-./scripts/docker-build.sh --target linux-x86 --crates "mesoclaw-cli mesoclaw-daemon"
+./scripts/docker-build.sh --target linux-x86 --crates "zenii-cli zenii-daemon"
 ```
 
 **Targets**: `linux-x86`, `linux-arm64`, `linux-armv7`, `windows`
@@ -97,10 +97,10 @@ Validates a compiled binary: checks architecture, file size, and basic execution
 
 ```bash
 # Basic smoke test
-./scripts/smoke-test.sh target/release/mesoclaw-daemon
+./scripts/smoke-test.sh target/release/zenii-daemon
 
 # With architecture and size constraints
-./scripts/smoke-test.sh target/release/mesoclaw-daemon --expected-arch x86-64 --max-size 50
+./scripts/smoke-test.sh target/release/zenii-daemon --expected-arch x86-64 --max-size 50
 ```
 
 ---

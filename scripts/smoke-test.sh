@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# MesoClaw -- Binary Smoke Test Script
+# Zenii -- Binary Smoke Test Script
 # Usage: ./scripts/smoke-test.sh <BINARY_PATH> [OPTIONS]
 #
 # Arguments:
@@ -207,7 +207,7 @@ done
 
 echo ""
 echo "========================================"
-echo "  MesoClaw Smoke Test"
+echo "  Zenii Smoke Test"
 echo "  Binary: $BINARY_PATH"
 if [ -n "$EXPECTED_ARCH" ]; then
 echo "  Arch:   $EXPECTED_ARCH"

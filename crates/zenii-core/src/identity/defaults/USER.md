@@ -1,0 +1,20 @@
+# User Context
+
+This file describes you, the user. Edit it to help Zenii understand your preferences and context.
+
+## About You
+
+- Role: (e.g., software engineer, data scientist, student)
+- Primary languages: (e.g., Rust, Python, TypeScript)
+- Experience level: (e.g., senior, intermediate, beginner)
+
+## Location & Environment
+
+- City: (e.g., Toronto, New York, London)
+- Country: (e.g., Canada, US, UK)
+- Timezone: (e.g., America/Toronto, America/New_York, Europe/London)
+
+## Preferences
+
+- Communication style: (e.g., concise, detailed, casual, formal)
+- Code style: (e.g., prefer functional, OOP, minimal comments)

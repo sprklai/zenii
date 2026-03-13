@@ -45,7 +45,7 @@ Instead, please email **security@nsrtech.dev** with:
 ## Security Best Practices
 
 - Always set `gateway_auth_token` in production deployments
-- Use environment variables (`MESOCLAW_TOKEN`) instead of command-line arguments for secrets
+- Use environment variables (`ZENII_TOKEN`) instead of command-line arguments for secrets
 - Run the daemon as a non-root user
 - Use a reverse proxy with TLS for remote access
 - Keep dependencies updated (`cargo audit`, Dependabot)

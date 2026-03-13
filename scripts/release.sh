@@ -62,9 +62,9 @@ fi
 
 CARGO_TOML="$ROOT_DIR/Cargo.toml"
 PACKAGE_JSON="$ROOT_DIR/web/package.json"
-TAURI_CONF="$ROOT_DIR/crates/mesoclaw-desktop/tauri.conf.json"
+TAURI_CONF="$ROOT_DIR/crates/zenii-desktop/tauri.conf.json"
 
-echo "=== MesoClaw Release: v$VERSION ==="
+echo "=== Zenii Release: v$VERSION ==="
 echo ""
 
 # --- Cargo.toml (workspace.package.version) ---

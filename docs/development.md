@@ -1,8 +1,8 @@
-# MesoClaw Development Guide
+# Zenii Development Guide
 
-This document covers setting up a development environment, building from source, running tests, and contributing to MesoClaw.
+This document covers setting up a development environment, building from source, running tests, and contributing to Zenii.
 
-> **Note**: This document was generated with AI assistance and may contain inaccuracies. If you find errors, please [report an issue](https://github.com/sprklai/mesoclaw/issues).
+> **Note**: This document was generated with AI assistance and may contain inaccuracies. If you find errors, please [report an issue](https://github.com/sprklai/zenii/issues).
 
 ## Table of Contents
 
@@ -75,8 +75,8 @@ curl -fsSL https://bun.sh/install | bash
 
 ```bash
 # Clone
-git clone https://github.com/nsrtech/mesoclaw.git
-cd mesoclaw
+git clone https://github.com/nsrtech/zenii.git
+cd zenii
 
 # Verify Rust workspace compiles
 cargo check --workspace
@@ -98,11 +98,11 @@ bun run test
 
 ```
 crates/
-├── mesoclaw-core/       All business logic (library crate)
-├── mesoclaw-daemon/     Headless daemon (thin binary)
-├── mesoclaw-cli/        CLI client (thin binary, HTTP client to daemon)
-├── mesoclaw-tui/        TUI client (thin binary)
-├── mesoclaw-desktop/    Tauri 2 desktop shell (thin binary)
+├── zenii-core/       All business logic (library crate)
+├── zenii-daemon/     Headless daemon (thin binary)
+├── zenii-cli/        CLI client (thin binary, HTTP client to daemon)
+├── zenii-tui/        TUI client (thin binary)
+├── zenii-desktop/    Tauri 2 desktop shell (thin binary)
 web/                     SvelteKit frontend (SPA, shared by desktop + web)
 scripts/                 Build and utility scripts
 docs/                    Architecture, deployment, and process documentation
@@ -110,7 +110,7 @@ plans/                   Per-phase implementation plans
 tests/                   Per-phase test plans and results
 ```
 
-All business logic lives in `mesoclaw-core`. Binary crates are thin shells (under 100 lines each).
+All business logic lives in `zenii-core`. Binary crates are thin shells (under 100 lines each).
 
 ---
 
@@ -126,14 +126,14 @@ cargo build --workspace
 cargo build --workspace --release
 
 # Single binary
-cargo build -p mesoclaw-daemon
-cargo build -p mesoclaw-cli
-cargo build -p mesoclaw-tui
+cargo build -p zenii-daemon
+cargo build -p zenii-cli
+cargo build -p zenii-tui
 ```
 
 ### Feature Flags
 
-Features are defined on `mesoclaw-core` and flow through to binary crates:
+Features are defined on `zenii-core` and flow through to binary crates:
 
 | Feature | Description | Default |
 |---------|-------------|---------|
@@ -150,19 +150,19 @@ Features are defined on `mesoclaw-core` and flow through to binary crates:
 
 ```bash
 # Core only (no optional features)
-cargo build -p mesoclaw-daemon
+cargo build -p zenii-daemon
 
 # With channels
-cargo build -p mesoclaw-daemon --features channels
+cargo build -p zenii-daemon --features channels
 
 # With specific channel adapters
-cargo build -p mesoclaw-daemon --features channels-telegram,channels-discord
+cargo build -p zenii-daemon --features channels-telegram,channels-discord
 
 # With scheduler
-cargo build -p mesoclaw-daemon --features scheduler
+cargo build -p zenii-daemon --features scheduler
 
 # Everything
-cargo build -p mesoclaw-daemon --all-features
+cargo build -p zenii-daemon --all-features
 ```
 
 ### Build Script
@@ -209,10 +209,10 @@ The `scripts/build.sh` script handles cross-compilation and packaging:
 cargo test --workspace
 
 # Run tests for a specific crate
-cargo test -p mesoclaw-core
+cargo test -p zenii-core
 
 # Run a specific test
-cargo test -p mesoclaw-core -- test_name
+cargo test -p zenii-core -- test_name
 
 # Run tests with output
 cargo test --workspace -- --nocapture
@@ -267,10 +267,10 @@ bun install        # Install dependencies (first time)
 bun run dev        # Start Vite dev server on http://localhost:18971
 ```
 
-The frontend expects the MesoClaw daemon running on `http://localhost:18981`. Start the daemon in another terminal:
+The frontend expects the Zenii daemon running on `http://localhost:18981`. Start the daemon in another terminal:
 
 ```bash
-cargo run -p mesoclaw-daemon
+cargo run -p zenii-daemon
 ```
 
 ### Build
@@ -323,9 +323,9 @@ This launches the Vite dev server on port 18971 and opens a Tauri window pointin
 
 | File | Description |
 |------|-------------|
-| `crates/mesoclaw-desktop/src/main.rs` | Tauri app entry point |
-| `crates/mesoclaw-desktop/src/commands.rs` | IPC commands (close_to_tray, show_window, etc.) |
-| `crates/mesoclaw-desktop/src/tray.rs` | System tray setup |
+| `crates/zenii-desktop/src/main.rs` | Tauri app entry point |
+| `crates/zenii-desktop/src/commands.rs` | IPC commands (close_to_tray, show_window, etc.) |
+| `crates/zenii-desktop/src/tray.rs` | System tray setup |
 | `web/src/lib/tauri.ts` | `isTauri` detection + invoke wrappers |
 
 ---
@@ -334,7 +334,7 @@ This launches the Vite dev server on port 18971 and opens a Tauri window pointin
 
 ### Add a New Agent Tool
 
-1. Create a new file in `crates/mesoclaw-core/src/tools/`:
+1. Create a new file in `crates/zenii-core/src/tools/`:
 
 ```rust
 use async_trait::async_trait;
@@ -365,7 +365,7 @@ impl Tool for MyTool {
 }
 ```
 
-2. Register in `crates/mesoclaw-core/src/boot.rs`:
+2. Register in `crates/zenii-core/src/boot.rs`:
 
 ```rust
 tools.register(Arc::new(MyTool));
@@ -375,7 +375,7 @@ tools.register(Arc::new(MyTool));
 
 ### Add a Gateway Route
 
-1. Create a handler in `crates/mesoclaw-core/src/gateway/handlers/`:
+1. Create a handler in `crates/zenii-core/src/gateway/handlers/`:
 
 ```rust
 use axum::extract::State;
@@ -388,7 +388,7 @@ pub async fn my_handler(State(state): State<Arc<AppState>>) -> Json<serde_json::
 }
 ```
 
-2. Add the route in `crates/mesoclaw-core/src/gateway/routes.rs`:
+2. Add the route in `crates/zenii-core/src/gateway/routes.rs`:
 
 ```rust
 .route("/my-endpoint", get(handlers::my_handler))
@@ -398,7 +398,7 @@ pub async fn my_handler(State(state): State<Arc<AppState>>) -> Json<serde_json::
 
 ### Add a Channel Adapter
 
-1. Implement the `Channel`, `ChannelLifecycle`, and `ChannelSender` traits in `crates/mesoclaw-core/src/channels/`:
+1. Implement the `Channel`, `ChannelLifecycle`, and `ChannelSender` traits in `crates/zenii-core/src/channels/`:
 
 ```rust
 use async_trait::async_trait;
@@ -427,7 +427,7 @@ impl ChannelSender for MyChannel {
 }
 ```
 
-2. Add a feature flag in `crates/mesoclaw-core/Cargo.toml`:
+2. Add a feature flag in `crates/zenii-core/Cargo.toml`:
 
 ```toml
 channels-mychannel = ["channels", "dep:my-crate"]
@@ -437,7 +437,7 @@ channels-mychannel = ["channels", "dep:my-crate"]
 
 ### Add a Configuration Field
 
-1. Add the field to `AppConfig` in `crates/mesoclaw-core/src/config/schema.rs`:
+1. Add the field to `AppConfig` in `crates/zenii-core/src/config/schema.rs`:
 
 ```rust
 pub struct AppConfig {
@@ -461,7 +461,7 @@ my_new_field: 42,
 ### Rust Conventions
 
 - **Naming**: `snake_case` for functions, variables, modules; `PascalCase` for types
-- **Error handling**: Use `MesoError` enum (thiserror). Never `Result<T, String>` or `.unwrap()` in production code
+- **Error handling**: Use `ZeniiError` enum (thiserror). Never `Result<T, String>` or `.unwrap()` in production code
 - **Async**: `tokio::sync` primitives only. Never `std::sync::Mutex` in async paths
 - **Logging**: `tracing` macros (`info!`, `warn!`, `error!`, `debug!`). Never `println!`
 - **SQLite**: All operations via `spawn_blocking`. rusqlite is sync
@@ -491,13 +491,13 @@ Colon-separated namespacing:
 
 ```bash
 # Set via environment variable (overrides config)
-RUST_LOG=debug cargo run -p mesoclaw-daemon
+RUST_LOG=debug cargo run -p zenii-daemon
 
 # Per-module filtering
-RUST_LOG=warn,mesoclaw_core::gateway=debug cargo run -p mesoclaw-daemon
+RUST_LOG=warn,zenii_core::gateway=debug cargo run -p zenii-daemon
 
 # Trace SQL queries
-RUST_LOG=mesoclaw_core::db=trace cargo run -p mesoclaw-daemon
+RUST_LOG=zenii_core::db=trace cargo run -p zenii-daemon
 ```
 
 ### WebSocket Debugging
@@ -521,7 +521,7 @@ Inspect the database directly:
 
 ```bash
 # Open the main database
-sqlite3 ~/.local/share/mesoclaw/mesoclaw.db
+sqlite3 ~/.local/share/zenii/zenii.db
 
 # List tables
 .tables
@@ -542,6 +542,6 @@ PRAGMA journal_mode;
 |-------|-------|-----|
 | "Failed to initialize keyring" | No keyring daemon on Linux | Install `gnome-keyring` or `kwallet`, or the daemon falls back to in-memory store |
 | "Address already in use" | Port 18981 occupied | Stop the other process or change `gateway_port` in config |
-| "MESOCLAW_TOKEN not set" | CLI requires auth token | Set `gateway_auth_token` in config or `MESOCLAW_TOKEN` env var |
-| Frontend shows "Connection refused" | Daemon not running | Start daemon: `cargo run -p mesoclaw-daemon` |
+| "ZENII_TOKEN not set" | CLI requires auth token | Set `gateway_auth_token` in config or `ZENII_TOKEN` env var |
+| Frontend shows "Connection refused" | Daemon not running | Start daemon: `cargo run -p zenii-daemon` |
 | "entity not found" on Tauri dev | Frontend not built | Run `cd web && bun install && bun run build` first |

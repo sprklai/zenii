@@ -31,27 +31,27 @@ describe("Theme store persistence", () => {
   });
 
   it("reads initial theme from localStorage", () => {
-    store["mesoclaw_theme"] = "dark";
+    store["zenii_theme"] = "dark";
     // Re-import to test initialization
-    expect(store["mesoclaw_theme"]).toBe("dark");
+    expect(store["zenii_theme"]).toBe("dark");
   });
 
   it("defaults to system when no stored preference", () => {
-    expect(store["mesoclaw_theme"]).toBeUndefined();
+    expect(store["zenii_theme"]).toBeUndefined();
     // The store defaults to 'system' when no stored value
   });
 
   it("persists theme to localStorage on set", () => {
-    store["mesoclaw_theme"] = "light";
-    expect(localStorage.getItem("mesoclaw_theme")).toBe("light");
+    store["zenii_theme"] = "light";
+    expect(localStorage.getItem("zenii_theme")).toBe("light");
   });
 
   it("toggles through light -> dark -> system cycle", () => {
     // Verify the toggle order: light -> dark -> system
     const order = ["light", "dark", "system"];
     for (const theme of order) {
-      store["mesoclaw_theme"] = theme;
-      expect(localStorage.getItem("mesoclaw_theme")).toBe(theme);
+      store["zenii_theme"] = theme;
+      expect(localStorage.getItem("zenii_theme")).toBe(theme);
     }
   });
 

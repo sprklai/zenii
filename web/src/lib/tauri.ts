@@ -29,7 +29,7 @@ export async function getAppVersion(): Promise<string | null> {
   return invoke<string>("get_app_version");
 }
 
-/** Open the MesoClaw data directory in the OS file manager. */
+/** Open the Zenii data directory in the OS file manager. */
 export async function openDataDir(): Promise<void> {
   if (!isTauri) return;
   const { invoke } = await import("@tauri-apps/api/core");

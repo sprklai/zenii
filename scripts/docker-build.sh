@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# MesoClaw -- Docker-Based Cross-Compilation Script
+# Zenii -- Docker-Based Cross-Compilation Script
 # Usage: ./scripts/docker-build.sh [OPTIONS]
 #
 # Options:
@@ -16,7 +16,7 @@ set -euo pipefail
 # ── Configuration ──────────────────────────────────────────────────────
 WORKSPACE_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 DOCKERFILE="${WORKSPACE_ROOT}/Dockerfile.cross-compile"
-IMAGE_NAME="mesoclaw-cross"
+IMAGE_NAME="zenii-cross"
 DIST_DIR="${WORKSPACE_ROOT}/target/dist"
 
 # ── Defaults ───────────────────────────────────────────────────────────
@@ -100,9 +100,9 @@ get_bin_name() {
 
     local name
     case "$crate" in
-        "mesoclaw-cli")     name="mesoclaw";;
-        "mesoclaw-tui")     name="mesoclaw-tui";;
-        "mesoclaw-daemon")  name="mesoclaw-daemon";;
+        "zenii-cli")     name="zenii";;
+        "zenii-tui")     name="zenii-tui";;
+        "zenii-daemon")  name="zenii-daemon";;
         *)                  name="$crate";;
     esac
 
@@ -144,7 +144,7 @@ run_cargo_in_docker() {
         crates_to_build="$CRATES"
     else
         # Skip desktop in Docker (needs Tauri/GTK)
-        crates_to_build="mesoclaw-cli mesoclaw-tui mesoclaw-daemon"
+        crates_to_build="zenii-cli zenii-tui zenii-daemon"
     fi
 
     local profile_dir
@@ -153,7 +153,7 @@ run_cargo_in_docker() {
     mkdir -p "$output_dir"
 
     for crate in $crates_to_build; do
-        if [ "$crate" = "mesoclaw-desktop" ]; then
+        if [ "$crate" = "zenii-desktop" ]; then
             warn "Skipping $crate in Docker build (requires Tauri platform setup)"
             continue
         fi
@@ -253,7 +253,7 @@ fi
 
 echo ""
 echo "========================================"
-echo "  MesoClaw Docker Build"
+echo "  Zenii Docker Build"
 echo "  Target:  $TARGET"
 echo "  Profile: $PROFILE"
 echo "  Crates:  ${CRATES:-cli tui daemon}"

@@ -114,7 +114,7 @@ describe("API client", () => {
       statusText: "Unauthorized",
       json: () =>
         Promise.resolve({
-          error_code: "MESO_AUTH",
+          error_code: "ZENII_AUTH",
           message: "Invalid token",
         }),
     });
@@ -127,7 +127,7 @@ describe("API client", () => {
     } catch (e) {
       const err = e as MesoApiError;
       expect(err.status).toBe(401);
-      expect(err.errorCode).toBe("MESO_AUTH");
+      expect(err.errorCode).toBe("ZENII_AUTH");
       expect(err.details).toBe("Invalid token");
     }
   });
