@@ -96,19 +96,19 @@
 
 ## How It Compares
 
-| | **Zenii** | OpenClaw | ZeroClaw | AIChat | Open Interpreter | Khoj |
-|---|---|---|---|---|---|---|
-| **Category** | **AI backend** | Chat agent | Minimal daemon | CLI tool | Code REPL | Document brain |
-| **Language** | **Rust** | TypeScript | Rust | Rust | Python | Python/TS |
-| **Binary** | **<20 MB (w/ GUI)** | ~100 MB+ | ~3.4 MB | Single binary | N/A (Python) | N/A (Python) |
-| **Desktop GUI** | **Native (Tauri 2)** | -- | -- | -- | -- | Browser |
-| **API Routes** | **96 REST+WS** | Chat endpoint | Daemon endpoint | Server mode | -- | -- |
-| **Plugins** | **Any language** | JS only | Rust only | -- | -- | -- |
-| **Memory** | **FTS5 + vectors** | File-based | Basic | Sessions | -- | Doc search |
-| **Self-Evolution** | **Human-approved** | Autonomous | -- | -- | -- | -- |
-| **Scheduling** | **Cron + one-shot** | Cron | -- | -- | -- | Automations |
-| **Security** | **6 layers default** | Optional sandbox | Privacy claims | Config | "Watch it" | Standard |
-| **License** | **MIT** | Open source | Open source | MIT | AGPL-3.0 | AGPL-3.0 |
+| | **Zenii** | OpenClaw | ZeroClaw |
+|---|---|---|---|
+| **Category** | **AI backend** | Chat agent | Minimal daemon |
+| **Language** | **Rust** | TypeScript | Rust |
+| **Binary** | **<20 MB (w/ GUI)** | ~100 MB+ | ~3.4 MB |
+| **Desktop GUI** | **Native (Tauri 2)** | -- | -- |
+| **API Routes** | **96 REST+WS** | Chat endpoint | Daemon endpoint |
+| **Plugins** | **Any language** | JS only | Rust only |
+| **Memory** | **FTS5 + vectors** | File-based | Basic |
+| **Self-Evolution** | **Human-approved** | Autonomous | -- |
+| **Scheduling** | **Cron + one-shot** | Cron | -- |
+| **Security** | **6 layers default** | Optional sandbox | Privacy claims |
+| **License** | **MIT** | Open source | Open source |
 
 **No other project has ALL of these simultaneously**: native desktop GUI, 96-route REST/WS API, plugins in any language, semantic vector memory, self-evolution with human approval, under 20 MB compiled binary, and MIT licensed.
 
