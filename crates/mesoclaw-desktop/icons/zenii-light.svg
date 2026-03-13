@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- background -->
+  <rect width="512" height="512" fill="#F2F1EC"/>
+  <!-- antenna stem -->
+  <line x1="256" y1="112" x2="256" y2="56" stroke="#534AB7" stroke-width="18" stroke-linecap="round"/>
+  <!-- antenna ball -->
+  <circle cx="256" cy="44" r="20" fill="#7F77DD"/>
+  <!-- body -->
+  <rect x="80" y="120" width="352" height="280" rx="88" fill="#7F77DD"/>
+  <!-- eye whites -->
+  <circle cx="176" cy="228" r="56" fill="#EEEDFE"/>
+  <circle cx="336" cy="228" r="56" fill="#EEEDFE"/>
+  <!-- pupils -->
+  <circle cx="184" cy="236" r="28" fill="#3C3489"/>
+  <circle cx="344" cy="236" r="28" fill="#3C3489"/>
+  <!-- pupil shine -->
+  <circle cx="194" cy="222" r="10" fill="#EEEDFE"/>
+  <circle cx="354" cy="222" r="10" fill="#EEEDFE"/>
+  <!-- smile — quadratic bezier curving downward = smile shape -->
+  <path d="M184 296 Q256 344 328 296" stroke="#EEEDFE" stroke-width="16" stroke-linecap="round" fill="none"/>
+  <!-- wisp tail -->
+  <path d="M256 400 Q224 448 192 464 Q224 464 256 456 Q288 464 320 464 Q288 448 256 400Z" fill="#534AB7"/>
+</svg>
