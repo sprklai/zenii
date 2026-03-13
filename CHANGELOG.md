@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.15] - 2026-03-13
+
+### Added
+- Per-tool call limits in ToolCallCache with canonical argument hashing for deduplication
+- Contacts module for channel message routing with contact resolution
+- ChannelSendTool expanded with contact lookup and `list_contacts` action
+- Shimmer loading animation component for active tool execution in chat UI
+- Tool permission system with tool dedup cache
+
+### Changed
+- Telegram formatter improvements for paragraph spacing
+- Context injection and prompt refinements for better agent behavior
+- Desktop branding updates (app name, desktop entry)
+- Sanitized example names in docs and tests
+
 ## [0.0.14] - 2026-03-12
 
 ### Added
