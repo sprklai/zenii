@@ -103,6 +103,7 @@ mod tests {
 
     // 18.6 — Embed returns 384-dim vector
     #[tokio::test]
+    #[ignore = "requires ONNX model download, run locally with --ignored"]
     async fn fastembed_embed_dimensions() {
         let provider = FastEmbedProvider::new("bge-small-en-v1.5", None).unwrap();
         let result = provider.embed("hello world").await.unwrap();
@@ -111,6 +112,7 @@ mod tests {
 
     // 18.7 — Same text produces same embedding (deterministic)
     #[tokio::test]
+    #[ignore = "requires ONNX model download, run locally with --ignored"]
     async fn fastembed_deterministic() {
         let provider = FastEmbedProvider::new("bge-small-en-v1.5", None).unwrap();
         let e1 = provider.embed("test text").await.unwrap();
@@ -120,6 +122,7 @@ mod tests {
 
     // 18.8 — Different texts produce different embeddings
     #[tokio::test]
+    #[ignore = "requires ONNX model download, run locally with --ignored"]
     async fn fastembed_different_texts() {
         let provider = FastEmbedProvider::new("bge-small-en-v1.5", None).unwrap();
         let e1 = provider.embed("hello world").await.unwrap();
@@ -129,6 +132,7 @@ mod tests {
 
     // 18.9 — Embedding is unit-normalized
     #[tokio::test]
+    #[ignore = "requires ONNX model download, run locally with --ignored"]
     async fn fastembed_normalized() {
         let provider = FastEmbedProvider::new("bge-small-en-v1.5", None).unwrap();
         let embedding = provider.embed("test normalization").await.unwrap();
