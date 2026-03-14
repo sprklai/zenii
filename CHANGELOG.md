@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.19] - 2026-03-14
+
+### Added
+- Plugin UI enabled across Desktop/Web (removed experimental placeholder) and TUI (new PluginList mode with table view and keybindings)
+
+### Changed
+- Updated architecture and process documentation for plugin system across all interfaces
+
 ## [0.0.18] - 2026-03-14
 
 ### Added
