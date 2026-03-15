@@ -141,6 +141,10 @@ pub(crate) mod tests {
                 Some(sched)
             },
             notification_router: None,
+            usage_logger: Arc::new(crate::logging::UsageLogger::new(
+                &crate::config::AppConfig::default(),
+                "test",
+            )),
             embedding_model_available: Arc::new(std::sync::atomic::AtomicBool::new(true)),
         });
         (dir, state)

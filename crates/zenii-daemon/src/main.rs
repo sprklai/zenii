@@ -33,12 +33,10 @@ async fn main() {
         }
     };
 
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| config.log_level.parse().unwrap_or_default()),
-        )
-        .init();
+    if let Err(e) = zenii_core::logging::init_tracing(&config, "daemon", false) {
+        eprintln!("Failed to initialize tracing: {e}");
+        std::process::exit(1);
+    }
 
     info!(identity = %config.identity_name, "Starting Zenii daemon");
 

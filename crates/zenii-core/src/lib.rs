@@ -4,6 +4,7 @@ pub mod db;
 pub mod error;
 pub mod event_bus;
 pub mod identity;
+pub mod logging;
 pub mod memory;
 pub mod notification;
 pub mod onboarding;

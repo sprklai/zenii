@@ -1,16 +1,68 @@
+use std::ops::Add;
 use std::sync::Arc;
 
 use rig::agent::Agent;
-use rig::completion::{Chat, Prompt};
+use rig::completion::Prompt;
 use rig::message::Message;
 use rig::prelude::CompletionClient;
 use rig::providers::{anthropic, openai};
+use serde::{Deserialize, Serialize};
 use tokio::sync::broadcast;
 
 use crate::config::AppConfig;
 use crate::credential::CredentialStore;
 use crate::tools::Tool;
 use crate::{Result, ZeniiError};
+
+/// Token usage from a single AI request.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct TokenUsage {
+    pub input_tokens: u64,
+    pub output_tokens: u64,
+    pub total_tokens: u64,
+    pub cached_input_tokens: u64,
+}
+
+impl TokenUsage {
+    /// Convert from rig-core's `Usage` type.
+    pub fn from_rig(usage: rig::completion::request::Usage) -> Self {
+        Self {
+            input_tokens: usage.input_tokens,
+            output_tokens: usage.output_tokens,
+            total_tokens: usage.total_tokens,
+            cached_input_tokens: usage.cached_input_tokens,
+        }
+    }
+}
+
+impl Add for TokenUsage {
+    type Output = Self;
+
+    fn add(self, other: Self) -> Self::Output {
+        Self {
+            input_tokens: self.input_tokens + other.input_tokens,
+            output_tokens: self.output_tokens + other.output_tokens,
+            total_tokens: self.total_tokens + other.total_tokens,
+            cached_input_tokens: self.cached_input_tokens + other.cached_input_tokens,
+        }
+    }
+}
+
+impl std::ops::AddAssign for TokenUsage {
+    fn add_assign(&mut self, other: Self) {
+        self.input_tokens += other.input_tokens;
+        self.output_tokens += other.output_tokens;
+        self.total_tokens += other.total_tokens;
+        self.cached_input_tokens += other.cached_input_tokens;
+    }
+}
+
+/// Response from an AI prompt/chat call, including token usage.
+#[derive(Debug, Clone)]
+pub struct AgentResponse {
+    pub output: String,
+    pub usage: TokenUsage,
+}
 
 // Only needed for resolve_agent(), which requires the full AppState
 #[cfg(feature = "ai")]
@@ -228,32 +280,46 @@ impl ZeniiAgent {
         })
     }
 
-    /// Send a simple prompt and get a response.
-    pub async fn prompt(&self, input: &str) -> Result<String> {
-        match &self.inner {
+    /// Send a simple prompt and get a response with token usage.
+    pub async fn prompt(&self, input: &str) -> Result<AgentResponse> {
+        let resp = match &self.inner {
             AgentInner::OpenAI(agent) => agent
                 .prompt(input)
+                .extended_details()
                 .await
-                .map_err(|e| ZeniiError::Agent(format!("prompt failed: {e}"))),
+                .map_err(|e| ZeniiError::Agent(format!("prompt failed: {e}")))?,
             AgentInner::Anthropic(agent) => agent
                 .prompt(input)
+                .extended_details()
                 .await
-                .map_err(|e| ZeniiError::Agent(format!("prompt failed: {e}"))),
-        }
+                .map_err(|e| ZeniiError::Agent(format!("prompt failed: {e}")))?,
+        };
+        Ok(AgentResponse {
+            output: resp.output,
+            usage: TokenUsage::from_rig(resp.usage),
+        })
     }
 
-    /// Send a prompt with chat history and get a response.
-    pub async fn chat(&self, input: &str, history: Vec<Message>) -> Result<String> {
-        match &self.inner {
+    /// Send a prompt with chat history and get a response with token usage.
+    pub async fn chat(&self, input: &str, mut history: Vec<Message>) -> Result<AgentResponse> {
+        let resp = match &self.inner {
             AgentInner::OpenAI(agent) => agent
-                .chat(input, history)
+                .prompt(input)
+                .with_history(&mut history)
+                .extended_details()
                 .await
-                .map_err(|e| ZeniiError::Agent(format!("chat failed: {e}"))),
+                .map_err(|e| ZeniiError::Agent(format!("chat failed: {e}")))?,
             AgentInner::Anthropic(agent) => agent
-                .chat(input, history)
+                .prompt(input)
+                .with_history(&mut history)
+                .extended_details()
                 .await
-                .map_err(|e| ZeniiError::Agent(format!("chat failed: {e}"))),
-        }
+                .map_err(|e| ZeniiError::Agent(format!("chat failed: {e}")))?,
+        };
+        Ok(AgentResponse {
+            output: resp.output,
+            usage: TokenUsage::from_rig(resp.usage),
+        })
     }
 }
 
@@ -790,5 +856,69 @@ mod tests {
         let tools: Vec<Arc<dyn Tool>> = vec![];
         let agent = ZeniiAgent::new(&config, &creds, &tools).await;
         assert!(agent.is_ok());
+    }
+
+    // 8.14.1 — TokenUsage::default() has all zeros
+    #[test]
+    fn token_usage_default_zeros() {
+        let usage = TokenUsage::default();
+        assert_eq!(usage.input_tokens, 0);
+        assert_eq!(usage.output_tokens, 0);
+        assert_eq!(usage.total_tokens, 0);
+        assert_eq!(usage.cached_input_tokens, 0);
+    }
+
+    // 8.14.2 — TokenUsage::from_rig() converts correctly
+    #[test]
+    fn token_usage_from_rig() {
+        let rig_usage = rig::completion::request::Usage {
+            input_tokens: 100,
+            output_tokens: 50,
+            total_tokens: 150,
+            cached_input_tokens: 20,
+        };
+        let usage = TokenUsage::from_rig(rig_usage);
+        assert_eq!(usage.input_tokens, 100);
+        assert_eq!(usage.output_tokens, 50);
+        assert_eq!(usage.total_tokens, 150);
+        assert_eq!(usage.cached_input_tokens, 20);
+    }
+
+    // 8.14.3 — TokenUsage implements Add
+    #[test]
+    fn token_usage_add() {
+        let a = TokenUsage {
+            input_tokens: 10,
+            output_tokens: 5,
+            total_tokens: 15,
+            cached_input_tokens: 2,
+        };
+        let b = TokenUsage {
+            input_tokens: 20,
+            output_tokens: 10,
+            total_tokens: 30,
+            cached_input_tokens: 5,
+        };
+        let sum = a + b;
+        assert_eq!(sum.input_tokens, 30);
+        assert_eq!(sum.output_tokens, 15);
+        assert_eq!(sum.total_tokens, 45);
+        assert_eq!(sum.cached_input_tokens, 7);
+    }
+
+    // 8.14.4 — AgentResponse contains output and usage
+    #[test]
+    fn agent_response_fields() {
+        let resp = AgentResponse {
+            output: "hello".into(),
+            usage: TokenUsage {
+                input_tokens: 10,
+                output_tokens: 5,
+                total_tokens: 15,
+                cached_input_tokens: 0,
+            },
+        };
+        assert_eq!(resp.output, "hello");
+        assert_eq!(resp.usage.total_tokens, 15);
     }
 }

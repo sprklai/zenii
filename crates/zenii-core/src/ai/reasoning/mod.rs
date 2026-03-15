@@ -3,7 +3,7 @@ use rig::message::Message;
 use tracing::{debug, info};
 
 use crate::Result;
-use crate::ai::agent::ZeniiAgent;
+use crate::ai::agent::{TokenUsage, ZeniiAgent};
 
 pub mod continuation;
 
@@ -22,6 +22,7 @@ pub struct StrategyContext {
 #[derive(Debug, Clone)]
 pub struct ChatResult {
     pub response: String,
+    pub usage: TokenUsage,
     pub interventions_used: u32,
     pub strategy_used: Option<String>,
 }
@@ -76,7 +77,9 @@ impl ReasoningEngine {
         prompt: &str,
         history: Vec<Message>,
     ) -> Result<ChatResult> {
-        let mut current_response = agent.chat(prompt, history.clone()).await?;
+        let agent_resp = agent.chat(prompt, history.clone()).await?;
+        let mut current_response = agent_resp.output;
+        let mut total_usage = agent_resp.usage;
         let mut interventions_used = 0u32;
         let mut strategy_used: Option<String> = None;
         let mut current_history = history;
@@ -126,11 +129,14 @@ impl ReasoningEngine {
             interventions_used += 1;
             strategy_used = Some(name);
 
-            current_response = agent.chat(&nudge_prompt, current_history.clone()).await?;
+            let nudge_resp = agent.chat(&nudge_prompt, current_history.clone()).await?;
+            current_response = nudge_resp.output;
+            total_usage += nudge_resp.usage;
         }
 
         Ok(ChatResult {
             response: current_response,
+            usage: total_usage,
             interventions_used,
             strategy_used,
         })
@@ -210,11 +216,42 @@ mod tests {
     fn chat_result_tracks_strategy_name() {
         let result = ChatResult {
             response: "done".into(),
+            usage: TokenUsage::default(),
             interventions_used: 1,
             strategy_used: Some("continuation".into()),
         };
         assert_eq!(result.strategy_used.as_deref(), Some("continuation"));
         assert_eq!(result.interventions_used, 1);
+    }
+
+    // 8.14.5 — ChatResult includes usage field
+    #[test]
+    fn chat_result_includes_usage() {
+        let result = ChatResult {
+            response: "hello".into(),
+            usage: TokenUsage {
+                input_tokens: 100,
+                output_tokens: 50,
+                total_tokens: 150,
+                cached_input_tokens: 0,
+            },
+            interventions_used: 0,
+            strategy_used: None,
+        };
+        assert_eq!(result.usage.input_tokens, 100);
+        assert_eq!(result.usage.total_tokens, 150);
+    }
+
+    // 8.14.6 — ChatResult with zero usage is valid
+    #[test]
+    fn chat_result_zero_usage_valid() {
+        let result = ChatResult {
+            response: "ok".into(),
+            usage: TokenUsage::default(),
+            interventions_used: 0,
+            strategy_used: None,
+        };
+        assert_eq!(result.usage.total_tokens, 0);
     }
 
     // TC-C4 — StrategyContext includes tool_calls_made

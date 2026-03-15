@@ -309,9 +309,8 @@ impl ChannelRouter {
             .reasoning_engine
             .chat(&agent, &message.content, history)
             .await
-            .map(|r| r.response)
         {
-            Ok(r) => r,
+            Ok(r) => r.response,
             Err(e) => {
                 warn!("ChannelRouter: agent chat failed for {channel_name}: {e}");
                 tool_listener.abort();

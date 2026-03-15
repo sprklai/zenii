@@ -9,6 +9,7 @@ use crate::Result;
 use crate::ai::prompt::AssemblyRequest;
 use crate::ai::resolve_agent;
 use crate::gateway::state::AppState;
+use crate::logging::UsageRecord;
 
 #[derive(Debug, Deserialize)]
 #[cfg_attr(feature = "api-docs", derive(utoipa::ToSchema))]
@@ -85,11 +86,38 @@ pub async fn chat(
     }
 
     // Use reasoning engine for multi-turn continuity with autonomous reasoning
+    let start = std::time::Instant::now();
     let chat_result = state
         .reasoning_engine
         .chat(&agent, &req.prompt, history)
         .await?;
+    let duration_ms = start.elapsed().as_millis() as u64;
     let response = chat_result.response;
+
+    // Log usage
+    let record = UsageRecord {
+        timestamp: chrono::Utc::now().to_rfc3339(),
+        session_id: req.session_id.clone(),
+        model_id: model_display.to_string(),
+        provider_id: model_display
+            .split(':')
+            .next()
+            .unwrap_or("unknown")
+            .to_string(),
+        input_tokens: chat_result.usage.input_tokens,
+        output_tokens: chat_result.usage.output_tokens,
+        total_tokens: chat_result.usage.total_tokens,
+        cached_input_tokens: chat_result.usage.cached_input_tokens,
+        tool_calls_count: agent.tool_calls_made(),
+        duration_ms,
+        context_level: "Full".into(),
+        binary: state.usage_logger.binary_name().to_string(),
+        success: true,
+    };
+    let logger = state.usage_logger.clone();
+    tokio::spawn(async move {
+        let _ = logger.log(&record).await;
+    });
 
     // Auto-extract facts from the conversation
     if let Some(ref sid) = req.session_id {

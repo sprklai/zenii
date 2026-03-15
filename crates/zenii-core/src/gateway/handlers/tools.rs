@@ -143,6 +143,7 @@ mod tests {
             #[cfg(feature = "scheduler")]
             scheduler: base_state.scheduler.clone(),
             notification_router: None,
+            usage_logger: base_state.usage_logger.clone(),
             embedding_model_available: base_state.embedding_model_available.clone(),
         });
         (dir, state)

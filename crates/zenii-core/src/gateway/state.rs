@@ -10,6 +10,7 @@ use crate::credential::CredentialStore;
 use crate::db::DbPool;
 use crate::event_bus::EventBus;
 use crate::identity::SoulLoader;
+use crate::logging::UsageLogger;
 use crate::memory::traits::Memory;
 use crate::plugins::installer::PluginInstaller;
 use crate::plugins::registry::PluginRegistry;
@@ -79,6 +80,7 @@ pub struct AppState {
     #[cfg(feature = "scheduler")]
     pub scheduler: Option<Arc<TokioScheduler>>,
     pub notification_router: Option<Arc<crate::notification::router::NotificationRouter>>,
+    pub usage_logger: Arc<UsageLogger>,
     /// Whether the local embedding model is downloaded and ready.
     pub embedding_model_available: Arc<AtomicBool>,
 }

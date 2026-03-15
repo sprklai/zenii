@@ -167,6 +167,11 @@ pub struct AppConfig {
     pub prompt_max_preamble_tokens: usize,
     pub prompt_compact_identity: bool,
 
+    // Phase 8.14: Usage Logging
+    pub usage_tracking_enabled: bool,
+    pub log_dir: String,
+    pub log_keep_days: u32,
+
     // Phase 8: Self-Evolution
     pub self_evolution_enabled: bool,
     pub learning_archive_threshold: f64,
@@ -331,6 +336,11 @@ impl Default for AppConfig {
             // Prompt Efficiency
             prompt_max_preamble_tokens: 1500,
             prompt_compact_identity: true,
+
+            // Usage Logging
+            usage_tracking_enabled: true,
+            log_dir: String::new(),
+            log_keep_days: 30,
 
             // Self-Evolution
             self_evolution_enabled: true,
@@ -772,5 +782,26 @@ mod tests {
         let config: AppConfig = toml::from_str(toml_str).unwrap();
         assert_eq!(config.tool_call_limits.get("web_search"), Some(&2));
         assert_eq!(config.tool_call_limits.get("file_read"), Some(&10));
+    }
+
+    // 8.14.17 — Default has usage_tracking_enabled = true
+    #[test]
+    fn default_usage_tracking_enabled() {
+        let config = AppConfig::default();
+        assert!(config.usage_tracking_enabled);
+    }
+
+    // 8.14.18 — Default has log_keep_days = 30
+    #[test]
+    fn default_log_keep_days() {
+        let config = AppConfig::default();
+        assert_eq!(config.log_keep_days, 30);
+    }
+
+    // 8.14.19 — Default has empty log_dir
+    #[test]
+    fn default_log_dir_empty() {
+        let config = AppConfig::default();
+        assert!(config.log_dir.is_empty());
     }
 }

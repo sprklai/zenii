@@ -316,11 +316,9 @@ async fn handle_ws(mut socket: WebSocket, state: Arc<AppState>) {
         let prompt = request.prompt.clone();
         let reasoning_engine = state.reasoning_engine.clone();
         let (result_tx, mut result_rx) = tokio::sync::oneshot::channel();
+        let chat_start = std::time::Instant::now();
         tokio::spawn(async move {
-            let result = reasoning_engine
-                .chat(&agent, &prompt, history)
-                .await
-                .map(|r| r.response);
+            let result = reasoning_engine.chat(&agent, &prompt, history).await;
             let _ = result_tx.send(result);
         });
 
@@ -394,8 +392,31 @@ async fn handle_ws(mut socket: WebSocket, state: Arc<AppState>) {
                     }
 
                     match result {
-                        Ok(Ok(response)) => {
+                        Ok(Ok(chat_result)) => {
+                            let duration_ms = chat_start.elapsed().as_millis() as u64;
+                            let response = chat_result.response;
                             send_outbound(&mut socket, &WsOutbound::Text { content: response.clone() }).await;
+
+                            // Log usage
+                            let record = crate::logging::UsageRecord {
+                                timestamp: chrono::Utc::now().to_rfc3339(),
+                                session_id: request.session_id.clone(),
+                                model_id: model_display.to_string(),
+                                provider_id: model_display.split(':').next().unwrap_or("unknown").to_string(),
+                                input_tokens: chat_result.usage.input_tokens,
+                                output_tokens: chat_result.usage.output_tokens,
+                                total_tokens: chat_result.usage.total_tokens,
+                                cached_input_tokens: chat_result.usage.cached_input_tokens,
+                                tool_calls_count: tool_events.len() as u32,
+                                duration_ms,
+                                context_level: "Full".into(),
+                                binary: state.usage_logger.binary_name().to_string(),
+                                success: true,
+                            };
+                            let logger = state.usage_logger.clone();
+                            tokio::spawn(async move {
+                                let _ = logger.log(&record).await;
+                            });
 
                             // Store assistant response and tool calls
                             if let Some(ref sid) = request.session_id {

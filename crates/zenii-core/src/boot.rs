@@ -80,6 +80,7 @@ pub struct Services {
     #[cfg(feature = "scheduler")]
     pub scheduler: Option<Arc<TokioScheduler>>,
     pub notification_router: Option<Arc<crate::notification::router::NotificationRouter>>,
+    pub usage_logger: Arc<crate::logging::UsageLogger>,
     /// Whether the local embedding model is downloaded and ready.
     pub embedding_model_available: Arc<AtomicBool>,
 }
@@ -702,6 +703,13 @@ pub async fn init_services(config: AppConfig) -> Result<Services> {
         plugin_registry.list().len()
     );
 
+    // Usage logger
+    let usage_logger = Arc::new(crate::logging::UsageLogger::new(&config, "daemon"));
+    if usage_logger.is_enabled() {
+        let _ = usage_logger.cleanup_old_files().await;
+        info!("Usage logger initialized");
+    }
+
     info!("All services initialized");
 
     Ok(Services {
@@ -744,6 +752,7 @@ pub async fn init_services(config: AppConfig) -> Result<Services> {
         #[cfg(feature = "scheduler")]
         scheduler,
         notification_router,
+        usage_logger,
         embedding_model_available,
     })
 }
@@ -793,6 +802,7 @@ impl From<Services> for AppState {
             #[cfg(feature = "scheduler")]
             scheduler: s.scheduler,
             notification_router: s.notification_router,
+            usage_logger: s.usage_logger,
             embedding_model_available: s.embedding_model_available,
         }
     }

@@ -157,8 +157,8 @@ pub async fn generate_title(
     );
 
     match agent.prompt(&prompt).await {
-        Ok(title) => {
-            let title = title.trim().to_string();
+        Ok(resp) => {
+            let title = resp.output.trim().to_string();
             let session = state.session_manager.update_session(&id, &title).await?;
             Ok(Json(session))
         }
