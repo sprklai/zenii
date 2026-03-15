@@ -102,7 +102,7 @@ zenii daemon status
 
 ### `setup` -- First-run onboarding wizard
 
-Run the interactive onboarding wizard to configure your AI provider and user profile. This is automatically triggered on first launch if setup is incomplete.
+Run the interactive onboarding wizard to configure your AI provider, messaging channels, and user profile. This is automatically triggered on first launch if setup is incomplete.
 
 ```bash
 zenii setup
@@ -113,7 +113,8 @@ The wizard walks through these steps:
 1. **Provider selection** -- choose from available AI providers (OpenAI, Anthropic, Google, Ollama, etc.)
 2. **API key** -- enter your API key (stored securely in OS keyring). Skipped for providers that don't require a key (e.g., Ollama)
 3. **Model selection** -- choose a default model from the selected provider
-4. **Profile** -- enter your name, location, and timezone (timezone is auto-detected)
+4. **Channels** (optional) -- configure messaging channel credentials (Telegram, Slack, or Discord). Defaults to skip.
+5. **Profile** -- enter your name, location, and timezone (timezone is auto-detected)
 
 Examples:
 

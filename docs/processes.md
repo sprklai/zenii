@@ -750,7 +750,7 @@ sequenceDiagram
 
 ## Onboarding / First-Run Setup Flow
 
-On first launch, all interfaces check `GET /setup/status` to determine if onboarding is needed. The `SetupStatus` response includes `needs_setup`, `missing` fields, `detected_timezone`, and `has_usable_model`. If setup is needed, a multi-step wizard collects AI provider configuration (provider, API key, model) and user profile (name, location, timezone).
+On first launch, all interfaces check `GET /setup/status` to determine if onboarding is needed. The `SetupStatus` response includes `needs_setup`, `missing` fields, `detected_timezone`, and `has_usable_model`. If setup is needed, a multi-step wizard collects AI provider configuration (provider, API key, model), optional channel credentials (Telegram, Slack, Discord), and user profile (name, location, timezone).
 
 ```mermaid
 sequenceDiagram
@@ -782,7 +782,13 @@ sequenceDiagram
         GW->>Prov: Set default provider + model
         GW-->>App: Ok
 
-        Note over App: Step 4 -- Profile
+        Note over App: Step 4 -- Channels - optional
+        App->>App: User picks channel to configure
+        App->>GW: POST /credentials
+        GW->>Cred: Store channel:id:field
+        GW-->>App: Ok
+
+        Note over App: Step 5 -- Profile
         App->>GW: PUT /config
         GW->>Cfg: Update name, location, timezone
         GW-->>App: Ok
@@ -794,9 +800,9 @@ sequenceDiagram
 
 ### Interface Variants
 
-- **Desktop**: 2-step `OnboardingWizard` component (provider setup via embedded `ProvidersSettings`, then profile fields)
-- **CLI**: `zenii setup` command -- 7-step interactive flow using `dialoguer` (Select, Password, Input prompts)
-- **TUI**: 4-step overlay modal (ProviderSelect, ApiKey, ModelSelect, Profile) with j/k navigation
+- **Desktop**: 3-step `OnboardingWizard` component (provider setup via embedded `ProvidersSettings`, optional channels via `ChannelsSettings`, then profile fields). Next button is in the card header for visibility on long pages.
+- **CLI**: `zenii setup` command -- interactive flow using `dialoguer` (Select, Confirm, Password, Input prompts). Channels step uses Confirm prompt (default: skip).
+- **TUI**: 5-step overlay modal (ProviderSelect, ApiKey, ModelSelect, Channels, Profile) with j/k navigation. Channels step has Tab to switch between Telegram/Slack/Discord and s to skip.
 
 **Config fields**: `user_name: Option<String>`, `user_timezone: Option<String>` (IANA format), `user_location: Option<String>` (human-readable)
 

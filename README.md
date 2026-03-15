@@ -569,7 +569,7 @@ max_tool_retries = 3
 ## CLI Commands
 
 ```bash
-zenii setup                        # First-run onboarding wizard (provider, API key, model, profile)
+zenii setup                        # First-run onboarding wizard (provider, API key, model, channels, profile)
 zenii daemon start|stop|status     # Manage the daemon process
 zenii chat [--session ID] [--model M]  # Interactive WS streaming chat
 zenii run "prompt" [--session] [--model]  # Single prompt, print response

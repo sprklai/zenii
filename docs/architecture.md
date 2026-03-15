@@ -1511,7 +1511,7 @@ The spec is assembled at runtime from `#[utoipa::path]` annotations on handler f
 
 ## Onboarding Flow
 
-Multi-step onboarding wizard that collects AI provider setup (provider selection, API key, model) and user profile (name, location, timezone). Available across Desktop, CLI, and TUI interfaces.
+Multi-step onboarding wizard that collects AI provider setup (provider selection, API key, model), optional channel credentials (Telegram, Slack, Discord), and user profile (name, location, timezone). Available across Desktop, CLI, and TUI interfaces.
 
 ### SetupStatus
 
@@ -1529,6 +1529,7 @@ sequenceDiagram
     participant FE as Frontend - AuthGate
     participant WZ as OnboardingWizard
     participant PS as ProvidersSettings
+    participant CS as ChannelsSettings
     participant GW as Gateway
     participant Cfg as Config
     participant Cred as Credentials
@@ -1548,7 +1549,13 @@ sequenceDiagram
         PS->>GW: POST /credentials
         PS->>GW: PUT /providers/default
 
-        Note over WZ: Step 2 -- Your Profile
+        Note over WZ: Step 2 -- Channels - optional
+        WZ->>CS: Embed ChannelsSettings
+        CS->>GW: GET /credentials
+        CS->>CS: User configures channel tokens
+        CS->>GW: POST /credentials
+
+        Note over WZ: Step 3 -- Your Profile
         WZ->>WZ: User enters name, location, timezone
         WZ->>GW: PUT /config
         GW->>Cfg: Update ArcSwap + persist TOML
@@ -1561,24 +1568,26 @@ sequenceDiagram
 
 ### CLI (Interactive Flow)
 
-The `zenii setup` command runs an interactive 7-step onboarding:
+The `zenii setup` command runs an interactive onboarding:
 
 1. Fetch providers from `GET /providers/with-key-status`
 2. User selects provider via `dialoguer::Select`
 3. Prompt for API key via `dialoguer::Password`, save to `POST /credentials`
 4. Refresh providers to get updated models
 5. User selects model, set default via `PUT /providers/default`
-6. Prompt for name, location, timezone (auto-detected default)
-7. Save profile to `PUT /config`
+6. Optional: `dialoguer::Confirm` to set up a messaging channel (Telegram/Slack/Discord), save credentials to `POST /credentials`
+7. Prompt for name, location, timezone (auto-detected default)
+8. Save profile to `PUT /config`
 
-### TUI (4-Step Overlay Modal)
+### TUI (5-Step Overlay Modal)
 
 Centered ratatui modal (60% x 70%) with step indicator:
 
 1. **ProviderSelect** -- list providers, j/k navigate, Enter select
 2. **ApiKey** -- masked password input, Enter save, Esc back
 3. **ModelSelect** -- list models for selected provider, Enter select
-4. **Profile** -- three text fields (Name/Location/Timezone), Tab switch, Enter save
+4. **Channels** (optional) -- Tab to switch between Telegram/Slack/Discord, j/k navigate credential fields, Enter save, s to skip
+5. **Profile** -- three text fields (Name/Location/Timezone), Tab switch, Enter save
 
 ### Detection
 
