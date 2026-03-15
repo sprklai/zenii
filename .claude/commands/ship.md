@@ -1,6 +1,6 @@
-# Format, Scan Secrets, Commit & Push to Main
+# Format, Update Docs, Scan Secrets, Commit & Push to Main
 
-This command formats the code, scans for leaked secrets, commits, and pushes to the remote main branch.
+This command formats the code, updates documentation to reflect changes, scans for leaked secrets, commits, and pushes to the remote main branch.
 **It will REFUSE to proceed if any secrets or tokens are detected.**
 **It runs fully automatically with NO user prompts unless secrets are found.**
 
@@ -36,14 +36,33 @@ This runs `svelte-kit sync && svelte-check` which validates paraglide i18n messa
 
 Run `cargo clippy --workspace` to catch lint issues. If there are warnings or errors, fix them before proceeding. Do NOT ask the user — just fix and re-run.
 
-### Step 5: Secret scan (BLOCKING)
+### Step 5: Update documentation
+
+Review the staged and unstaged changes (use `git diff` and `git diff --cached`) to understand what has changed since the last commit. Then update the following documentation files **only if the code changes warrant it** — do not make gratuitous edits:
+
+1. **`README.md`** — Update if there are new features, removed features, changed commands, new dependencies, or altered project structure.
+2. **`CHANGELOG.md`** — Add entries for any user-facing changes (features, fixes, breaking changes). Follow the existing format and group under the current unreleased version section. Create a new section if needed.
+3. **`docs/` directory** — Update relevant docs if the changes affect:
+   - `docs/architecture.md` — new modules, traits, data flows, or structural changes
+   - `docs/phases.md` — phase status changes or deliverable updates
+   - `docs/processes.md` — process flow changes
+   - `docs/cli-reference.md` — new or changed CLI commands/flags
+   - Any other doc that describes behavior that has changed
+
+**Rules:**
+- Only update files where the code changes actually affect documented behavior. If nothing changed that impacts docs, skip this step entirely.
+- Keep changes minimal and accurate — reflect what actually changed, don't embellish.
+- Do NOT create new documentation files — only update existing ones.
+- Do NOT ask the user — just make the updates and proceed.
+
+### Step 6: Secret scan (BLOCKING)
 
 This is the critical security gate. Scan ALL staged and unstaged tracked files for leaked secrets.
 
-#### 5a. Stage all formatted changes first
+#### 6a. Stage all formatted changes first
 Run `git add -A` to stage everything, then immediately run `git diff --cached --no-color` to get the full diff.
 
-#### 5b. Scan the diff output for these patterns (MUST check ALL):
+#### 6b. Scan the diff output for these patterns (MUST check ALL):
 
 | Type | Pattern |
 |------|---------|
@@ -65,10 +84,10 @@ Run `git add -A` to stage everything, then immediately run `git diff --cached --
 | Connection String | `(?i)(mongodb\|postgres\|mysql\|redis)://[^\s'"]+:[^\s'"]+@` |
 | Bot ID / Channel Token | `(?i)(bot[_-]?id\|bot[_-]?token\|channel[_-]?token\|chat[_-]?id)\s*[=:]\s*['"]?[a-zA-Z0-9_\-:]{8,}` |
 
-#### 5c. Also scan ALL tracked files (not just diff) for the same patterns:
+#### 6c. Also scan ALL tracked files (not just diff) for the same patterns:
 Use grep across the entire repo (excluding `.git/`, `target/`, `node_modules/`, `*.lock` files).
 
-#### 5d. If ANY secret is detected:
+#### 6d. If ANY secret is detected:
 - Run `git reset HEAD` to unstage everything
 - Output the alert in this EXACT format:
 
@@ -88,11 +107,11 @@ ACTION REQUIRED:
 - STOP. Do NOT commit. Do NOT push. This is non-negotiable.
 - This is the ONLY case where user input is required before proceeding.
 
-#### 5e. If scan is clean:
+#### 6e. If scan is clean:
 Print: "Secret scan passed - no leaked credentials detected."
-Proceed immediately to Step 6 without asking for confirmation.
+Proceed immediately to Step 7 without asking for confirmation.
 
-### Step 6: Commit
+### Step 7: Commit
 
 - Run `git diff --cached --stat` for a summary
 - Create a commit with a descriptive message based on the actual changes. Do NOT ask the user for a commit message — generate one automatically:
@@ -106,13 +125,13 @@ EOF
 )"
 ```
 
-### Step 7: Push to remote main
+### Step 8: Push to remote main
 
 - First run `git pull --rebase origin main` to sync
 - Then run `git push origin main`
 - Do NOT ask for confirmation — just push.
 
-### Step 8: Summary
+### Step 9: Summary
 
 Print a summary:
 ```
@@ -120,6 +139,7 @@ Ship complete:
 - Formatted: cargo fmt + prettier
 - i18n check: PASSED
 - Linted: cargo clippy
+- Docs updated: <list files updated, or "none needed">
 - Secret scan: PASSED
 - Committed: <commit hash> <commit message>
 - Pushed to: origin/main
