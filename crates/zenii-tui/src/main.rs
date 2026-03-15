@@ -230,13 +230,44 @@ async fn run_app(
                                 {
                                     Ok(_) => {
                                         app.current_model = format!("{provider_id}:{model_id}");
-                                        app.onboard_step = app::OnboardStep::Profile;
+                                        app.onboard_step = app::OnboardStep::Channels;
                                         app.onboard_error = None;
                                     }
                                     Err(e) => {
                                         app.onboard_error =
                                             Some(format!("Failed to set model: {e}"));
                                     }
+                                }
+                            }
+                        }
+                        "__onboard_save_channel_cred__" => {
+                            app.notification_text = None;
+                            let channels = app::ONBOARD_CHANNELS;
+                            let channel = &channels[app.onboard_selected_channel];
+                            let cred = &channel.credentials[app.onboard_channel_cred_idx];
+                            let cred_key = format!("channel:{}:{}", channel.id, cred.0);
+                            let value = app.onboard_channel_input.content.trim().to_string();
+                            let body = serde_json::json!({
+                                "key": cred_key,
+                                "value": value,
+                            });
+                            match client
+                                .post::<_, serde_json::Value>("/credentials", &body)
+                                .await
+                            {
+                                Ok(_) => {
+                                    app.onboard_channel_saved
+                                        .insert(format!("channel:{}:{}", channel.id, cred.0));
+                                    app.onboard_channel_input.clear();
+                                    app.onboard_error = None;
+                                    // Auto-advance to next credential field
+                                    if app.onboard_channel_cred_idx < channel.credentials.len() - 1
+                                    {
+                                        app.onboard_channel_cred_idx += 1;
+                                    }
+                                }
+                                Err(e) => {
+                                    app.onboard_error = Some(format!("Failed to save: {e}"));
                                 }
                             }
                         }

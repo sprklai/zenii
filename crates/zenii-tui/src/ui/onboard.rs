@@ -4,7 +4,7 @@ use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Clear, List, ListItem, Paragraph, Wrap};
 
-use crate::app::{App, OnboardField, OnboardStep};
+use crate::app::{App, ONBOARD_CHANNELS, OnboardField, OnboardStep};
 
 pub fn render_onboard(frame: &mut Frame, area: Rect, app: &App) {
     let overlay = centered_rect(60, 70, area);
@@ -34,6 +34,7 @@ pub fn render_onboard(frame: &mut Frame, area: Rect, app: &App) {
         OnboardStep::ProviderSelect => render_provider_select(frame, chunks[1], app),
         OnboardStep::ApiKey => render_api_key(frame, chunks[1], app),
         OnboardStep::ModelSelect => render_model_select(frame, chunks[1], app),
+        OnboardStep::Channels => render_channels(frame, chunks[1], app),
         OnboardStep::Profile => render_profile(frame, chunks[1], app),
     }
 
@@ -41,12 +42,13 @@ pub fn render_onboard(frame: &mut Frame, area: Rect, app: &App) {
 }
 
 fn render_step_indicator(frame: &mut Frame, area: Rect, step: OnboardStep) {
-    let steps = ["Provider", "API Key", "Model", "Profile"];
+    let steps = ["Provider", "API Key", "Model", "Channels", "Profile"];
     let current = match step {
         OnboardStep::ProviderSelect => 0,
         OnboardStep::ApiKey => 1,
         OnboardStep::ModelSelect => 2,
-        OnboardStep::Profile => 3,
+        OnboardStep::Channels => 3,
+        OnboardStep::Profile => 4,
     };
 
     let mut spans = Vec::new();
@@ -239,11 +241,105 @@ fn render_profile(frame: &mut Frame, area: Rect, app: &App) {
     }
 }
 
+fn render_channels(frame: &mut Frame, area: Rect, app: &App) {
+    let channels = ONBOARD_CHANNELS;
+    let channel = &channels[app.onboard_selected_channel];
+
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(2), // channel tabs
+            Constraint::Length(1), // description
+            Constraint::Min(4),    // credential fields
+            Constraint::Length(2), // error/status
+        ])
+        .split(area);
+
+    // Channel tabs
+    let mut tab_spans = Vec::new();
+    for (i, ch) in channels.iter().enumerate() {
+        let style = if i == app.onboard_selected_channel {
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD)
+        } else {
+            Style::default().fg(Color::DarkGray)
+        };
+        tab_spans.push(Span::styled(format!(" {} ", ch.name), style));
+        if i < channels.len() - 1 {
+            tab_spans.push(Span::raw(" | "));
+        }
+    }
+    let tabs = Paragraph::new(Line::from(tab_spans)).alignment(Alignment::Center);
+    frame.render_widget(tabs, chunks[0]);
+
+    // Description
+    let desc =
+        Paragraph::new("Optional: add credentials for messaging channels. Press 's' to skip.")
+            .style(Style::default().fg(Color::DarkGray))
+            .alignment(Alignment::Center);
+    frame.render_widget(desc, chunks[1]);
+
+    // Credential fields
+    let creds = channel.credentials;
+    let constraints: Vec<Constraint> = creds.iter().map(|_| Constraint::Length(3)).collect();
+    let field_chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints(constraints)
+        .split(chunks[2]);
+
+    for (i, &(key, label, is_secret)) in creds.iter().enumerate() {
+        let is_active = i == app.onboard_channel_cred_idx;
+        let cred_key = format!("channel:{}:{}", channel.id, key);
+        let is_saved = app.onboard_channel_saved.contains(&cred_key);
+        let border_style = if is_active {
+            Style::default().fg(Color::Cyan)
+        } else {
+            Style::default().fg(Color::DarkGray)
+        };
+
+        let display = if is_active && !app.onboard_channel_input.content.is_empty() {
+            if is_secret {
+                "*".repeat(app.onboard_channel_input.content.len())
+            } else {
+                app.onboard_channel_input.content.clone()
+            }
+        } else if is_saved {
+            "******** (saved)".to_string()
+        } else {
+            format!("({label})")
+        };
+
+        let title = if is_saved {
+            format!(" {label} [set] ")
+        } else {
+            format!(" {label} ")
+        };
+
+        let p = Paragraph::new(display).block(
+            Block::default()
+                .title(title)
+                .borders(Borders::ALL)
+                .border_style(border_style),
+        );
+        frame.render_widget(p, field_chunks[i]);
+    }
+
+    // Error
+    if let Some(ref err) = app.onboard_error {
+        let err_msg = Paragraph::new(err.as_str())
+            .style(Style::default().fg(Color::Red))
+            .wrap(Wrap { trim: true });
+        frame.render_widget(err_msg, chunks[3]);
+    }
+}
+
 fn render_footer(frame: &mut Frame, area: Rect, app: &App) {
     let hint = match app.onboard_step {
         OnboardStep::ProviderSelect => "j/k: Navigate | Enter: Select | q: Quit",
         OnboardStep::ApiKey => "Type key | Enter: Save | Esc: Back",
         OnboardStep::ModelSelect => "j/k: Navigate | Enter: Select | Esc: Back",
+        OnboardStep::Channels => "Tab: Switch Channel | j/k: Field | Enter: Save | s: Skip",
         OnboardStep::Profile => "Tab: Next Field | Enter: Save | Esc: Back",
     };
     let footer = Paragraph::new(hint)

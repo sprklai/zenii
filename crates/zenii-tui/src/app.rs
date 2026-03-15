@@ -16,6 +16,7 @@ pub enum OnboardStep {
     ProviderSelect,
     ApiKey,
     ModelSelect,
+    Channels,
     Profile,
 }
 
@@ -25,6 +26,42 @@ pub enum OnboardField {
     Location,
     Timezone,
 }
+
+#[derive(Debug, Clone)]
+pub struct ChannelDef {
+    pub id: &'static str,
+    pub name: &'static str,
+    pub credentials: &'static [(&'static str, &'static str, bool)], // (key, label, is_secret)
+}
+
+pub const ONBOARD_CHANNELS: &[ChannelDef] = &[
+    ChannelDef {
+        id: "telegram",
+        name: "Telegram",
+        credentials: &[
+            ("token", "Bot Token", true),
+            ("allowed_chat_ids", "Allowed Chat IDs", false),
+        ],
+    },
+    ChannelDef {
+        id: "slack",
+        name: "Slack",
+        credentials: &[
+            ("bot_token", "Bot Token", true),
+            ("app_token", "App Token", true),
+            ("allowed_channel_ids", "Allowed Channel IDs", false),
+        ],
+    },
+    ChannelDef {
+        id: "discord",
+        name: "Discord",
+        credentials: &[
+            ("token", "Bot Token", true),
+            ("allowed_guild_ids", "Allowed Server IDs", false),
+            ("allowed_channel_ids", "Allowed Channel IDs", false),
+        ],
+    },
+];
 
 /// Chat streaming status.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -248,6 +285,10 @@ pub struct App {
     pub onboard_field: OnboardField,
     pub onboard_provider_id: String,
     pub onboard_requires_key: bool,
+    pub onboard_selected_channel: usize,
+    pub onboard_channel_cred_idx: usize,
+    pub onboard_channel_input: TextInput,
+    pub onboard_channel_saved: std::collections::HashSet<String>,
     pub plugins: Vec<PluginListItem>,
     pub selected_plugin: Option<usize>,
     pub plugin_install_input: TextInput,
@@ -291,6 +332,10 @@ impl App {
             onboard_field: OnboardField::Name,
             onboard_provider_id: String::new(),
             onboard_requires_key: true,
+            onboard_selected_channel: 0,
+            onboard_channel_cred_idx: 0,
+            onboard_channel_input: TextInput::new(),
+            onboard_channel_saved: std::collections::HashSet::new(),
             plugins: Vec::new(),
             selected_plugin: None,
             plugin_install_input: TextInput::new(),

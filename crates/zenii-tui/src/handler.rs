@@ -231,9 +231,52 @@ fn handle_onboard(app: &mut App, key: KeyEvent) {
             }
             _ => {}
         },
+        OnboardStep::Channels => match (key.code, key.modifiers) {
+            (KeyCode::Esc, _) | (KeyCode::Char('s'), _) => {
+                // Skip channels — go to profile
+                app.onboard_step = OnboardStep::Profile;
+                app.onboard_error = None;
+            }
+            (KeyCode::Char('j'), _) | (KeyCode::Down, _) => {
+                let channels = crate::app::ONBOARD_CHANNELS;
+                let channel = &channels[app.onboard_selected_channel];
+                if app.onboard_channel_cred_idx < channel.credentials.len() - 1 {
+                    app.onboard_channel_cred_idx += 1;
+                    app.onboard_channel_input.clear();
+                }
+            }
+            (KeyCode::Char('k'), _) | (KeyCode::Up, _) => {
+                if app.onboard_channel_cred_idx > 0 {
+                    app.onboard_channel_cred_idx -= 1;
+                    app.onboard_channel_input.clear();
+                }
+            }
+            (KeyCode::Tab, _) => {
+                let channels = crate::app::ONBOARD_CHANNELS;
+                app.onboard_selected_channel = (app.onboard_selected_channel + 1) % channels.len();
+                app.onboard_channel_cred_idx = 0;
+                app.onboard_channel_input.clear();
+                app.onboard_error = None;
+            }
+            (KeyCode::Enter, _) => {
+                if !app.onboard_channel_input.content.trim().is_empty() {
+                    app.notification_text = Some("__onboard_save_channel_cred__".into());
+                }
+            }
+            (KeyCode::Backspace, _) => app.onboard_channel_input.delete_back(),
+            (KeyCode::Char('n'), KeyModifiers::CONTROL) => {
+                // Ctrl+N: next step (done with channels)
+                app.onboard_step = OnboardStep::Profile;
+                app.onboard_error = None;
+            }
+            (KeyCode::Char(c), KeyModifiers::NONE | KeyModifiers::SHIFT) => {
+                app.onboard_channel_input.insert(c);
+            }
+            _ => {}
+        },
         OnboardStep::Profile => match (key.code, key.modifiers) {
             (KeyCode::Esc, _) => {
-                app.onboard_step = OnboardStep::ModelSelect;
+                app.onboard_step = OnboardStep::Channels;
                 app.onboard_error = None;
             }
             (KeyCode::Tab, _) => {

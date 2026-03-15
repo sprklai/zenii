@@ -1,4 +1,4 @@
-use dialoguer::{Input, Password, Select};
+use dialoguer::{Confirm, Input, Password, Select};
 use serde::Deserialize;
 use serde_json::json;
 
@@ -18,10 +18,61 @@ struct ModelInfo {
     display_name: String,
 }
 
+struct ChannelDef {
+    id: &'static str,
+    name: &'static str,
+    credentials: &'static [(&'static str, &'static str, bool)], // (key, label, is_secret)
+}
+
+const CHANNELS: &[ChannelDef] = &[
+    ChannelDef {
+        id: "telegram",
+        name: "Telegram",
+        credentials: &[
+            ("token", "Bot Token (from @BotFather)", true),
+            (
+                "allowed_chat_ids",
+                "Allowed Chat IDs (comma-separated, empty = all)",
+                false,
+            ),
+        ],
+    },
+    ChannelDef {
+        id: "slack",
+        name: "Slack",
+        credentials: &[
+            ("bot_token", "Bot Token (xoxb-...)", true),
+            ("app_token", "App Token (xapp-...)", true),
+            (
+                "allowed_channel_ids",
+                "Allowed Channel IDs (comma-separated, empty = all)",
+                false,
+            ),
+        ],
+    },
+    ChannelDef {
+        id: "discord",
+        name: "Discord",
+        credentials: &[
+            ("token", "Bot Token", true),
+            (
+                "allowed_guild_ids",
+                "Allowed Server IDs (comma-separated, empty = all)",
+                false,
+            ),
+            (
+                "allowed_channel_ids",
+                "Allowed Channel IDs (comma-separated, empty = all)",
+                false,
+            ),
+        ],
+    },
+];
+
 pub async fn run(client: &ZeniiClient) -> Result<(), String> {
     println!("\nWelcome to Zenii! Let's get you set up.\n");
 
-    // 1. Fetch providers
+    // Step 1: Fetch providers
     let providers: Vec<ProviderInfo> = client
         .get("/providers/with-key-status")
         .await
@@ -31,7 +82,7 @@ pub async fn run(client: &ZeniiClient) -> Result<(), String> {
         return Err("No AI providers available. Check your daemon configuration.".into());
     }
 
-    // 2. Select provider
+    // Step 1: Select provider
     let provider_names: Vec<String> = providers.iter().map(|p| p.name.clone()).collect();
     let selection = Select::new()
         .with_prompt("Choose your AI provider")
@@ -45,7 +96,7 @@ pub async fn run(client: &ZeniiClient) -> Result<(), String> {
     let selected_requires_key = providers[selection].requires_api_key;
     println!();
 
-    // 3. API key (skip for providers that don't need it, like Ollama)
+    // Step 1: API key (skip for providers that don't need it, like Ollama)
     if selected_requires_key {
         let api_key: String = Password::new()
             .with_prompt(format!("Enter your {} API key", selected_name))
@@ -62,7 +113,7 @@ pub async fn run(client: &ZeniiClient) -> Result<(), String> {
         println!("  {} does not require an API key\n", selected_name);
     }
 
-    // 4. Refresh providers to get updated models list
+    // Step 1: Refresh providers to get updated models list
     let providers: Vec<ProviderInfo> = client
         .get("/providers/with-key-status")
         .await
@@ -73,7 +124,7 @@ pub async fn run(client: &ZeniiClient) -> Result<(), String> {
         .find(|p| p.id == selected_id)
         .unwrap_or(&providers[selection]);
 
-    // 5. Select model (if models available)
+    // Step 1: Select model (if models available)
     if !provider.models.is_empty() {
         let model_names: Vec<String> = provider
             .models
@@ -99,7 +150,54 @@ pub async fn run(client: &ZeniiClient) -> Result<(), String> {
         );
     }
 
-    // 6. User profile
+    // Step 2: Channels (optional)
+    let setup_channels = Confirm::new()
+        .with_prompt("Set up messaging channels (Telegram, Slack, Discord)? (optional)")
+        .default(false)
+        .interact()
+        .map_err(|e| e.to_string())?;
+
+    if setup_channels {
+        println!();
+        let channel_names: Vec<&str> = CHANNELS.iter().map(|c| c.name).collect();
+        let channel_selection = Select::new()
+            .with_prompt("Choose a channel to configure")
+            .items(&channel_names)
+            .default(0)
+            .interact()
+            .map_err(|e| e.to_string())?;
+
+        let channel = &CHANNELS[channel_selection];
+        println!("\n  Configuring {}...\n", channel.name);
+
+        for &(key, label, is_secret) in channel.credentials {
+            let value = if is_secret {
+                Password::new()
+                    .with_prompt(label)
+                    .allow_empty_password(true)
+                    .interact()
+                    .map_err(|e| e.to_string())?
+            } else {
+                Input::<String>::new()
+                    .with_prompt(label)
+                    .allow_empty(true)
+                    .interact_text()
+                    .map_err(|e| e.to_string())?
+            };
+
+            if !value.trim().is_empty() {
+                let body = json!({
+                    "key": format!("channel:{}:{}", channel.id, key),
+                    "value": value.trim(),
+                });
+                let _resp: serde_json::Value = client.post("/credentials", &body).await?;
+                println!("  Saved {}\n", label);
+            }
+        }
+    }
+
+    // Step 3: User profile
+    println!();
     let name: String = Input::new()
         .with_prompt("Your name")
         .interact_text()
@@ -117,7 +215,7 @@ pub async fn run(client: &ZeniiClient) -> Result<(), String> {
         .interact_text()
         .map_err(|e| e.to_string())?;
 
-    // 7. Save profile
+    // Step 3: Save profile
     let body = json!({
         "user_name": name,
         "user_location": location,
