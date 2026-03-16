@@ -1,3 +1,9 @@
+---
+sidebar_position: 4
+title: Deployment
+slug: /deployment
+---
+
 # Zenii Deployment Guide
 
 This document covers deploying Zenii in various environments: native binaries, Docker containers, Raspberry Pi, and behind reverse proxies.

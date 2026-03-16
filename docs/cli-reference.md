@@ -1,3 +1,9 @@
+---
+sidebar_position: 3
+title: CLI Reference
+slug: /cli-reference
+---
+
 # Zenii CLI Reference
 
 Complete reference for the `zenii` command-line interface.

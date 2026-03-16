@@ -1,3 +1,9 @@
+---
+sidebar_position: 8
+title: Architecture
+slug: /architecture
+---
+
 # Zenii Architecture
 
 ## Table of Contents

@@ -49,6 +49,11 @@ crates/mesoclaw-desktop/gen/
 dist/
 build/
 
+# Docusaurus (docs-site/)
+docs-site/node_modules/
+docs-site/build/
+docs-site/.docusaurus/
+
 # Project internal (not committed)
 no_commit/
 plans/

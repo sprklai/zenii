@@ -1,3 +1,9 @@
+---
+sidebar_position: 1
+title: Installation & Usage
+slug: /installation-and-usage
+---
+
 # Zenii Installation and Usage Guide
 
 A complete guide to installing, running, and integrating Zenii across all supported platforms, interfaces, and programming languages.

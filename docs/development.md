@@ -1,3 +1,9 @@
+---
+sidebar_position: 6
+title: Development
+slug: /development
+---
+
 # Zenii Development Guide
 
 This document covers setting up a development environment, building from source, running tests, and contributing to Zenii.

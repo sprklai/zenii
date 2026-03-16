@@ -1,3 +1,9 @@
+---
+sidebar_position: 2
+title: Configuration
+slug: /configuration
+---
+
 # Zenii Configuration Reference
 
 > **Note**: This document was generated with AI assistance and may contain inaccuracies. If you find errors, please [report an issue](https://github.com/sprklai/zenii/issues).

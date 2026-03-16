@@ -1,3 +1,9 @@
+---
+sidebar_position: 9
+title: Process Flows
+slug: /processes
+---
+
 # Zenii Process Flows
 
 ## Table of Contents
