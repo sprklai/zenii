@@ -71,6 +71,36 @@
 
 > *"ChatGPT is a tab you open. Zenii is a capability your machine gains."*
 
+<!-- DEMO GIF HERE — 30-second terminal recording showing:
+  1. curl health check
+  2. Create session
+  3. Send chat message with tool call
+  4. Response streams back
+  See go2market/Mar17_Launch/04_demo_scripts.md for exact script
+-->
+<p align="center">
+  <img src="docs/assets/demo.gif" alt="Zenii terminal demo" width="720" />
+</p>
+
+## Quick Start
+
+```bash
+# Download (Linux/macOS)
+curl -fsSL https://raw.githubusercontent.com/sprklai/zenii/main/install.sh | sh
+
+# Start the daemon
+zenii-daemon &
+
+# Your first AI request
+curl -X POST localhost:18981/chat \
+  -H "Content-Type: application/json" \
+  -d '{"session_id": "hello", "message": "What can you do?"}'
+```
+
+Or use the desktop app, CLI, or TUI — they all talk to the same backend.
+
+---
+
 ## Why Zenii?
 
 | Your pain | How Zenii fixes it |
@@ -79,44 +109,101 @@
 | AI can't do things, only talk | 16 built-in tools: web search, file ops, shell, scheduling |
 | Locked into one AI provider | 18 providers, switch with one config change |
 | AI tools are cloud-only | 100% local, zero telemetry, OS keyring for secrets |
-| "Works on my machine" for AI | Same binary on macOS, Linux, Windows -- desktop, CLI, or daemon |
-| Plugin systems require learning a framework | JSON-RPC over stdio -- write plugins in Python, Go, JS, or anything |
+| "Works on my machine" for AI | Same binary on macOS, Linux, Windows — desktop, CLI, or daemon |
+| Plugin systems require learning a framework | JSON-RPC over stdio — write plugins in Python, Go, JS, or anything |
 | AI doesn't learn your patterns | Self-evolving skills with human-in-the-loop approval |
 | AI can't run tasks while you sleep | Built-in cron scheduler for autonomous recurring tasks |
 
 ## What Zenii is NOT
 
-- Not a chatbot wrapper -- it's a full API backend with 96 routes
-- Not Electron -- native Tauri 2, under 20 MB
-- Not a framework you learn -- it's infrastructure you call via `curl`
-- Not cloud-dependent -- runs fully offline with Ollama
-- Not opinionated about your stack -- any language, any tool, JSON over HTTP
+- Not a chatbot wrapper — it's a full API backend with 96 routes
+- Not Electron — native Tauri 2, under 20 MB
+- Not a framework you learn — it's infrastructure you call via `curl`
+- Not cloud-dependent — runs fully offline with Ollama
+- Not opinionated about your stack — any language, any tool, JSON over HTTP
+
+---
+
+## What Can I Automate?
+
+```bash
+# Schedule a daily morning briefing
+curl -X POST localhost:18981/scheduler/jobs \
+  -d '{"name":"briefing", "cron":"0 9 * * *", "prompt":"Summarize system status and news"}'
+
+# Store knowledge the AI should remember
+curl -X POST localhost:18981/memory \
+  -d '{"key":"deploy", "content":"Production DB is on port 5433, deploy via ssh prod"}'
+
+# Ask a question that uses stored memory
+curl -X POST localhost:18981/chat \
+  -d '{"session_id":"ops", "message":"How do I deploy to production?"}'
+
+# List what tools the agent has
+curl localhost:18981/tools | jq '.[].name'
+
+# Send a message via Telegram
+curl -X POST localhost:18981/channels/telegram/send \
+  -d '{"text":"Deploy complete", "chat_id":"123456"}'
+```
 
 ---
 
 ## How It Compares
 
-| | **Zenii** | OpenClaw | ZeroClaw |
-|---|---|---|---|
-| **Category** | **AI backend** | Chat agent | Minimal daemon |
-| **Language** | **Rust** | TypeScript | Rust |
-| **Binary** | **<20 MB (w/ GUI)** | ~100 MB+ | ~3.4 MB |
-| **Desktop GUI** | **Native (Tauri 2)** | -- | -- |
-| **API Routes** | **96 REST+WS** | Chat endpoint | Daemon endpoint |
-| **Plugins** | **Any language** | JS only | Rust only |
-| **Memory** | **FTS5 + vectors** | File-based | Basic |
-| **Self-Evolution** | **Human-approved** | Autonomous | -- |
-| **Scheduling** | **Cron + one-shot** | Cron | -- |
-| **Security** | **6 layers default** | Optional sandbox | Privacy claims |
-| **License** | **MIT** | Open source | Open source |
+| | **Zenii** | OpenClaw | ZeroClaw | PicoClaw | Open Interpreter | Khoj | Gemini CLI |
+|---|---|---|---|---|---|---|---|
+| **Category** | **AI backend** | Chat agent | Minimal daemon | Edge AI assistant | Code REPL | Document brain | Terminal AI |
+| **Stars** | New | 210k+ | 20k+ | 24.8k | 62.6k | 32.8k | 97.8k |
+| **Language** | **Rust** | TypeScript | Rust | Go | Python | Python/TS | TypeScript |
+| **Binary** | **<20 MB (w/ GUI)** | ~100 MB+ | ~3.4 MB | <10 MB RAM | N/A (Python) | N/A (Docker) | N/A (npm) |
+| **Desktop GUI** | **Native (Tauri 2)** | -- | -- | Web console | -- | Browser | -- |
+| **API Routes** | **96 REST+WS** | Chat endpoint | Daemon endpoint | Webhook gateway | -- | -- | -- |
+| **Plugins** | **Any language** | JS only | Rust only | Tool-based | -- | -- | -- |
+| **Memory** | **FTS5 + vectors** | File-based | Basic | Workspace logs | -- | Doc search | -- |
+| **Self-Evolution** | **Human-approved** | Autonomous | -- | Agent-generated | -- | -- | -- |
+| **Scheduling** | **Cron + one-shot** | Cron | -- | Built-in | -- | Automations | -- |
+| **Offline** | **Ollama** | Ollama | Ollama | DuckDuckGo | LiteLLM | Optional | No |
+| **License** | **MIT** | Open source | Open source | MIT | AGPL-3.0 | AGPL-3.0 | Apache 2.0 |
 
-**No other project has ALL of these simultaneously**: native desktop GUI, 96-route REST/WS API, plugins in any language, semantic vector memory, self-evolution with human approval, under 20 MB compiled binary, and MIT licensed.
+**No other project has ALL of these simultaneously**: native desktop GUI, 96-route REST/WS API, plugins in any language, semantic vector memory, self-evolution with human approval, under 20 MB binary, and MIT licensed.
+
+---
+
+## The Self-Evolution Story
+
+Most AI tools are static — they do exactly what they did on day one. OpenClaw self-modifies without asking. Zenii takes a third path:
+
+1. **Zenii observes** your patterns and preferences over time
+2. **Zenii proposes** skill modifications ("I notice you always want code reviews on Fridays. Want me to schedule that?")
+3. **You approve or reject** — like a PR from your AI
+4. **Zenii learns** — approved changes become permanent skills
+
+Your AI gets smarter. You stay in control. No surprises.
 
 ---
 
 ## Features
 
+- **Self-evolving agent** — proposes skill changes based on your patterns, learns only with your approval
+- **Plugin system** — write plugins in Python, Go, JS, or any language. A plugin is any program that speaks JSON-RPC 2.0 over stdio (~15 lines of Python)
+- **96 API routes** — full REST + WebSocket gateway. Interactive docs at `localhost:18981/api-docs`
 - **18 AI providers** via rig-core (OpenAI, Anthropic, Google, Ollama, and more)
+- **16 built-in tools** — websearch, sysinfo, shell, file ops, memory, config, scheduling, channels
+- **Semantic memory** — SQLite FTS5 + vector embeddings, persists across sessions and restarts
+- **Native desktop app** — Tauri 2 + Svelte 5, under 20 MB, not Electron
+- **Compact prompts** — plugin-based prompt strategy with ~65% token reduction
+- **Token usage tracking** — date-rotated JSONL logs for cost visibility
+- **Messaging channels** — Telegram, Slack, Discord (feature-gated)
+- **Cron scheduler** — automated recurring AI tasks
+- **6-layer security** — OS keyring, autonomy levels, FS sandbox, injection detection, rate limits, audit trail
+- **Cross-platform** — Linux, macOS, Windows, ARM (Raspberry Pi)
+
+<!-- Detailed feature descriptions below for SEO / deep readers -->
+
+<details>
+<summary><strong>Full feature details</strong> (click to expand)</summary>
+
 - **Tool calling** with 16 built-in tools (14 base + 2 feature-gated) via DashMap-backed ToolRegistry: websearch, sysinfo, shell, file read/write/list/search, patch, process, learn, skill_proposal, memory, config, agent_self + feature-gated channel_send, scheduler
 - **Plugin system** -- external process plugins via JSON-RPC 2.0 protocol, installable from git or local paths, with automatic tool and skill registration. Managed via CLI, Web/Desktop UI, and TUI. See [zenii-plugins](https://github.com/sprklai/zenii-plugins) for official community plugins
 - **Autonomous reasoning** -- ReasoningEngine with tool-aware ContinuationStrategy and per-request tool call deduplication cache
@@ -141,6 +228,8 @@
 - **Notifications** -- desktop OS notifications (tauri-plugin-notification) + web toast notifications (svelte-sonner) via WebSocket push
 - **Cross-platform** -- Linux, macOS, Windows, ARM (Raspberry Pi)
 
+</details>
+
 ## Tech Stack
 
 | Layer | Technology |
@@ -162,7 +251,8 @@
 
 ---
 
-## Architecture
+<details>
+<summary><strong>Architecture</strong> (click to expand)</summary>
 
 ### System Architecture
 
@@ -338,6 +428,8 @@ graph TD
     Wd --> WdCore[zenii-core/web-dashboard]
     WdCore --> GW
 ```
+
+</details>
 
 ---
 
@@ -653,6 +745,12 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines. Quick summary:
 3. Write tests first, then implement
 4. Ensure `cargo test --workspace` and `cargo clippy --workspace -- -D warnings` pass
 5. Submit a pull request
+
+---
+
+<!-- ## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=sprklai/zenii&type=Date)](https://star-history.com/#sprklai/zenii&Date) -->
 
 ---
 

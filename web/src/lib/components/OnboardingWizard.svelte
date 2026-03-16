@@ -126,7 +126,7 @@
 					</span>
 				</div>
 				{#if i < TOTAL_STEPS - 1}
-					<div class="h-px w-12 bg-border"></div>
+					<div class="h-px w-12 bg-muted-foreground/40"></div>
 				{/if}
 			{/each}
 		</div>
@@ -156,7 +156,7 @@
 					</Card.Header>
 				</Card.Root>
 
-				<ProvidersSettings />
+				<ProvidersSettings hideDefaultModel />
 			</div>
 		{:else if step === 2}
 			<div class="space-y-4">

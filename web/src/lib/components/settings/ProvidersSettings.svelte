@@ -16,6 +16,8 @@
 	} from '$lib/components/ai-elements/prompt-input';
 	import { onMount } from 'svelte';
 
+	let { hideDefaultModel = false }: { hideDefaultModel?: boolean } = $props();
+
 	let expandedId = $state<string | null>(null);
 	let apiKeyInputs = $state<Record<string, string>>({});
 	let showKey = $state<Record<string, boolean>>({});
@@ -208,7 +210,7 @@
 	</div>
 {/if}
 
-{#if providersStore.configuredModels.length > 0}
+{#if !hideDefaultModel && providersStore.configuredModels.length > 0}
 	<Card.Root class="mb-4">
 		<Card.Header class="py-3">
 			<Card.Title class="text-base">Default Model</Card.Title>

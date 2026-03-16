@@ -312,14 +312,13 @@ impl PluginInstaller {
         // Register skills
         for skill_def in &plugin.manifest.skills {
             let skill_path = plugin.install_path.join(&skill_def.file);
-            if let Ok(content) = std::fs::read_to_string(&skill_path) {
-                if let Err(e) = self
+            if let Ok(content) = std::fs::read_to_string(&skill_path)
+                && let Err(e) = self
                     .skill_registry
                     .register_external(&skill_def.name, content)
                     .await
-                {
-                    tracing::warn!("Failed to register skill '{}': {e}", skill_def.name);
-                }
+            {
+                tracing::warn!("Failed to register skill '{}': {e}", skill_def.name);
             }
         }
 
