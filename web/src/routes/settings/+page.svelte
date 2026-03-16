@@ -163,6 +163,11 @@
 				<a href="https://zenii.sprklai.com" target="_blank" rel="noopener" class="text-primary hover:underline">Website</a>
 				<a href="https://github.com/sprklai/zenii" target="_blank" rel="noopener" class="text-primary hover:underline">GitHub</a>
 			</div>
+			<Separator class="my-2" />
+			<div class="text-xs text-muted-foreground leading-relaxed">
+				<p class="font-medium text-foreground">Disclaimer</p>
+				<p>Zenii uses large language models (LLMs) to generate responses and can execute system-level actions (shell commands, file operations) on your behalf. LLM outputs may be inaccurate, incomplete, or inappropriate. System actions run with your user permissions. Always review AI-suggested actions before confirming. Use at your own risk.</p>
+			</div>
 		</Dialog.Description>
 	</Dialog.Content>
 </Dialog.Root>

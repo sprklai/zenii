@@ -727,15 +727,16 @@ Global options: `--host`, `--port`, `--token` (or `ZENII_TOKEN` env var)
 
 ## Documentation
 
-Detailed documentation lives in the `docs/` directory:
+**[docs.zenii.sprklai.com](https://docs.zenii.sprklai.com)** -- Full documentation site
 
-- [CLI Reference](docs/cli-reference.md) -- All commands, options, shell completions, recipes
-- [API Reference](docs/api-reference.md) -- All 96 REST/WS routes with request/response schemas
-- [Configuration](docs/configuration.md) -- All 70+ config.toml fields with types and defaults
-- [Deployment Guide](docs/deployment.md) -- Native, Docker, systemd, Raspberry Pi, reverse proxy
-- [Development Guide](docs/development.md) -- Prerequisites, building, testing, how-to guides
-- [Architecture](docs/architecture.md) -- System diagrams, crate dependencies, project structure
-- [Process Flows](docs/processes.md) -- Chat request, startup, error handling, WebSocket flows
+- [Installation & Usage](https://docs.zenii.sprklai.com/installation-and-usage) -- Get up and running
+- [CLI Reference](https://docs.zenii.sprklai.com/cli-reference) -- All commands, options, shell completions, recipes
+- [API Reference](https://docs.zenii.sprklai.com/api-reference) -- All 96 REST/WS routes with request/response schemas
+- [Configuration](https://docs.zenii.sprklai.com/configuration) -- All 70+ config.toml fields with types and defaults
+- [Deployment Guide](https://docs.zenii.sprklai.com/deployment) -- Native, Docker, systemd, Raspberry Pi, reverse proxy
+- [Development Guide](https://docs.zenii.sprklai.com/development) -- Prerequisites, building, testing, how-to guides
+- [Architecture](https://docs.zenii.sprklai.com/architecture) -- System diagrams, crate dependencies, project structure
+- [Process Flows](https://docs.zenii.sprklai.com/processes) -- Chat request, startup, error handling, WebSocket flows
 - [Changelog](CHANGELOG.md) -- Release history
 
 ---
@@ -757,6 +758,10 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines. Quick summary:
 [![Star History Chart](https://api.star-history.com/svg?repos=sprklai/zenii&type=Date)](https://star-history.com/#sprklai/zenii&Date) -->
 
 ---
+
+## Disclaimer
+
+Zenii uses large language models (LLMs) to generate responses and can execute system-level actions (shell commands, file operations) on your behalf. LLM outputs may be inaccurate, incomplete, or inappropriate. System actions run with your user permissions. Always review AI-suggested actions before confirming. Use at your own risk.
 
 ## License
 

@@ -31,6 +31,7 @@
 	let userTimezone = $state('');
 	let saving = $state(false);
 	let error = $state('');
+	let disclaimerAccepted = $state(false);
 
 	const stepLabels = ['AI Provider', 'Default Model', 'Channels', 'Your Profile'];
 
@@ -274,9 +275,22 @@
 				</Card.Content>
 			</Card.Root>
 
+			<div class="rounded-md border border-border bg-muted/50 px-4 py-3 space-y-2">
+				<p class="text-xs text-muted-foreground leading-relaxed">
+					Zenii uses large language models (LLMs) to generate responses and can execute system-level
+					actions (shell commands, file operations) on your behalf. LLM outputs may be inaccurate,
+					incomplete, or inappropriate. System actions run with your user permissions. Always review
+					AI-suggested actions before confirming. Use at your own risk.
+				</p>
+				<label class="flex items-center gap-2 text-sm cursor-pointer">
+					<input type="checkbox" bind:checked={disclaimerAccepted} class="accent-primary h-4 w-4" />
+					<span>I understand and accept</span>
+				</label>
+			</div>
+
 			<div class="flex justify-between">
 				<Button variant="ghost" onclick={() => (step = 3)}>Back</Button>
-				<Button onclick={handleFinish} disabled={saving} size="lg">
+				<Button onclick={handleFinish} disabled={saving || !disclaimerAccepted} size="lg">
 					{saving ? 'Saving...' : 'Get Started'}
 				</Button>
 			</div>
