@@ -88,9 +88,9 @@ function createProvidersStore() {
           "/providers/with-key-status",
         );
         const models = this.configuredModels;
-        // Validate persisted model still exists, fall back to first available
-        if (!selectedModel || !models.some((m) => m.value === selectedModel)) {
-          this.selectedModel = models.length > 0 ? models[0].value : "";
+        // Only clear selection if it references a model that no longer exists
+        if (selectedModel && !models.some((m) => m.value === selectedModel)) {
+          this.selectedModel = "";
         }
       } finally {
         loading = false;
@@ -102,10 +102,18 @@ function createProvidersStore() {
         const result = await apiGet<DefaultModel | null>("/providers/default");
         defaultModel = result;
         if (result && !selectedModel) {
-          selectedModel = `${result.provider_id}:${result.model_id}`;
+          const defaultValue = `${result.provider_id}:${result.model_id}`;
+          // Only set if the default model is actually available (has API key)
+          if (this.configuredModels.some((m) => m.value === defaultValue)) {
+            this.selectedModel = defaultValue;
+          }
         }
       } catch {
         defaultModel = null;
+      }
+      // Final fallback: first available model if still nothing selected
+      if (!selectedModel && this.configuredModels.length > 0) {
+        this.selectedModel = this.configuredModels[0].value;
       }
     },
 

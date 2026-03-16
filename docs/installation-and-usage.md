@@ -70,7 +70,7 @@ A complete guide to installing, running, and integrating Zenii across all suppor
 
 ## Overview
 
-Zenii is an AI assistant platform with a Rust backend and multiple client interfaces. All interfaces communicate through a single HTTP+WebSocket gateway running on `127.0.0.1:18981` by default.
+Zenii is an AI assistant platform with a Rust backend and multiple client interfaces. All interfaces communicate through a single HTTP+WebSocket gateway running on `localhost:18981` by default.
 
 **Architecture:**
 
@@ -291,7 +291,7 @@ cargo tauri dev
 - System tray with show/hide/quit
 - Close-to-tray behavior (quit via tray menu)
 
-The desktop app exposes the same gateway on `127.0.0.1:18981`, so you can use the CLI or custom scripts alongside it. To connect to an external daemon instead of the embedded one, set `ZENII_GATEWAY_URL=http://host:port`.
+The desktop app exposes the same gateway on `localhost:18981`, so you can use the CLI or custom scripts alongside it. To connect to an external daemon instead of the embedded one, set `ZENII_GATEWAY_URL=http://host:port`.
 
 ### Daemon (Headless Server)
 
@@ -448,9 +448,9 @@ See [docs/configuration.md](configuration.md) for the full field reference.
 
 Zenii exposes a REST API on port 18981. Any language with an HTTP client can integrate.
 
-**Base URL:** `http://127.0.0.1:18981`
+**Base URL:** `http://localhost:18981`
 
-**Interactive docs:** Open `http://127.0.0.1:18981/api-docs` in a browser for the Scalar UI (OpenAPI explorer).
+**Interactive docs:** Open `http://localhost:18981/api-docs` in a browser for the Scalar UI (OpenAPI explorer).
 
 ### Authentication
 
@@ -465,7 +465,7 @@ Authorization: Bearer <your-token>
 ```python
 import requests
 
-BASE = "http://127.0.0.1:18981"
+BASE = "http://localhost:18981"
 HEADERS = {"Authorization": "Bearer your-token"}
 
 # Health check
@@ -512,7 +512,7 @@ for t in r.json():
 ### JavaScript / TypeScript
 
 ```typescript
-const BASE = "http://127.0.0.1:18981";
+const BASE = "http://localhost:18981";
 const headers = {
   "Authorization": "Bearer your-token",
   "Content-Type": "application/json",
@@ -559,7 +559,7 @@ import (
     "net/http"
 )
 
-const baseURL = "http://127.0.0.1:18981"
+const baseURL = "http://localhost:18981"
 const token = "your-token"
 
 func main() {
@@ -593,7 +593,7 @@ use serde_json::{json, Value};
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let client = Client::new();
-    let base = "http://127.0.0.1:18981";
+    let base = "http://localhost:18981";
     let token = "your-token";
 
     // Chat
@@ -620,7 +620,7 @@ require 'net/http'
 require 'json'
 require 'uri'
 
-BASE = "http://127.0.0.1:18981"
+BASE = "http://localhost:18981"
 TOKEN = "your-token"
 
 def zenii_request(method, path, body = nil)
@@ -656,7 +656,7 @@ import java.net.http.*;
 import com.google.gson.*;
 
 public class ZeniiClient {
-    static final String BASE = "http://127.0.0.1:18981";
+    static final String BASE = "http://localhost:18981";
     static final String TOKEN = "your-token";
     static final HttpClient client = HttpClient.newHttpClient();
     static final Gson gson = new Gson();
@@ -690,7 +690,7 @@ using System.Text;
 using System.Text.Json;
 
 var client = new HttpClient();
-client.BaseAddress = new Uri("http://127.0.0.1:18981");
+client.BaseAddress = new Uri("http://localhost:18981");
 client.DefaultRequestHeaders.Authorization =
     new AuthenticationHeaderValue("Bearer", "your-token");
 
@@ -713,7 +713,7 @@ Console.WriteLine(health);
 
 ```bash
 TOKEN="your-token"
-BASE="http://127.0.0.1:18981"
+BASE="http://localhost:18981"
 
 # Health check
 curl $BASE/health
@@ -755,7 +755,7 @@ For real-time streaming responses, connect via WebSocket. This is how the deskto
 
 ### Protocol
 
-**Endpoint:** `ws://127.0.0.1:18981/ws/chat?token=<auth_token>`
+**Endpoint:** `ws://localhost:18981/ws/chat?token=<auth_token>`
 
 **Client sends:**
 
@@ -777,7 +777,7 @@ For real-time streaming responses, connect via WebSocket. This is how the deskto
 | `done` | — | Response complete |
 | `error` | `error` | Error occurred |
 
-**Notification endpoint** (`ws://127.0.0.1:18981/ws/notifications?token=<auth_token>`) pushes real-time events:
+**Notification endpoint** (`ws://localhost:18981/ws/notifications?token=<auth_token>`) pushes real-time events:
 
 | Type | Fields | Description |
 |------|--------|-------------|
@@ -792,7 +792,7 @@ import json
 import websockets
 
 async def chat_stream(prompt: str):
-    uri = "ws://127.0.0.1:18981/ws/chat?token=your-token"
+    uri = "ws://localhost:18981/ws/chat?token=your-token"
 
     async with websockets.connect(uri) as ws:
         await ws.send(json.dumps({"prompt": prompt}))
@@ -821,7 +821,7 @@ asyncio.run(chat_stream("Write a haiku about Rust"))
 ```typescript
 function chatStream(prompt: string, token: string): void {
   const ws = new WebSocket(
-    `ws://127.0.0.1:18981/ws/chat?token=${token}`
+    `ws://localhost:18981/ws/chat?token=${token}`
   );
 
   ws.onopen = () => {
@@ -863,7 +863,7 @@ import WebSocket from "ws";
 function chatStream(prompt: string): Promise<string> {
   return new Promise((resolve, reject) => {
     const ws = new WebSocket(
-      "ws://127.0.0.1:18981/ws/chat?token=your-token"
+      "ws://localhost:18981/ws/chat?token=your-token"
     );
     let fullResponse = "";
 
@@ -915,7 +915,7 @@ type WSMessage struct {
 func main() {
     u := url.URL{
         Scheme:   "ws",
-        Host:     "127.0.0.1:18981",
+        Host:     "localhost:18981",
         Path:     "/ws/chat",
         RawQuery: "token=your-token",
     }
@@ -963,7 +963,7 @@ use tokio_tungstenite::connect_async;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let url = "ws://127.0.0.1:18981/ws/chat?token=your-token";
+    let url = "ws://localhost:18981/ws/chat?token=your-token";
     let (mut ws, _) = connect_async(url).await?;
 
     // Send prompt
@@ -1697,7 +1697,7 @@ server {
     ssl_certificate_key /etc/letsencrypt/live/zenii.yourdomain.com/privkey.pem;
 
     location / {
-        proxy_pass http://127.0.0.1:18981;
+        proxy_pass http://localhost:18981;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";

@@ -37,7 +37,7 @@
 
 ## Overview
 
-**Base URL:** `http://127.0.0.1:18981`
+**Base URL:** `http://localhost:18981`
 
 The Zenii gateway is an axum HTTP+WebSocket server. All routes accept and return JSON unless otherwise noted. CORS is configured via the `gateway_cors_origins` config field; an empty list or `["*"]` enables permissive CORS.
 
@@ -45,17 +45,17 @@ The Zenii gateway is an axum HTTP+WebSocket server. All routes accept and return
 
 When built with the `api-docs` feature (enabled by default in daemon and desktop), Zenii serves interactive API documentation:
 
-- **Scalar UI:** `http://127.0.0.1:18981/api-docs` -- interactive API explorer with try-it-out functionality
-- **OpenAPI JSON:** `http://127.0.0.1:18981/api-docs/openapi.json` -- raw OpenAPI 3.1 spec
+- **Scalar UI:** `http://localhost:18981/api-docs` -- interactive API explorer with try-it-out functionality
+- **OpenAPI JSON:** `http://localhost:18981/api-docs/openapi.json` -- raw OpenAPI 3.1 spec
 
 Both endpoints bypass authentication and are always accessible.
 
 ```bash
 # Open interactive API docs in browser
-open http://127.0.0.1:18981/api-docs
+open http://localhost:18981/api-docs
 
 # Download the OpenAPI spec
-curl http://127.0.0.1:18981/api-docs/openapi.json -o openapi.json
+curl http://localhost:18981/api-docs/openapi.json -o openapi.json
 ```
 
 To disable API docs (reduces binary size), build without the feature:
@@ -142,7 +142,7 @@ Returns server health status. Bypasses authentication.
 
 **Example:**
 ```bash
-curl http://127.0.0.1:18981/health
+curl http://localhost:18981/health
 ```
 
 ---
@@ -170,7 +170,7 @@ Create a new chat session.
 
 **Example:**
 ```bash
-curl -X POST http://127.0.0.1:18981/sessions \
+curl -X POST http://localhost:18981/sessions \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"title": "My Session"}'
@@ -268,7 +268,7 @@ Get all messages in a session, including tool call records for assistant message
 
 **Example:**
 ```bash
-curl http://127.0.0.1:18981/sessions/SESSION_ID/messages \
+curl http://localhost:18981/sessions/SESSION_ID/messages \
   -H "Authorization: Bearer $TOKEN"
 ```
 
@@ -313,7 +313,7 @@ Send a prompt and receive an AI response. Optionally associates with a session.
 
 **Example:**
 ```bash
-curl -X POST http://127.0.0.1:18981/chat \
+curl -X POST http://localhost:18981/chat \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"prompt": "Hello!", "session_id": null}'
@@ -342,7 +342,7 @@ The `category` field is optional and defaults to `"core"`.
 
 **Example:**
 ```bash
-curl -X POST http://127.0.0.1:18981/memory \
+curl -X POST http://localhost:18981/memory \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"key": "pref_theme", "content": "User likes dark mode"}'
@@ -408,7 +408,7 @@ Get current configuration with secrets redacted and default paths resolved.
 
 **Example:**
 ```bash
-curl http://127.0.0.1:18981/config \
+curl http://localhost:18981/config \
   -H "Authorization: Bearer $TOKEN"
 ```
 
@@ -449,7 +449,7 @@ Returns whether the user needs to complete onboarding (missing provider API key,
 
 **Example:**
 ```bash
-curl http://127.0.0.1:18981/setup/status
+curl http://localhost:18981/setup/status
 ```
 
 ---
@@ -475,7 +475,7 @@ Store a credential (key-value pair) in the secure store (OS keyring or in-memory
 
 **Example:**
 ```bash
-curl -X POST http://127.0.0.1:18981/credentials \
+curl -X POST http://localhost:18981/credentials \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"key": "api_key:openai", "value": "sk-your-key-here"}'
@@ -548,7 +548,7 @@ List all AI providers with their models.
 
 **Example:**
 ```bash
-curl http://127.0.0.1:18981/providers \
+curl http://localhost:18981/providers \
   -H "Authorization: Bearer $TOKEN"
 ```
 
@@ -672,7 +672,7 @@ List available models from the current config.
 
 **Example:**
 ```bash
-curl http://127.0.0.1:18981/models \
+curl http://localhost:18981/models \
   -H "Authorization: Bearer $TOKEN"
 ```
 
@@ -688,7 +688,7 @@ List all registered tools.
 
 **Example:**
 ```bash
-curl http://127.0.0.1:18981/tools \
+curl http://localhost:18981/tools \
   -H "Authorization: Bearer $TOKEN"
 ```
 
@@ -729,7 +729,7 @@ Get host system information.
 
 **Example:**
 ```bash
-curl http://127.0.0.1:18981/system/info \
+curl http://localhost:18981/system/info \
   -H "Authorization: Bearer $TOKEN"
 ```
 
@@ -754,7 +754,7 @@ List all identity/persona files.
 
 **Example:**
 ```bash
-curl http://127.0.0.1:18981/identity \
+curl http://localhost:18981/identity \
   -H "Authorization: Bearer $TOKEN"
 ```
 
@@ -806,7 +806,7 @@ List all skills. Optional `?category=` query parameter to filter.
 
 **Example:**
 ```bash
-curl http://127.0.0.1:18981/skills \
+curl http://localhost:18981/skills \
   -H "Authorization: Bearer $TOKEN"
 ```
 
@@ -884,7 +884,7 @@ List pending skill proposals.
 
 **Example:**
 ```bash
-curl http://127.0.0.1:18981/skills/proposals \
+curl http://localhost:18981/skills/proposals \
   -H "Authorization: Bearer $TOKEN"
 ```
 
@@ -931,7 +931,7 @@ List user observations (learned preferences and facts). Optional `?category=` fi
 
 **Example:**
 ```bash
-curl http://127.0.0.1:18981/user/observations \
+curl http://localhost:18981/user/observations \
   -H "Authorization: Bearer $TOKEN"
 ```
 
@@ -1007,7 +1007,7 @@ If no provider is configured:
 
 **Example:**
 ```bash
-curl http://127.0.0.1:18981/embeddings/status \
+curl http://localhost:18981/embeddings/status \
   -H "Authorization: Bearer $TOKEN"
 ```
 
@@ -1083,7 +1083,7 @@ Re-embed all stored memories with the current provider. Useful after switching p
 
 **Example:**
 ```bash
-curl -X POST http://127.0.0.1:18981/embeddings/reindex \
+curl -X POST http://localhost:18981/embeddings/reindex \
   -H "Authorization: Bearer $TOKEN"
 ```
 
@@ -1310,7 +1310,7 @@ On failure:
 
 **Example:**
 ```bash
-curl -X POST http://127.0.0.1:18981/channels/telegram/test \
+curl -X POST http://localhost:18981/channels/telegram/test \
   -H "Authorization: Bearer $TOKEN"
 ```
 
@@ -1334,7 +1334,7 @@ List registered channels with their status.
 
 **Example:**
 ```bash
-curl http://127.0.0.1:18981/channels \
+curl http://localhost:18981/channels \
   -H "Authorization: Bearer $TOKEN"
 ```
 
@@ -1437,7 +1437,7 @@ List all scheduled jobs.
 
 **Example:**
 ```bash
-curl http://127.0.0.1:18981/scheduler/jobs \
+curl http://localhost:18981/scheduler/jobs \
   -H "Authorization: Bearer $TOKEN"
 ```
 
@@ -1505,7 +1505,7 @@ WebSocket endpoint for streaming chat. See [WebSocket Protocol](#websocket-proto
 
 **Example (websocat):**
 ```bash
-websocat "ws://127.0.0.1:18981/ws/chat?token=$TOKEN"
+websocat "ws://localhost:18981/ws/chat?token=$TOKEN"
 ```
 
 #### GET /ws/notifications
@@ -1521,7 +1521,7 @@ WebSocket endpoint for real-time notifications (scheduler events, system alerts)
 ### Connection
 
 ```
-ws://127.0.0.1:18981/ws/chat?token=<auth_token>
+ws://localhost:18981/ws/chat?token=<auth_token>
 ```
 
 ### Client-to-Server Message

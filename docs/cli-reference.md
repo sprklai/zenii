@@ -8,16 +8,16 @@ Complete reference for the `zenii` command-line interface.
 
 ### From GitHub Releases
 
-Download the latest binary for your platform from [GitHub Releases](https://github.com/NSRTech/zenii/releases):
+Download the latest binary for your platform from [GitHub Releases](https://github.com/sprklai/zenii/releases):
 
 ```bash
 # macOS (Apple Silicon)
-curl -LO https://github.com/NSRTech/zenii/releases/latest/download/zenii-aarch64-apple-darwin.tar.gz
+curl -LO https://github.com/sprklai/zenii/releases/latest/download/zenii-aarch64-apple-darwin.tar.gz
 tar xzf zenii-aarch64-apple-darwin.tar.gz
 sudo mv zenii /usr/local/bin/
 
 # Linux (x86_64)
-curl -LO https://github.com/NSRTech/zenii/releases/latest/download/zenii-x86_64-unknown-linux-gnu.tar.gz
+curl -LO https://github.com/sprklai/zenii/releases/latest/download/zenii-x86_64-unknown-linux-gnu.tar.gz
 tar xzf zenii-x86_64-unknown-linux-gnu.tar.gz
 sudo mv zenii /usr/local/bin/
 ```

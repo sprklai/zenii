@@ -763,7 +763,7 @@ graph TB
 
 ## Gateway Routes
 
-All clients communicate via the HTTP+WebSocket gateway at `127.0.0.1:18981`. Routes are grouped by subsystem (79 base + 17 feature-gated = 96 total).
+All clients communicate via the HTTP+WebSocket gateway at `localhost:18981`. Routes are grouped by subsystem (79 base + 17 feature-gated = 96 total).
 
 ### Health (1 route, no auth)
 

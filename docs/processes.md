@@ -98,7 +98,7 @@ sequenceDiagram
         App->>App: Init TokioScheduler (OnceCell)
     end
     App->>App: Bundle into Services struct
-    App->>GW: Start axum server (127.0.0.1:18981)
+    App->>GW: Start axum server (localhost:18981)
     opt scheduler feature enabled
         App->>App: scheduler.wire(app_state) — OnceCell post-construction
         App->>App: PayloadExecutor wired with agent + channel access

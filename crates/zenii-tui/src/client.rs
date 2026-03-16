@@ -124,7 +124,7 @@ impl ZeniiClient {
     }
 
     pub async fn get_default_model(&self) -> Result<String, String> {
-        let resp: serde_json::Value = self.get("/providers/default-model").await?;
+        let resp: serde_json::Value = self.get("/providers/default").await?;
         Ok(resp
             .get("model_id")
             .and_then(|v| v.as_str())

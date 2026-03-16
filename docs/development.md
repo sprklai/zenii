@@ -75,7 +75,7 @@ curl -fsSL https://bun.sh/install | bash
 
 ```bash
 # Clone
-git clone https://github.com/nsrtech/zenii.git
+git clone https://github.com/sprklai/zenii.git
 cd zenii
 
 # Verify Rust workspace compiles

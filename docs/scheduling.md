@@ -191,25 +191,25 @@ The TUI (`zenii-tui`) communicates with the same daemon HTTP API. Scheduler mana
 
 ### HTTP API (Direct)
 
-For scripting or custom integrations, call the gateway endpoints directly. The daemon listens on `127.0.0.1:18981` by default.
+For scripting or custom integrations, call the gateway endpoints directly. The daemon listens on `localhost:18981` by default.
 
 **Get scheduler status:**
 
 ```bash
-curl http://127.0.0.1:18981/scheduler/status
+curl http://localhost:18981/scheduler/status
 # {"running":true,"job_count":3}
 ```
 
 **List all jobs:**
 
 ```bash
-curl http://127.0.0.1:18981/scheduler/jobs
+curl http://localhost:18981/scheduler/jobs
 ```
 
 **Create a job:**
 
 ```bash
-curl -X POST http://127.0.0.1:18981/scheduler/jobs \
+curl -X POST http://localhost:18981/scheduler/jobs \
   -H "Content-Type: application/json" \
   -d '{
     "name": "Evening Summary",
@@ -225,7 +225,7 @@ curl -X POST http://127.0.0.1:18981/scheduler/jobs \
 **Create a channel notification (requires `channels` feature):**
 
 ```bash
-curl -X POST http://127.0.0.1:18981/scheduler/jobs \
+curl -X POST http://localhost:18981/scheduler/jobs \
   -H "Content-Type: application/json" \
   -d '{
     "name": "Telegram Daily Update",
@@ -241,20 +241,20 @@ curl -X POST http://127.0.0.1:18981/scheduler/jobs \
 **Toggle a job:**
 
 ```bash
-curl -X PUT http://127.0.0.1:18981/scheduler/jobs/{job_id}/toggle
+curl -X PUT http://localhost:18981/scheduler/jobs/{job_id}/toggle
 # {"id":"...","enabled":false}
 ```
 
 **View job history:**
 
 ```bash
-curl http://127.0.0.1:18981/scheduler/jobs/{job_id}/history
+curl http://localhost:18981/scheduler/jobs/{job_id}/history
 ```
 
 **Delete a job:**
 
 ```bash
-curl -X DELETE http://127.0.0.1:18981/scheduler/jobs/{job_id}
+curl -X DELETE http://localhost:18981/scheduler/jobs/{job_id}
 # 204 No Content
 ```
 
@@ -280,7 +280,7 @@ zenii-cli schedule create \
 Run a heartbeat every hour during business hours:
 
 ```bash
-curl -X POST http://127.0.0.1:18981/scheduler/jobs \
+curl -X POST http://localhost:18981/scheduler/jobs \
   -H "Content-Type: application/json" \
   -d '{
     "name": "Hourly Health Check",
@@ -321,7 +321,7 @@ zenii-cli schedule create \
 Send a daily digest to your Telegram bot at 7 PM:
 
 ```bash
-curl -X POST http://127.0.0.1:18981/scheduler/jobs \
+curl -X POST http://localhost:18981/scheduler/jobs \
   -H "Content-Type: application/json" \
   -d '{
     "name": "Telegram Daily Digest",
@@ -335,7 +335,7 @@ curl -X POST http://127.0.0.1:18981/scheduler/jobs \
 ### 6. Pomodoro break reminders (every 25 minutes during work)
 
 ```bash
-curl -X POST http://127.0.0.1:18981/scheduler/jobs \
+curl -X POST http://localhost:18981/scheduler/jobs \
   -H "Content-Type: application/json" \
   -d '{
     "name": "Pomodoro Break",

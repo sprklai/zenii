@@ -105,8 +105,8 @@ Before submitting your PR, verify:
 
 ## Reporting Issues
 
-- **Bugs**: Use the [Bug Report](https://github.com/nsrtech/zenii/issues/new?template=bug_report.md) template.
-- **Features**: Use the [Feature Request](https://github.com/nsrtech/zenii/issues/new?template=feature_request.md) template.
+- **Bugs**: Use the [Bug Report](https://github.com/sprklai/zenii/issues/new?template=bug_report.md) template.
+- **Features**: Use the [Feature Request](https://github.com/sprklai/zenii/issues/new?template=feature_request.md) template.
 - **Security**: See [SECURITY.md](SECURITY.md) for responsible disclosure.
 
 ## Code of Conduct

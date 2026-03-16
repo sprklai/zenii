@@ -92,9 +92,9 @@ curl -fsSL https://raw.githubusercontent.com/sprklai/zenii/main/install.sh | bas
 zenii-daemon &
 
 # Your first AI request
-curl -X POST localhost:18981/chat \
+curl -X POST http://localhost:18981/chat \
   -H "Content-Type: application/json" \
-  -d '{"session_id": "hello", "message": "What can you do?"}'
+  -d '{"session_id": "hello", "prompt": "What can you do?"}'
 ```
 
 Or use the desktop app, CLI, or TUI — they all talk to the same backend.
@@ -128,23 +128,27 @@ Or use the desktop app, CLI, or TUI — they all talk to the same backend.
 
 ```bash
 # Schedule a daily morning briefing
-curl -X POST localhost:18981/scheduler/jobs \
-  -d '{"name":"briefing", "cron":"0 9 * * *", "prompt":"Summarize system status and news"}'
+curl -X POST http://localhost:18981/scheduler/jobs \
+  -H "Content-Type: application/json" \
+  -d '{"name":"briefing","schedule":{"Cron":{"expr":"0 9 * * *"}},"payload":{"AgentTurn":{"prompt":"Summarize system status and news"}}}'
 
 # Store knowledge the AI should remember
-curl -X POST localhost:18981/memory \
+curl -X POST http://localhost:18981/memory \
+  -H "Content-Type: application/json" \
   -d '{"key":"deploy", "content":"Production DB is on port 5433, deploy via ssh prod"}'
 
 # Ask a question that uses stored memory
-curl -X POST localhost:18981/chat \
-  -d '{"session_id":"ops", "message":"How do I deploy to production?"}'
+curl -X POST http://localhost:18981/chat \
+  -H "Content-Type: application/json" \
+  -d '{"session_id":"ops", "prompt":"How do I deploy to production?"}'
 
 # List what tools the agent has
-curl localhost:18981/tools | jq '.[].name'
+curl http://localhost:18981/tools | jq '.[].name'
 
 # Send a message via Telegram
-curl -X POST localhost:18981/channels/telegram/send \
-  -d '{"text":"Deploy complete", "chat_id":"123456"}'
+curl -X POST http://localhost:18981/channels/telegram/send \
+  -H "Content-Type: application/json" \
+  -d '{"content":"Deploy complete", "recipient":"123456"}'
 ```
 
 ---

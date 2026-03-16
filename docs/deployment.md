@@ -94,7 +94,7 @@ zenii-daemon
 zenii-daemon --config /path/to/config.toml
 ```
 
-The daemon starts the HTTP+WebSocket gateway on `127.0.0.1:18981` by default.
+The daemon starts the HTTP+WebSocket gateway on `localhost:18981` by default.
 
 ### 6. Verify
 
@@ -265,7 +265,7 @@ Zenii runs well on Raspberry Pi 4/5 with ARM64 (aarch64). SQLite is the only dat
 
 ```bash
 # Download the aarch64 build from releases
-wget https://github.com/nsrtech/zenii/releases/latest/download/zenii-daemon-linux-arm64
+wget https://github.com/sprklai/zenii/releases/latest/download/zenii-daemon-linux-arm64
 chmod +x zenii-daemon-linux-arm64
 sudo mv zenii-daemon-linux-arm64 /usr/local/bin/zenii-daemon
 ```
@@ -319,7 +319,7 @@ Zenii uses both HTTP and WebSocket connections on the same port (default 18981).
 
 ```nginx
 upstream zenii {
-    server 127.0.0.1:18981;
+    server localhost:18981;
 }
 
 server {
