@@ -7,9 +7,10 @@
 <h1 align="center">20 megabytes. AI everywhere.</h1>
 
 <p align="center">
-  Install one binary. Now your scripts have <strong>AI memory</strong>. Your cron jobs <strong>reason</strong>. Your Telegram bot <strong>thinks</strong>.<br>
+  Install <strong>one binary</strong>. Now your scripts have <strong>AI memory</strong>. Your cron jobs <strong>reason</strong>. Your Telegram bot <strong>thinks</strong>.<br>
   A private AI backend for everything on your machine — native desktop app, plugins in <strong>any language</strong>, and an API your <code>curl</code> can call. Powered by Rust.<br>
-  <a href="https://zenii.sprklai.com">https://zenii.sprklai.com</a>
+  <a href="https://zenii.sprklai.com">https://zenii.sprklai.com</a><br>
+  <a href="https://docs.zenii.sprklai.com">https://docs.zenii.sprklai.com</a>
 </p>
 
 <!-- Row 1: CI & Release -->
@@ -87,8 +88,19 @@
 
 ## Quick Start
 
+**Download the latest installer** for your platform from [**GitHub Releases**](https://github.com/sprklai/zenii/releases/latest):
+
+| Platform | Desktop App | CLI + Daemon + TUI |
+|----------|------------|---------------------|
+| **Linux** | `.deb` `.rpm` `.AppImage` | `zenii-linux` `zenii-daemon-linux` `zenii-tui-linux` |
+| **macOS** | `.dmg` | `zenii-macos-arm64` `zenii-daemon-macos-arm64` `zenii-tui-macos-arm64` |
+| **Windows** | `.msi` `.exe` (NSIS) | `zenii.exe` `zenii-daemon.exe` `zenii-tui.exe` |
+| **ARM** | -- | `zenii-arm64` `zenii-daemon-arm64` `zenii-tui-arm64` |
+
+Or install via script (Linux/macOS):
+
 ```bash
-# Download (Linux/macOS)
+# Download & install CLI + daemon + TUI
 curl -fsSL https://raw.githubusercontent.com/sprklai/zenii/main/install.sh | bash
 
 # Start the daemon
@@ -428,7 +440,7 @@ zenii/
 
 ---
 
-## Getting Started
+## Building from Source
 
 ### Prerequisites
 
