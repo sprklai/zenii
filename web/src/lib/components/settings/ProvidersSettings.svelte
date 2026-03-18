@@ -201,7 +201,7 @@
 	</Button>
 </div>
 
-{#if defaultProviderMissingKey}
+{#if !hideDefaultModel && defaultProviderMissingKey}
 	<div class="mb-4 rounded-md border border-amber-500/50 bg-amber-500/10 px-4 py-3 text-sm text-amber-700 dark:text-amber-400">
 		<strong>No API key for default provider.</strong> Your config defaults to
 		<code class="rounded bg-amber-500/20 px-1">{configStore.get('provider_name')}</code> /

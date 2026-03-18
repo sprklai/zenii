@@ -42,15 +42,6 @@
 			''
 	);
 
-	const defaultProviderName = $derived(
-		(configStore.get('provider_name') as string) || 'anthropic'
-	);
-
-	const defaultProviderMissing = $derived.by(() => {
-		const provider = providersStore.providers.find((p) => p.id === defaultProviderName);
-		return provider ? provider.requires_api_key && !provider.has_api_key : false;
-	});
-
 	function canAdvance(fromStep: number): boolean {
 		if (fromStep === 1) return providersStore.hasUsableModel;
 		if (fromStep === 2) return !!providersStore.selectedModel;
@@ -186,6 +177,10 @@
 									Add an API key for at least one provider to enable chat. Expand a provider below, enter
 									your key, and save it.
 								</Card.Description>
+								<p class="mt-2 text-xs text-muted-foreground">
+									Need a different provider? Any OpenAI API-compatible service can be added via the
+									<strong>+ Add Provider</strong> button above the list.
+								</p>
 							</div>
 							<Button
 								onclick={() => (step = 2)}
@@ -235,9 +230,9 @@
 					</Card.Content>
 				</Card.Root>
 
-				{#if defaultProviderMissing}
-					<div class="rounded-md border border-blue-500/50 bg-blue-500/10 px-4 py-3 text-sm text-blue-700 dark:text-blue-400">
-						Your current default uses <strong>{defaultProviderName}</strong>, which doesn't have an API key configured. Select any available model below to update your default.
+				{#if currentModelLabel}
+					<div class="rounded-md border border-green-500/50 bg-green-500/10 px-4 py-3 text-sm text-green-700 dark:text-green-400">
+						Default model set to <strong>{currentModelLabel}</strong>
 					</div>
 				{/if}
 

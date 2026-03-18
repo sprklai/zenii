@@ -10,7 +10,7 @@
 
 **Do not open a public issue for security vulnerabilities.**
 
-Instead, please email **security@nsrtech.dev** with:
+Instead, please email **aisprkl@gmail.com** with:
 
 1. A description of the vulnerability
 2. Steps to reproduce
