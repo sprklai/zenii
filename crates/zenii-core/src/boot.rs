@@ -818,6 +818,7 @@ mod tests {
             memory_db_path: Some(dir.path().join("memory.db").to_string_lossy().into()),
             identity_dir: Some(dir.path().join("identity").to_string_lossy().into()),
             skills_dir: Some(dir.path().join("skills").to_string_lossy().into()),
+            plugins_dir: Some(dir.path().join("plugins").to_string_lossy().into()),
             ..Default::default()
         }
     }
@@ -864,7 +865,7 @@ mod tests {
         let dir = tempfile::TempDir::new().unwrap();
         let config = test_config(&dir);
         let services = init_services(config).await.unwrap();
-        let mut expected = 16; // base tools + memory + config + agent_notes
+        let mut expected = 14; // base tools + memory + config + agent_notes
         #[cfg(feature = "channels")]
         {
             expected += 1; // channel_send
@@ -941,7 +942,7 @@ mod tests {
         let config = test_config(&dir);
         let services = init_services(config).await.unwrap();
         let skills = services.skill_registry.list().await;
-        assert_eq!(skills.len(), 4); // 4 bundled
+        assert_eq!(skills.len(), 3); // 4 bundled
     }
 
     #[tokio::test]
@@ -1008,7 +1009,7 @@ mod tests {
         let identity = state.soul_loader.get().await;
         assert_eq!(identity.meta.name, "Zenii");
         let skills = state.skill_registry.list().await;
-        assert_eq!(skills.len(), 4);
+        assert_eq!(skills.len(), 3);
     }
 
     // 18.12 — Boot with embedding_provider="none" creates SqliteMemoryStore without vector
