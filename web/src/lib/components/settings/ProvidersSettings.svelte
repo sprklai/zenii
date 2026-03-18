@@ -194,12 +194,20 @@
 	}
 </script>
 
-<div class="flex items-center justify-between mb-4">
+<div class="flex items-center justify-between mb-2">
 	<h2 class="text-lg font-semibold">AI Providers</h2>
 	<Button size="sm" variant="outline" onclick={() => (showAddProvider = !showAddProvider)}>
 		{showAddProvider ? 'Cancel' : '+ Add Provider'}
 	</Button>
 </div>
+<p class="mb-1 text-sm text-muted-foreground">
+	Add an API key for at least one provider to enable chat. Expand a provider below, enter
+	your key, and save it.
+</p>
+<p class="mb-4 text-xs text-muted-foreground">
+	Need a different provider? Any OpenAI API-compatible service can be added via the
+	<strong>+ Add Provider</strong> button above the list.
+</p>
 
 {#if !hideDefaultModel && defaultProviderMissingKey}
 	<div class="mb-4 rounded-md border border-amber-500/50 bg-amber-500/10 px-4 py-3 text-sm text-amber-700 dark:text-amber-400">

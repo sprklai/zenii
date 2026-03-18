@@ -8,6 +8,7 @@
 
 <p align="center">
   Install <strong>one binary</strong>. Now your scripts have <strong>AI memory</strong>. Your cron jobs <strong>reason</strong>. Your Telegram bot <strong>thinks</strong>.<br>
+  And they all share the same brain — same memory, same tools, one address.<br>
   A private AI backend for everything on your machine — native desktop app, plugins in <strong>any language</strong>, and an API your <code>curl</code> can call. Powered by Rust.<br>
   <a href="https://zenii.sprklai.com">https://zenii.sprklai.com</a><br>
   <a href="https://docs.zenii.sprklai.com">https://docs.zenii.sprklai.com</a>
@@ -88,6 +89,8 @@
   <img src="docs/assets/demo.gif" alt="Zenii terminal demo" width="720" />
 </p>
 
+> *"Every tool you use is smart in isolation. Zenii makes them smart together."*
+
 ## Quick Start
 
 **Download the latest installer** for your platform from [**GitHub Releases**](https://github.com/sprklai/zenii/releases/latest):
@@ -122,6 +125,7 @@ Or use the desktop app, CLI, or TUI — they all talk to the same backend.
 
 | Your pain | How Zenii fixes it |
 |-----------|-------------------|
+| **AI tools are islands — ChatGPT, Telegram, scripts, cron all have separate memory and context** | **One shared brain: every interface, channel, and script shares the same memory, tools, and intelligence via `localhost:18981`** |
 | Context resets every AI session | Semantic memory persists across sessions and survives restarts |
 | AI can't do things, only talk | 16 built-in tools: web search, file ops, shell, scheduling |
 | Locked into one AI provider | 18 providers, switch with one config change |
@@ -130,6 +134,19 @@ Or use the desktop app, CLI, or TUI — they all talk to the same backend.
 | Plugin systems require learning a framework | JSON-RPC over stdio — write plugins in Python, Go, JS, or anything |
 | AI doesn't learn your patterns | Self-evolving skills with human-in-the-loop approval |
 | AI can't run tasks while you sleep | Built-in cron scheduler for autonomous recurring tasks |
+
+## One Address. Everything Connects.
+
+Every AI tool you use today is an island. ChatGPT doesn't know what your Telegram bot discussed.
+Your Python scripts can't access the memory your CLI built. Your cron jobs reason in isolation.
+
+Zenii changes that. One address — `localhost:18981` — serves every interface, every channel,
+every automation, every language. Desktop app, CLI, TUI, Telegram, Slack, Discord,
+your Python scripts, your Go services, your shell one-liners — all sharing the same memory,
+same tools, same AI providers, same learned behaviors.
+
+Write a memory from Telegram. Recall it from Python. Schedule a task from the CLI.
+Get notified on Discord. **Nothing is siloed. Everything converges.**
 
 ## What Zenii is NOT
 
@@ -168,6 +185,26 @@ curl -X POST http://localhost:18981/channels/telegram/send \
   -d '{"content":"Deploy complete", "recipient":"123456"}'
 ```
 
+### Follow the Memory
+
+```bash
+# 9 AM — Store from desktop/CLI
+curl -X POST localhost:18981/memory \
+  -H "Content-Type: application/json" \
+  -d '{"key":"deploy","content":"Prod DB moved to port 5434"}'
+
+# 10 AM — Your Python deploy script asks
+curl -X POST localhost:18981/chat \
+  -H "Content-Type: application/json" \
+  -d '{"session_id":"deploy","prompt":"What port is prod DB on?"}'
+# → "5434"
+
+# 2 PM — Teammate asks via Telegram → same answer
+
+# 3 PM — Cron job generates status report → includes the update
+# One memory. Four interfaces. Zero configuration.
+```
+
 ---
 
 ## How It Compares
@@ -187,7 +224,7 @@ curl -X POST http://localhost:18981/channels/telegram/send \
 | **Offline** | **Ollama** | Ollama | Ollama | DuckDuckGo | LiteLLM | Optional | No |
 | **License** | **MIT** | Open source | Open source | MIT | AGPL-3.0 | AGPL-3.0 | Apache 2.0 |
 
-**No other project has ALL of these simultaneously**: native desktop GUI, 96-route REST/WS API, plugins in any language, semantic vector memory, self-evolution with human approval, under 20 MB binary, and MIT licensed.
+**No other project has ALL of these simultaneously**: native desktop GUI, 96-route REST/WS API where any language, any tool, any channel connects to the same shared intelligence, plugins in any language, semantic vector memory, self-evolution with human approval, under 20 MB binary, cross-system coherence where memory stored from any interface is instantly available everywhere, and MIT licensed.
 
 ---
 
@@ -390,6 +427,52 @@ sequenceDiagram
     S-->>C: { type: "tool_call", name: "websearch" }
     S-->>C: { type: "tool_result", result: "..." }
     S-->>C: { type: "done" }
+```
+
+### How Everything Connects
+
+```mermaid
+graph TD
+    subgraph Clients["Entry Points"]
+        Desktop[Desktop App]
+        CLI[CLI]
+        TUI[TUI]
+        Telegram[Telegram]
+        Slack[Slack]
+        Discord[Discord]
+        Python[Python Script]
+        GoSvc[Go Service]
+        Cron[Cron Job]
+        Curl[curl / HTTP]
+        Plugin[Plugin]
+    end
+
+    subgraph Core["Zenii Core — localhost:18981"]
+        GW[Gateway]
+        Mem[Memory]
+        Tools[Tools]
+        Prov[Providers]
+        Sched[Scheduler]
+        EvBus[Event Bus]
+    end
+
+    Desktop --> GW
+    CLI --> GW
+    TUI --> GW
+    Telegram --> GW
+    Slack --> GW
+    Discord --> GW
+    Python --> GW
+    GoSvc --> GW
+    Cron --> GW
+    Curl --> GW
+    Plugin --> GW
+
+    GW --> Mem
+    GW --> Tools
+    GW --> Prov
+    GW --> Sched
+    GW --> EvBus
 ```
 
 ### Feature Flag Composition
