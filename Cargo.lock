@@ -1762,7 +1762,7 @@ dependencies = [
  "foldhash 0.2.0",
  "html5ever 0.38.0",
  "precomputed-hash",
- "selectors 0.36.0",
+ "selectors 0.36.1",
  "tendril 0.5.0",
 ]
 
@@ -1951,9 +1951,9 @@ checksum = "d817e038c30374a4bcb22f94d0a8a0e216958d4c3dcde369b1439fec4bdda6e6"
 
 [[package]]
 name = "euclid"
-version = "0.22.13"
+version = "0.22.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "df61bf483e837f88d5c2291dcf55c67be7e676b3a51acc48db3a7b163b91ed63"
+checksum = "f1a05365e3b1c6d1650318537c7460c6923f1abdd272ad6842baa2b509957a06"
 dependencies = [
  "num-traits",
 ]
@@ -6368,9 +6368,9 @@ dependencies = [
 
 [[package]]
 name = "selectors"
-version = "0.36.0"
+version = "0.36.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "223b960be86f7d302b7168cdbab137f9bdbf7e04a90c185312fab14dff49dc5f"
+checksum = "c5d9c0c92a92d33f08817311cf3f2c29a3538a8240e94a6a3c622ce652d7e00c"
 dependencies = [
  "bitflags 2.11.0",
  "cssparser 0.36.0",
@@ -10061,11 +10061,11 @@ dependencies = [
 
 [[package]]
 name = "zenii"
-version = "0.0.26"
+version = "0.0.27"
 
 [[package]]
 name = "zenii-cli"
-version = "0.0.26"
+version = "0.0.27"
 dependencies = [
  "clap",
  "clap_complete",
@@ -10084,7 +10084,7 @@ dependencies = [
 
 [[package]]
 name = "zenii-core"
-version = "0.0.26"
+version = "0.0.27"
 dependencies = [
  "arc-swap",
  "async-trait",
@@ -10135,7 +10135,7 @@ dependencies = [
 
 [[package]]
 name = "zenii-daemon"
-version = "0.0.26"
+version = "0.0.27"
 dependencies = [
  "clap",
  "tokio",
@@ -10146,7 +10146,7 @@ dependencies = [
 
 [[package]]
 name = "zenii-desktop"
-version = "0.0.26"
+version = "0.0.27"
 dependencies = [
  "opener",
  "serde",
@@ -10167,7 +10167,7 @@ dependencies = [
 
 [[package]]
 name = "zenii-tui"
-version = "0.0.26"
+version = "0.0.27"
 dependencies = [
  "clap",
  "crossterm",

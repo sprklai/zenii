@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.27] - 2026-03-18
+
+### Fixed
+- Onboarding re-trigger bug: log credential access errors instead of silently swallowing them
+- Onboarding wizard now auto-skips to first incomplete step when re-triggered
+- Error handling added to model selection step in onboarding wizard
+- Improved keyring fallback warning with persistence and macOS code-signature hints
+- Added setup status diagnostic logging for debugging onboarding flow
+
+### Changed
+- Updated AI provider models: added GPT-5.4 family, Gemini 3.x, expanded OpenRouter and Vercel AI Gateway
+- Updated Anthropic model context limits (Opus/Sonnet 4.6 to 1M tokens)
+- Added provider documentation links in AI Providers settings page
+- LICENSE updated
+
 ## [0.0.26] - 2026-03-18
 
 ### Fixed
