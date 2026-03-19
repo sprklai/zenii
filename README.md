@@ -55,7 +55,7 @@
 
 <!-- Row 4: Quality & i18n -->
 <p align="center">
-  <img src="https://img.shields.io/badge/tests-1206%20Rust%20%2B%20JS-success?style=flat-square" alt="1206 Rust + JS Tests" />
+  <img src="https://img.shields.io/badge/tests-1272%20Rust%20%2B%20JS-success?style=flat-square" alt="1272 Rust + JS Tests" />
   <img src="https://img.shields.io/badge/i18n-EN-blue?style=flat-square" alt="English" />
 </p>
 
@@ -129,7 +129,7 @@ Or use the desktop app, CLI, or TUI — they all talk to the same backend.
 | Context resets every AI session | Semantic memory persists across sessions and survives restarts |
 | AI can't do things, only talk | 16 built-in tools: web search, file ops, shell, scheduling |
 | Locked into one AI provider | 18 providers, switch with one config change |
-| AI tools are cloud-only | 100% local, zero telemetry, OS keyring for secrets |
+| AI tools are cloud-only | 100% local, zero telemetry, encrypted credential storage |
 | "Works on my machine" for AI | Same binary on macOS, Linux, Windows — desktop, CLI, or daemon |
 | Plugin systems require learning a framework | JSON-RPC over stdio — write plugins in Python, Go, JS, or anything |
 | AI doesn't learn your patterns | Self-evolving skills with human-in-the-loop approval |
@@ -254,7 +254,7 @@ Your AI gets smarter. You stay in control. No surprises.
 - **Token usage tracking** — date-rotated JSONL logs for cost visibility
 - **Messaging channels** — Telegram, Slack, Discord (feature-gated)
 - **Cron scheduler** — automated recurring AI tasks
-- **6-layer security** — OS keyring, autonomy levels, FS sandbox, injection detection, rate limits, audit trail
+- **6-layer security** — OS keyring with encrypted file fallback, autonomy levels, FS sandbox, injection detection, rate limits, audit trail
 - **Cross-platform** — Linux, macOS, Windows, ARM (Raspberry Pi)
 
 <!-- Detailed feature descriptions below for SEO / deep readers -->
@@ -280,7 +280,7 @@ Your AI gets smarter. You stay in control. No surprises.
 - **Skills system** -- bundled + user markdown skills loaded into agent context (Claude Code model)
 - **Progressive user learning** -- SQLite-backed observations with category filtering, confidence scoring, and privacy controls
 - **Tool permission system** -- per-surface, risk-based tool permissions with 3 risk levels (Low/Medium/High), surface-specific overrides, and settings UI
-- **Secure credentials** via OS keyring with zeroize memory protection
+- **Secure credentials** via OS keyring with AES-256-GCM encrypted file fallback and zeroize memory protection. Fallback chain: KeyringStore → FileCredentialStore → InMemoryCredentialStore. Credentials persist even when the OS keyring is unavailable (macOS code-signature revocation, Linux without Secret Service, headless boards)
 - **Messaging channels** -- Telegram, Slack, Discord with lifecycle hooks (typing indicators, status messages) and end-to-end channel router pipeline (feature-gated, trait-based with DashMap registry)
 - **Cron scheduler** -- automated recurring tasks with real payload execution (Notify, AgentTurn, Heartbeat, SendViaChannel)
 - **Notifications** -- desktop OS notifications (tauri-plugin-notification) + web toast notifications (svelte-sonner) via WebSocket push
@@ -340,7 +340,7 @@ graph TD
     core --> rusqlite["rusqlite<br>#40;database#41;"]
     core --> rigcore["rig-core<br>#40;AI#41;"]
     core --> tokio["tokio<br>#40;async#41;"]
-    core --> keyring["keyring<br>#40;credentials#41;"]
+    core --> keyring["keyring + aes-gcm<br>#40;credentials#41;"]
     core --> serdeyaml["serde_yaml<br>#40;YAML frontmatter#41;"]
     core -.-> teloxide["teloxide<br>#40;Telegram, feature-gated#41;"]
     core -.-> serenity["serenity<br>#40;Discord, feature-gated#41;"]
@@ -394,7 +394,7 @@ sequenceDiagram
     App->>Cfg: Parse CLI args + load TOML
     App->>App: Initialize tracing
     App->>DB: Open/create database + migrations
-    App->>Cred: Initialize credential store
+    App->>Cred: Initialize credential store (keyring → file → memory)
     App->>AI: Register providers + load API keys
     App->>AI: Register 14 base + 2 feature-gated agent tools
     App->>Ctx: Init ContextEngine + BootContext (OS, location, timezone)
@@ -717,6 +717,7 @@ max_tool_retries = 3
 # user_name = "John"                        # Display name for greetings
 # user_timezone = "America/New_York"        # IANA timezone (auto-detected on first run)
 # user_location = "New York, US"            # User location for context-aware queries
+# credential_file_path = "/custom/path/credentials.enc"  # Override encrypted credential file location
 # plugins_dir = "/custom/plugins/path"      # Override default plugins directory
 # plugin_auto_update = false                # Auto-update git-sourced plugins
 ```
@@ -766,7 +767,7 @@ Global options: `--host`, `--port`, `--token` (or `ZENII_TOKEN` env var)
 | Memory | `POST /memory`, `GET /memory`, `GET/PUT/DELETE /memory/{key}` | Semantic memory CRUD |
 | Config | `GET /config`, `PUT /config`, `GET /config/file` | Configuration management |
 | Setup | `GET /setup/status` | First-run onboarding status |
-| Credentials | `POST/GET /credentials`, `DELETE /credentials/{key}`, `GET /credentials/{key}/value`, `GET /credentials/{key}/exists` | Credential management (keyring) |
+| Credentials | `POST/GET /credentials`, `DELETE /credentials/{key}`, `GET /credentials/{key}/value`, `GET /credentials/{key}/exists` | Credential management (keyring → encrypted file → memory) |
 | Providers & Models | `GET/POST /providers`, `GET /providers/with-key-status`, `GET/PUT /providers/default`, `GET/PUT/DELETE /providers/{id}`, `POST /providers/{id}/test`, `POST /providers/{id}/models`, `DELETE /providers/{id}/models/{model_id}`, `GET /models` | Multi-provider AI management |
 | Tools | `GET /tools`, `POST /tools/{name}/execute` | Tool listing and execution |
 | Permissions | `GET /permissions`, `GET /permissions/{surface}`, `PUT/DELETE /permissions/{surface}/{tool}` | Per-surface tool permissions |
