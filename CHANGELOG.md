@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.28] - 2026-03-18
+
+### Fixed
+- Prevent onboarding re-trigger on restart with persistent `onboarding_completed` flag in config.toml
+- Works across all platforms: macOS Keychain revocation, Linux in-memory fallback, Windows
+- Chat view shows actionable banner when API key is missing instead of re-running full wizard
+
 ## [0.0.27] - 2026-03-18
 
 ### Fixed
