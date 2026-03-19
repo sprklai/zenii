@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Onboarding no longer re-triggers when API keys are missing — only `user_name` and `user_location` gate setup
+- Auto-migration for pre-v0.0.28 configs: infers completed onboarding from filled profile fields
+
 ## [0.0.28] - 2026-03-18
 
 ### Fixed

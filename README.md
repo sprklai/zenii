@@ -209,22 +209,22 @@ curl -X POST localhost:18981/chat \
 
 ## How It Compares
 
-| | **Zenii** | OpenClaw | ZeroClaw | PicoClaw | Open Interpreter | Khoj | Gemini CLI |
-|---|---|---|---|---|---|---|---|
-| **Category** | **AI backend** | Chat agent | Minimal daemon | Edge AI assistant | Code REPL | Document brain | Terminal AI |
-| **Stars** | New | 210k+ | 20k+ | 24.8k | 62.6k | 32.8k | 97.8k |
-| **Language** | **Rust** | TypeScript | Rust | Go | Python | Python/TS | TypeScript |
-| **Binary** | **<20 MB (w/ GUI)** | ~100 MB+ | ~3.4 MB | <10 MB RAM | N/A (Python) | N/A (Docker) | N/A (npm) |
-| **Desktop GUI** | **Native (Tauri 2)** | -- | -- | Web console | -- | Browser | -- |
-| **API Routes** | **96 REST+WS** | Chat endpoint | Daemon endpoint | Webhook gateway | -- | -- | -- |
-| **Plugins** | **Any language** | JS only | Rust only | Tool-based | -- | -- | -- |
-| **Memory** | **FTS5 + vectors** | File-based | Basic | Workspace logs | -- | Doc search | -- |
-| **Self-Evolution** | **Human-approved** | Autonomous | -- | Agent-generated | -- | -- | -- |
-| **Scheduling** | **Cron + one-shot** | Cron | -- | Built-in | -- | Automations | -- |
-| **Offline** | **Ollama** | Ollama | Ollama | DuckDuckGo | LiteLLM | Optional | No |
-| **License** | **MIT** | Open source | Open source | MIT | AGPL-3.0 | AGPL-3.0 | Apache 2.0 |
+| | **Zenii** | OpenClaw | NemoClaw | ZeroClaw | PicoClaw | Open Interpreter | Khoj | Gemini CLI |
+|---|---|---|---|---|---|---|---|---|
+| **Category** | **AI backend** | Chat agent | Enterprise security wrapper | Minimal daemon | Edge AI assistant | Code REPL | Document brain | Terminal AI |
+| **Stars** | New | 210k+ | New (NVIDIA-backed) | 20k+ | 24.8k | 62.6k | 32.8k | 97.8k |
+| **Language** | **Rust** | TypeScript | TypeScript + Python | Rust | Go | Python | Python/TS | TypeScript |
+| **Binary** | **<20 MB (w/ GUI)** | ~100 MB+ | Docker container (~500 MB+) | ~3.4 MB | <10 MB RAM | N/A (Python) | N/A (Docker) | N/A (npm) |
+| **Desktop GUI** | **Native (Tauri 2)** | -- | -- | -- | Web console | -- | Browser | -- |
+| **API Routes** | **96 REST+WS** | Chat endpoint | Inherits OpenClaw | Daemon endpoint | Webhook gateway | -- | -- | -- |
+| **Plugins** | **Any language** | JS only | Inherits OpenClaw (JS) | Rust only | Tool-based | -- | -- | -- |
+| **Memory** | **FTS5 + vectors** | File-based | Inherits OpenClaw (file) | Basic | Workspace logs | -- | Doc search | -- |
+| **Self-Evolution** | **Human-approved** | Autonomous | Inherits OpenClaw (sandboxed) | -- | Agent-generated | -- | -- | -- |
+| **Scheduling** | **Cron + one-shot** | Cron | Inherits OpenClaw | -- | Built-in | -- | Automations | -- |
+| **Offline** | **Ollama** | Ollama | NVIDIA Nemotron primary | Ollama | DuckDuckGo | LiteLLM | Optional | No |
+| **License** | **MIT** | Open source | Apache 2.0 | Open source | MIT | AGPL-3.0 | AGPL-3.0 | Apache 2.0 |
 
-**No other project has ALL of these simultaneously**: native desktop GUI, 96-route REST/WS API where any language, any tool, any channel connects to the same shared intelligence, plugins in any language, semantic vector memory, self-evolution with human approval, under 20 MB binary, cross-system coherence where memory stored from any interface is instantly available everywhere, and MIT licensed.
+**No other project has ALL of these simultaneously**: native desktop GUI, 96-route REST/WS API where any language, any tool, any channel connects to the same shared intelligence, plugins in any language, semantic vector memory, self-evolution with human approval, under 20 MB binary, cross-system coherence where memory stored from any interface is instantly available everywhere, and MIT licensed. NemoClaw brings the strongest kernel-level sandboxing (Landlock + seccomp + netns) but requires Linux + Docker (~500 MB+) — Zenii delivers built-in 6-layer security natively on macOS, Windows, and Linux in under 20 MB.
 
 ---
 

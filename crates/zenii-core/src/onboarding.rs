@@ -25,8 +25,11 @@ pub struct SetupStatus {
 ///
 /// Otherwise, `needs_setup` is true when:
 /// - `user_name` is not set, OR
-/// - `user_location` is not set, OR
-/// - no provider has an API key configured
+/// - `user_location` is not set
+///
+/// API key availability does NOT gate onboarding — the chat banner handles
+/// missing keys. This avoids re-triggering onboarding when the credential
+/// store is inaccessible (e.g., macOS Keychain after binary recompilation).
 ///
 /// Timezone is NOT required (auto-detected via `iana-time-zone`).
 pub async fn check_setup_status<C: CredentialStore + ?Sized>(
@@ -48,6 +51,20 @@ pub async fn check_setup_status<C: CredentialStore + ?Sized>(
         };
     }
 
+    // Migration: if profile is complete but flag wasn't set (pre-v0.0.28 user),
+    // treat onboarding as done — the flag didn't exist in older versions.
+    if !config.onboarding_completed
+        && config.user_name.as_ref().is_some_and(|n| !n.is_empty())
+        && config.user_location.as_ref().is_some_and(|l| !l.is_empty())
+    {
+        return SetupStatus {
+            needs_setup: false,
+            missing: vec![],
+            detected_timezone,
+            has_usable_model: has_any_api_key(credentials, provider_ids).await,
+        };
+    }
+
     let mut missing = Vec::new();
 
     if config.user_name.is_none() || config.user_name.as_deref() == Some("") {
@@ -57,11 +74,9 @@ pub async fn check_setup_status<C: CredentialStore + ?Sized>(
         missing.push("user_location".to_string());
     }
 
-    // Check if any provider has an API key
+    // API key check is informational only — does NOT trigger onboarding.
+    // The chat banner handles missing API keys gracefully.
     let has_usable_model = has_any_api_key(credentials, provider_ids).await;
-    if !has_usable_model {
-        missing.push("api_key".to_string());
-    }
 
     SetupStatus {
         needs_setup: !missing.is_empty(),
@@ -129,12 +144,27 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn needs_setup_when_no_api_key() {
+    async fn no_retrigger_when_profile_complete_but_no_api_key() {
+        // Profile complete + no API key = onboarding NOT re-triggered.
+        // API key absence is handled by the chat banner, not onboarding.
         let cfg = config_with_profile();
         let creds = InMemoryCredentialStore::new();
         let status = check_setup_status(&cfg, &creds, &["openai".into()]).await;
-        assert!(status.needs_setup);
-        assert!(status.missing.contains(&"api_key".to_string()));
+        assert!(!status.needs_setup);
+        assert!(!status.has_usable_model);
+    }
+
+    #[tokio::test]
+    async fn migration_pre_flag_config() {
+        // Pre-v0.0.28 config: user_name + user_location set, no onboarding_completed flag.
+        // Should infer onboarding was completed and NOT re-trigger.
+        let cfg = config_with_profile();
+        assert!(!cfg.onboarding_completed); // flag defaults to false
+        let creds = InMemoryCredentialStore::new();
+        creds.set("api_key:openai", "sk-test").await.ok();
+        let status = check_setup_status(&cfg, &creds, &["openai".into()]).await;
+        assert!(!status.needs_setup);
+        assert!(status.has_usable_model);
     }
 
     #[tokio::test]
@@ -177,13 +207,13 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn ollama_no_key_still_counts() {
-        // Ollama doesn't require API key, but if it's the only provider and has no key,
-        // has_usable_model is false. The UI/CLI should handle Ollama specially.
+    async fn ollama_no_key_profile_complete() {
+        // Profile complete + Ollama with no key = onboarding NOT re-triggered.
+        // has_usable_model is false but that's informational for the chat banner.
         let cfg = config_with_profile();
         let creds = InMemoryCredentialStore::new();
         let status = check_setup_status(&cfg, &creds, &["ollama".into()]).await;
-        assert!(status.needs_setup);
+        assert!(!status.needs_setup);
         assert!(!status.has_usable_model);
     }
 }
