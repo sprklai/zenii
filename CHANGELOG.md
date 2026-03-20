@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.31] - 2026-03-20
+
+### Added
+- Human schedule type for scheduler with cron timezone fix and auto-cleanup of one-time jobs
+- Unified diagnostic file logging across all binaries (desktop, daemon, CLI, TUI)
+- Session list refresh button with auto-reload on focus
+- Documentation link in sidebar
+
+### Fixed
+- Whole-app workflow audit: security, agent safety, lifecycle, and cleanup improvements
+- Channel broadcast for scheduler/notifications, replaced datetime-local input
+- Scheduler execution audit: publish agent responses, parallel jobs, error backoff
+- Shell command permissions in chat: OS-aware security, expanded risk lists, surface-based tool filtering
+
+### Docs
+- Documented unified diagnostic logging across all binaries
+
 ## [0.0.30] - 2026-03-19
 
 ### Added
