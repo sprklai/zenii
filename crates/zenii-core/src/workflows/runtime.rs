@@ -17,8 +17,8 @@ pub async fn dispatch_step(
             let args_str = serde_json::to_string(args)
                 .map_err(|e| ZeniiError::Workflow(format!("args serialize error: {e}")))?;
             let resolved_args_str = templates::resolve(&args_str, step_outputs)?;
-            let resolved_args: serde_json::Value =
-                serde_json::from_str(&resolved_args_str).map_err(|e| {
+            let resolved_args: serde_json::Value = serde_json::from_str(&resolved_args_str)
+                .map_err(|e| {
                     ZeniiError::Workflow(format!("args parse error after template: {e}"))
                 })?;
 
@@ -72,16 +72,14 @@ mod tests {
     use std::sync::Arc;
 
     use super::*;
-    use crate::tools::system_info::SystemInfoTool;
     use crate::tools::ToolRegistry;
+    use crate::tools::system_info::SystemInfoTool;
 
     // 5.38
     #[tokio::test]
     async fn dispatch_tool_step() {
         let tools = ToolRegistry::new();
-        tools
-            .register(Arc::new(SystemInfoTool::new()))
-            .unwrap();
+        tools.register(Arc::new(SystemInfoTool::new())).unwrap();
         let outputs = HashMap::new();
 
         let step = StepType::Tool {

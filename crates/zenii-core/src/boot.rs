@@ -787,13 +787,12 @@ pub async fn init_services(config: AppConfig) -> Result<Services> {
         }
     };
     #[cfg(feature = "workflows")]
-    let workflow_executor_init =
-        Some(Arc::new(crate::workflows::executor::WorkflowExecutor::new(
-            pool.clone(),
-            config.workflow_max_steps,
-            config.workflow_step_timeout_secs,
-            config.workflow_step_max_retries,
-        )));
+    let workflow_executor_init = Some(Arc::new(crate::workflows::executor::WorkflowExecutor::new(
+        pool.clone(),
+        config.workflow_max_steps,
+        config.workflow_step_timeout_secs,
+        config.workflow_step_max_retries,
+    )));
 
     info!("All services initialized");
 

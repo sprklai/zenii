@@ -105,9 +105,14 @@ pub fn boot_gateway(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Erro
 
                 info!("Starting embedded gateway on {host}:{port}");
                 if let Err(e) = gateway
-                    .start_with_shutdown(&host, port, async {
-                        let _ = shutdown_rx.await;
-                    }, Some(ready_tx))
+                    .start_with_shutdown(
+                        &host,
+                        port,
+                        async {
+                            let _ = shutdown_rx.await;
+                        },
+                        Some(ready_tx),
+                    )
                     .await
                 {
                     let msg = format!("Embedded gateway error: {e}");

@@ -168,7 +168,11 @@ fn render_delegation_tree<'a>(delegation: &DelegationState, theme: &Theme) -> Ve
 
     for (i, agent) in delegation.agents.iter().enumerate() {
         let is_last = i == agent_count - 1;
-        let connector = if is_last { "\u{2514}\u{2500} " } else { "\u{251C}\u{2500} " };
+        let connector = if is_last {
+            "\u{2514}\u{2500} "
+        } else {
+            "\u{251C}\u{2500} "
+        };
         let sub_connector = if is_last { "   " } else { "\u{2502}  " };
 
         // Build the agent summary line
@@ -177,11 +181,17 @@ fn render_delegation_tree<'a>(delegation: &DelegationState, theme: &Theme) -> Ve
             AgentDisplayStatus::Running => ("", theme.agent_running, String::new()),
             AgentDisplayStatus::Completed { duration_ms } => {
                 let secs = *duration_ms as f64 / 1000.0;
-                ("\u{2713} ", theme.agent_complete, format!("completed ({secs:.1}s) \u{00B7} "))
+                (
+                    "\u{2713} ",
+                    theme.agent_complete,
+                    format!("completed ({secs:.1}s) \u{00B7} "),
+                )
             }
-            AgentDisplayStatus::Failed { .. } => {
-                ("\u{2717} ", theme.agent_failed, "failed \u{00B7} ".to_string())
-            }
+            AgentDisplayStatus::Failed { .. } => (
+                "\u{2717} ",
+                theme.agent_failed,
+                "failed \u{00B7} ".to_string(),
+            ),
         };
 
         let stats = format!(
@@ -193,7 +203,15 @@ fn render_delegation_tree<'a>(delegation: &DelegationState, theme: &Theme) -> Ve
         lines.push(Line::from(vec![
             Span::styled(connector.to_string(), theme.agent_connector),
             Span::styled(
-                format!("{}{}", agent.description, if status_suffix.is_empty() && stats.is_empty() { "" } else { " \u{00B7} " }),
+                format!(
+                    "{}{}",
+                    agent.description,
+                    if status_suffix.is_empty() && stats.is_empty() {
+                        ""
+                    } else {
+                        " \u{00B7} "
+                    }
+                ),
                 status_style,
             ),
             Span::styled(format!("{status_icon}{status_suffix}"), status_style),

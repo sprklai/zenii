@@ -67,7 +67,10 @@ async fn main() {
         info!("Shutdown signal received, draining connections...");
     };
 
-    if let Err(e) = gateway.start_with_shutdown(&host, port, shutdown, None).await {
+    if let Err(e) = gateway
+        .start_with_shutdown(&host, port, shutdown, None)
+        .await
+    {
         error!("Gateway server error: {e}");
         std::process::exit(1);
     }

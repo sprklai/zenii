@@ -29,10 +29,7 @@ impl SubAgent {
         let desc_preview = &task.description[..task.description.len().min(80)];
         let session = state
             .session_manager
-            .create_session_with_source(
-                &format!("delegation: {desc_preview}"),
-                "delegation",
-            )
+            .create_session_with_source(&format!("delegation: {desc_preview}"), "delegation")
             .await?;
 
         let tools = if let Some(ref allowlist) = task.tool_allowlist {
@@ -54,9 +51,15 @@ impl SubAgent {
         // Create per-agent broadcast channel for tool events
         let (tool_tx, tool_rx) = broadcast::channel::<ToolCallEvent>(128);
 
-        let agent =
-            crate::ai::resolve_agent_with_tools(None, state, Some(tool_tx), None, Some(tools), surface)
-                .await?;
+        let agent = crate::ai::resolve_agent_with_tools(
+            None,
+            state,
+            Some(tool_tx),
+            None,
+            Some(tools),
+            surface,
+        )
+        .await?;
 
         Ok(Self {
             task,
@@ -93,7 +96,9 @@ impl SubAgent {
                     Ok(evt) => {
                         match &evt.phase {
                             ToolCallPhase::Started { .. } => {
-                                let current = tool_uses_clone.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
+                                let current = tool_uses_clone
+                                    .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+                                    + 1;
                                 // Throttle progress events to max 1/sec
                                 if last_emit.elapsed() >= throttle {
                                     let _ = event_bus.publish(
@@ -177,8 +182,10 @@ mod tests {
 
     /// Set up state with an openai credential and last_used_model pointing to it.
     #[cfg(feature = "ai")]
-    async fn setup_state_with_agent(
-    ) -> (tempfile::TempDir, std::sync::Arc<crate::gateway::state::AppState>) {
+    async fn setup_state_with_agent() -> (
+        tempfile::TempDir,
+        std::sync::Arc<crate::gateway::state::AppState>,
+    ) {
         let (dir, state) = crate::gateway::handlers::tests::test_state().await;
         state
             .credentials
@@ -208,7 +215,9 @@ mod tests {
             depends_on: vec![],
         };
 
-        let sub = SubAgent::new(task, &state, "desktop", "d-test".into()).await.unwrap();
+        let sub = SubAgent::new(task, &state, "desktop", "d-test".into())
+            .await
+            .unwrap();
         assert!(!sub.session_id().is_empty());
 
         let session = state

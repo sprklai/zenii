@@ -234,8 +234,14 @@ pub fn build_router(state: Arc<AppState>) -> Router {
         // Workflows (Feature 5)
         .merge(workflow_routes())
         // Agent Delegation
-        .route("/agents/active", get(handlers::delegation::list_active_agents))
-        .route("/agents/{id}/cancel", post(handlers::delegation::cancel_agent))
+        .route(
+            "/agents/active",
+            get(handlers::delegation::list_active_agents),
+        )
+        .route(
+            "/agents/{id}/cancel",
+            post(handlers::delegation::cancel_agent),
+        )
         // WebSocket
         .route("/ws/chat", get(handlers::ws::ws_chat))
         .route("/ws/notifications", get(handlers::ws::ws_notifications))
@@ -350,13 +356,11 @@ fn workflow_routes() -> Router<Arc<AppState>> {
         Router::new()
             .route(
                 "/workflows",
-                get(handlers::workflows::list_workflows)
-                    .post(handlers::workflows::create_workflow),
+                get(handlers::workflows::list_workflows).post(handlers::workflows::create_workflow),
             )
             .route(
                 "/workflows/{id}",
-                get(handlers::workflows::get_workflow)
-                    .delete(handlers::workflows::delete_workflow),
+                get(handlers::workflows::get_workflow).delete(handlers::workflows::delete_workflow),
             )
             .route(
                 "/workflows/{id}/run",

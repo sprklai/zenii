@@ -76,7 +76,12 @@ mod tests {
         // Accessing a field on a missing step returns a template render error
         let result = resolve("{{ steps.missing.output }}", &outputs);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("template render error"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("template render error")
+        );
     }
 
     // 5.16
@@ -95,8 +100,11 @@ mod tests {
         let (k2, o2) = make_output("s2", "beta", true);
         outputs.insert(k1, o1);
         outputs.insert(k2, o2);
-        let result =
-            resolve("A: {{ steps.s1.output }}, B: {{ steps.s2.output }}", &outputs).unwrap();
+        let result = resolve(
+            "A: {{ steps.s1.output }}, B: {{ steps.s2.output }}",
+            &outputs,
+        )
+        .unwrap();
         assert_eq!(result, "A: alpha, B: beta");
     }
 

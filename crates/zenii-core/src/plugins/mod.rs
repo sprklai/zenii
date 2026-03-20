@@ -49,7 +49,9 @@ pub(crate) mod test_helpers {
 
     /// Returns the real zenii-plugins path, or None if not available.
     pub fn real_plugins_path() -> Option<PathBuf> {
-        let path = std::env::var("ZENII_PLUGINS_PATH").ok().map(PathBuf::from)?;
+        let path = std::env::var("ZENII_PLUGINS_PATH")
+            .ok()
+            .map(PathBuf::from)?;
         if path.exists() { Some(path) } else { None }
     }
 

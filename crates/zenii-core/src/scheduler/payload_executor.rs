@@ -30,9 +30,7 @@ pub async fn execute(
         JobPayload::SendViaChannel { channel, message } => {
             execute_send_via_channel(job, channel, message, app_state).await
         }
-        JobPayload::Workflow { workflow_id } => {
-            execute_workflow(job, workflow_id, app_state).await
-        }
+        JobPayload::Workflow { workflow_id } => execute_workflow(job, workflow_id, app_state).await,
     };
 
     // Publish completion event
@@ -280,7 +278,10 @@ async fn execute_workflow(
             return JobStatus::Skipped;
         };
 
-        match executor.execute(&workflow, &state.tools, state.event_bus.as_ref()).await {
+        match executor
+            .execute(&workflow, &state.tools, state.event_bus.as_ref())
+            .await
+        {
             Ok(run) => {
                 info!(
                     "Scheduler job '{}': Workflow '{}' completed (run {})",

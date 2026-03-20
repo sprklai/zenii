@@ -17,7 +17,12 @@ pub struct WorkflowExecutor {
 }
 
 impl WorkflowExecutor {
-    pub fn new(db: DbPool, max_steps: usize, step_timeout_secs: u64, step_max_retries: u32) -> Self {
+    pub fn new(
+        db: DbPool,
+        max_steps: usize,
+        step_timeout_secs: u64,
+        step_max_retries: u32,
+    ) -> Self {
         Self {
             db,
             max_steps,
@@ -61,9 +66,8 @@ impl WorkflowExecutor {
         }
 
         // Validate acyclic
-        toposort(&graph, None).map_err(|_| {
-            ZeniiError::Workflow("workflow contains cyclic dependencies".into())
-        })?;
+        toposort(&graph, None)
+            .map_err(|_| ZeniiError::Workflow("workflow contains cyclic dependencies".into()))?;
 
         Ok((graph, indices))
     }
@@ -85,9 +89,8 @@ impl WorkflowExecutor {
         }
 
         let (graph, _indices) = Self::build_dag(&workflow.steps)?;
-        let topo = toposort(&graph, None).map_err(|_| {
-            ZeniiError::Workflow("workflow contains cyclic dependencies".into())
-        })?;
+        let topo = toposort(&graph, None)
+            .map_err(|_| ZeniiError::Workflow("workflow contains cyclic dependencies".into()))?;
 
         let run_id = uuid::Uuid::new_v4().to_string();
         let started_at = chrono::Utc::now().to_rfc3339();
@@ -521,9 +524,7 @@ mod tests {
         let executor = WorkflowExecutor::new(pool, 50, 300, 3);
         let tools = crate::tools::ToolRegistry::new();
         tools
-            .register(Arc::new(
-                crate::tools::system_info::SystemInfoTool::new(),
-            ))
+            .register(Arc::new(crate::tools::system_info::SystemInfoTool::new()))
             .unwrap();
         let bus = crate::event_bus::TokioBroadcastBus::new(16);
 
@@ -606,9 +607,7 @@ mod tests {
         let executor = WorkflowExecutor::new(pool, 50, 300, 3);
         let tools = crate::tools::ToolRegistry::new();
         tools
-            .register(Arc::new(
-                crate::tools::system_info::SystemInfoTool::new(),
-            ))
+            .register(Arc::new(crate::tools::system_info::SystemInfoTool::new()))
             .unwrap();
         let bus = crate::event_bus::TokioBroadcastBus::new(16);
 
@@ -699,9 +698,7 @@ mod tests {
         let executor = WorkflowExecutor::new(pool, 50, 300, 3);
         let tools = crate::tools::ToolRegistry::new();
         tools
-            .register(Arc::new(
-                crate::tools::system_info::SystemInfoTool::new(),
-            ))
+            .register(Arc::new(crate::tools::system_info::SystemInfoTool::new()))
             .unwrap();
         let bus = crate::event_bus::TokioBroadcastBus::new(16);
 

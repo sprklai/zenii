@@ -5,8 +5,6 @@ pub mod chat;
 pub mod config;
 pub mod credentials;
 pub mod delegation;
-#[cfg(feature = "workflows")]
-pub mod workflows;
 pub mod embeddings;
 pub mod health;
 pub mod identity;
@@ -24,6 +22,8 @@ pub mod skills;
 pub mod system;
 pub mod tools;
 pub mod user;
+#[cfg(feature = "workflows")]
+pub mod workflows;
 pub mod ws;
 
 #[cfg(test)]

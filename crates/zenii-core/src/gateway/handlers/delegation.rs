@@ -14,9 +14,7 @@ pub struct ActiveAgentsResponse {
     pub agents: Vec<String>,
 }
 
-pub async fn list_active_agents(
-    State(state): State<Arc<AppState>>,
-) -> impl IntoResponse {
+pub async fn list_active_agents(State(state): State<Arc<AppState>>) -> impl IntoResponse {
     let agents = state.coordinator.active_agents();
     Json(ActiveAgentsResponse { agents })
 }
@@ -28,9 +26,7 @@ pub async fn cancel_agent(
     if state.coordinator.cancel(&id) {
         Ok(StatusCode::NO_CONTENT)
     } else {
-        Err(ZeniiError::NotFound(format!(
-            "delegation '{id}' not found"
-        )))
+        Err(ZeniiError::NotFound(format!("delegation '{id}' not found")))
     }
 }
 

@@ -231,7 +231,9 @@ mod tests {
         assert!(json.contains("workflow"));
         assert!(json.contains("my-workflow-123"));
         let back: JobPayload = serde_json::from_str(&json).unwrap();
-        assert!(matches!(back, JobPayload::Workflow { workflow_id } if workflow_id == "my-workflow-123"));
+        assert!(
+            matches!(back, JobPayload::Workflow { workflow_id } if workflow_id == "my-workflow-123")
+        );
     }
 
     // 16.8 — SessionTarget variants

@@ -4,8 +4,8 @@ use dashmap::DashMap;
 use tracing::{info, warn};
 
 use crate::ai::agent::TokenUsage;
-use crate::ai::delegation::task::{DelegationResult, DelegationTask, TaskResult, TaskStatus};
 use crate::ai::delegation::DelegationConfig;
+use crate::ai::delegation::task::{DelegationResult, DelegationTask, TaskResult, TaskStatus};
 use crate::event_bus::DelegationAgentInfo;
 use crate::{Result, ZeniiError};
 
@@ -96,13 +96,12 @@ impl Coordinator {
         let response = agent.prompt(&decompose_prompt).await?;
         let json_text = extract_json(&response.output);
 
-        let mut tasks: Vec<DelegationTask> =
-            serde_json::from_str(json_text).map_err(|e| {
-                ZeniiError::Agent(format!(
-                    "failed to parse decomposition response as JSON: {e}\nResponse: {}",
-                    &response.output[..response.output.len().min(200)]
-                ))
-            })?;
+        let mut tasks: Vec<DelegationTask> = serde_json::from_str(json_text).map_err(|e| {
+            ZeniiError::Agent(format!(
+                "failed to parse decomposition response as JSON: {e}\nResponse: {}",
+                &response.output[..response.output.len().min(200)]
+            ))
+        })?;
 
         for task in &mut tasks {
             task.token_budget = self.config.per_agent_token_budget;
@@ -126,8 +125,7 @@ impl Coordinator {
         let start = std::time::Instant::now();
 
         let decomp_model = self.config.decomposition_model.as_deref();
-        let agent =
-            crate::ai::resolve_agent(decomp_model, state, None, None, surface).await?;
+        let agent = crate::ai::resolve_agent(decomp_model, state, None, None, surface).await?;
 
         let tasks = self.decompose(prompt, &agent).await?;
         if tasks.is_empty() {
@@ -149,8 +147,9 @@ impl Coordinator {
         );
 
         // Emit DelegationStarted with all agent info
-        let _ = state.event_bus.publish(
-            crate::event_bus::AppEvent::DelegationStarted {
+        let _ = state
+            .event_bus
+            .publish(crate::event_bus::AppEvent::DelegationStarted {
                 delegation_id: delegation_id.clone(),
                 agents: tasks
                     .iter()
@@ -159,8 +158,7 @@ impl Coordinator {
                         description: t.description.clone(),
                     })
                     .collect(),
-            },
-        );
+            });
 
         // Execute tasks in dependency waves
         let mut completed: HashMap<String, TaskResult> = HashMap::new();
@@ -201,13 +199,13 @@ impl Coordinator {
             let mut join_set = tokio::task::JoinSet::new();
             for task in ready {
                 let task_id = task.id.clone();
-                let _ = state.event_bus.publish(
-                    crate::event_bus::AppEvent::SubAgentSpawned {
+                let _ = state
+                    .event_bus
+                    .publish(crate::event_bus::AppEvent::SubAgentSpawned {
                         delegation_id: delegation_id.clone(),
                         agent_id: task_id.clone(),
                         task: task.description.clone(),
-                    },
-                );
+                    });
 
                 match SubAgent::new(task, state, surface, delegation_id.clone()).await {
                     Ok(sub) => {
@@ -276,13 +274,13 @@ impl Coordinator {
         let total_duration_ms = start.elapsed().as_millis() as u64;
 
         // Emit DelegationCompleted
-        let _ = state.event_bus.publish(
-            crate::event_bus::AppEvent::DelegationCompleted {
+        let _ = state
+            .event_bus
+            .publish(crate::event_bus::AppEvent::DelegationCompleted {
                 delegation_id: delegation_id.clone(),
                 total_duration_ms,
                 total_tokens: total_usage.total_tokens,
-            },
-        );
+            });
 
         let results: Vec<TaskResult> = completed.into_values().collect();
         let aggregated = self.aggregate(prompt, &results, &agent).await?;
@@ -393,7 +391,11 @@ mod tests {
             ..Default::default()
         };
         let coord = Coordinator::new(config);
-        let tasks = vec![make_task("t1", vec![]), make_task("t2", vec![]), make_task("t3", vec![])];
+        let tasks = vec![
+            make_task("t1", vec![]),
+            make_task("t2", vec![]),
+            make_task("t3", vec![]),
+        ];
 
         let result = coord.validate_tasks(&tasks, &[]);
         assert!(result.is_err());

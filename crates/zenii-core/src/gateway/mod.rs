@@ -85,9 +85,14 @@ mod tests {
         let server = GatewayServer::new(state);
         let handle = tokio::spawn(async move {
             server
-                .start_with_shutdown("127.0.0.1", port, async {
-                    let _ = rx.await;
-                }, None)
+                .start_with_shutdown(
+                    "127.0.0.1",
+                    port,
+                    async {
+                        let _ = rx.await;
+                    },
+                    None,
+                )
                 .await
         });
 
@@ -114,9 +119,14 @@ mod tests {
         let server = GatewayServer::new(state);
         let handle = tokio::spawn(async move {
             server
-                .start_with_shutdown("127.0.0.1", port, async {
-                    let _ = rx.await;
-                }, None)
+                .start_with_shutdown(
+                    "127.0.0.1",
+                    port,
+                    async {
+                        let _ = rx.await;
+                    },
+                    None,
+                )
                 .await
         });
 
