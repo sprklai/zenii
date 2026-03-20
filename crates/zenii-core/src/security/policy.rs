@@ -6,6 +6,9 @@ use parking_lot::Mutex;
 
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
+use tracing::warn;
+
+use crate::config::AppConfig;
 
 /// The level of autonomy granted to the agent.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -14,6 +17,23 @@ pub enum AutonomyLevel {
     ReadOnly,
     Supervised,
     Full,
+}
+
+impl AutonomyLevel {
+    /// Parse a string into an AutonomyLevel, falling back to Supervised for unrecognized values.
+    pub fn from_str_lossy(s: &str) -> Self {
+        match s.to_lowercase().as_str() {
+            "readonly" | "read_only" | "read-only" => Self::ReadOnly,
+            "full" => Self::Full,
+            "supervised" => Self::Supervised,
+            other => {
+                warn!(
+                    "Unrecognized autonomy level '{other}', defaulting to Supervised"
+                );
+                Self::Supervised
+            }
+        }
+    }
 }
 
 /// Risk classification for a command.
@@ -84,25 +104,58 @@ impl RateLimiter {
 /// Commands that are always denied regardless of autonomy level.
 const BLOCKED_COMMANDS: &[&str] = &[
     "rm", "sudo", "chmod", "chown", "kill", "pkill", "shutdown", "reboot", "dd", "mkfs", "fdisk",
+    // Windows equivalents
+    "format", "runas",
 ];
 
 /// Commands classified as low risk (read-only / informational).
-const LOW_RISK_COMMANDS: &[&str] = &["ls", "cat", "head", "tail", "echo", "pwd", "whoami", "date"];
+const LOW_RISK_COMMANDS: &[&str] = &[
+    // Unix read-only
+    "ls", "cat", "head", "tail", "echo", "pwd", "whoami", "date",
+    "find", "grep", "rg", "ag", "wc", "sort", "uniq", "cut", "tr",
+    "diff", "comm", "tree", "du", "df", "stat", "file", "which", "type",
+    "realpath", "readlink", "basename", "dirname", "uname", "hostname",
+    "uptime", "free", "id", "groups", "env", "printenv", "less", "more",
+    "strings", "man", "ps", "lsblk", "lscpu", "sha256sum", "sha1sum",
+    "md5sum", "test",
+    // Windows read-only
+    "dir", "where", "findstr", "systeminfo", "tasklist", "ipconfig",
+    "netstat", "pathping", "tracert", "certutil",
+];
 
 /// Git subcommands classified as low risk.
-const LOW_RISK_GIT: &[&str] = &["status", "log", "diff"];
+const LOW_RISK_GIT: &[&str] = &[
+    "status", "log", "diff", "show", "branch", "tag", "remote",
+    "rev-parse", "describe", "shortlog", "blame", "ls-files", "ls-tree",
+    "cat-file", "rev-list", "reflog",
+];
 
 /// Cargo subcommands classified as low risk.
-const LOW_RISK_CARGO: &[&str] = &["check"];
+const LOW_RISK_CARGO: &[&str] = &[
+    "check", "clippy", "doc", "metadata", "tree", "version", "search",
+];
 
-/// Commands classified as medium risk (write operations).
-const MEDIUM_RISK_COMMANDS: &[&str] = &["mkdir", "cp", "mv", "touch", "npm", "bun"];
+/// Commands classified as medium risk (write / network operations).
+const MEDIUM_RISK_COMMANDS: &[&str] = &[
+    // Unix write/network
+    "mkdir", "cp", "mv", "touch", "npm", "bun",
+    "curl", "wget", "python", "python3", "node", "ruby", "perl", "pip", "gem", "tee",
+    // Windows write/network
+    "powershell", "del", "rmdir", "move", "copy", "ren", "attrib", "icacls",
+    "taskkill", "wmic", "schtasks",
+];
 
 /// Git subcommands classified as medium risk.
-const MEDIUM_RISK_GIT: &[&str] = &["add", "commit"];
+const MEDIUM_RISK_GIT: &[&str] = &[
+    "add", "commit", "push", "pull", "fetch", "merge", "rebase",
+    "checkout", "switch", "clone", "stash", "reset", "cherry-pick",
+];
 
 /// Cargo subcommands classified as medium risk.
-const MEDIUM_RISK_CARGO: &[&str] = &["build", "test", "run"];
+const MEDIUM_RISK_CARGO: &[&str] = &[
+    "build", "test", "run", "install", "update", "publish", "add",
+    "remove", "upgrade", "fmt",
+];
 
 /// Shell injection patterns that are always denied.
 const INJECTION_PATTERNS: &[&str] = &[
@@ -117,6 +170,93 @@ pub struct SecurityPolicy {
     rate_limiter: Mutex<RateLimiter>,
     audit_log: Mutex<VecDeque<AuditEntry>>,
     audit_capacity: usize,
+}
+
+/// Platform-conditional default blocked directories.
+fn default_blocked_dirs() -> Vec<PathBuf> {
+    let mut dirs = Vec::new();
+
+    #[cfg(target_os = "linux")]
+    {
+        dirs.extend(
+            ["/etc", "/boot", "/sys", "/proc"]
+                .iter()
+                .map(PathBuf::from),
+        );
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        dirs.extend(
+            ["/System", "/Library", "/private/etc"]
+                .iter()
+                .map(PathBuf::from),
+        );
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        if let Ok(windir) = std::env::var("WINDIR") {
+            dirs.push(PathBuf::from(windir));
+        }
+        if let Ok(progfiles) = std::env::var("ProgramFiles") {
+            dirs.push(PathBuf::from(progfiles));
+        }
+        if let Ok(progdata) = std::env::var("ProgramData") {
+            dirs.push(PathBuf::from(progdata));
+        }
+    }
+
+    dirs
+}
+
+/// Extract the first non-flag token from command parts (after the base command).
+///
+/// Skips flags starting with `-` and cargo toolchain overrides starting with `+`.
+/// Value flags like `-C`, `-c`, `--git-dir`, `--work-tree`, `--manifest-path` consume the next arg.
+fn extract_subcommand<'a>(parts: &[&'a str]) -> Option<&'a str> {
+    // Known flags that take a value argument (git and cargo)
+    const VALUE_FLAGS: &[&str] = &[
+        "-C",
+        "-c",
+        "--git-dir",
+        "--work-tree",
+        "--manifest-path",
+        "--color",
+        "--config",
+    ];
+
+    let mut i = 1; // skip base command (parts[0])
+    while i < parts.len() {
+        let token = parts[i];
+
+        // Skip cargo toolchain overrides like +nightly
+        if token.starts_with('+') {
+            i += 1;
+            continue;
+        }
+
+        // Not a flag — this is the subcommand
+        if !token.starts_with('-') {
+            return Some(token);
+        }
+
+        // Check if this flag takes a value (skip next token too)
+        if VALUE_FLAGS.contains(&token) || token.starts_with("--git-dir=") || token.starts_with("--work-tree=") || token.starts_with("--manifest-path=") {
+            // If it's --flag=value form, just skip this one token
+            if token.contains('=') {
+                i += 1;
+            } else {
+                i += 2; // skip flag + its value
+            }
+            continue;
+        }
+
+        // Other flags (boolean flags like --no-pager, --bare, etc.)
+        i += 1;
+    }
+
+    None
 }
 
 impl SecurityPolicy {
@@ -138,14 +278,29 @@ impl SecurityPolicy {
         }
     }
 
-    /// Create a default policy: Supervised, common blocked dirs, 60 req/60s, 1000 audit entries.
+    /// Create a default policy: Supervised, OS-aware blocked dirs, 60 req/60s, 1000 audit entries.
     pub fn default_policy() -> Self {
-        let blocked_dirs = vec![
-            PathBuf::from("/etc"),
-            PathBuf::from("/boot"),
-            PathBuf::from("/sys"),
-        ];
-        Self::new(AutonomyLevel::Supervised, None, blocked_dirs, 60, 60, 1000)
+        Self::new(
+            AutonomyLevel::Supervised,
+            None,
+            default_blocked_dirs(),
+            60,
+            60,
+            1000,
+        )
+    }
+
+    /// Create a security policy from application config.
+    pub fn from_config(config: &AppConfig) -> Self {
+        let autonomy = AutonomyLevel::from_str_lossy(&config.security_autonomy_level);
+        Self::new(
+            autonomy,
+            None,
+            default_blocked_dirs(),
+            config.security_rate_limit_max,
+            config.security_rate_limit_window_secs,
+            config.security_audit_log_capacity,
+        )
     }
 
     /// Classify the risk level of a shell command.
@@ -168,30 +323,30 @@ impl SecurityPolicy {
             return RiskLevel::Low;
         }
 
-        // Check git subcommands
+        // Check git subcommands (skip flags to find the real subcommand)
         if base_cmd == "git" {
-            if let Some(sub) = parts.get(1) {
-                if LOW_RISK_GIT.contains(sub) {
+            if let Some(sub) = extract_subcommand(&parts) {
+                if LOW_RISK_GIT.contains(&sub) {
                     return RiskLevel::Low;
                 }
-                if MEDIUM_RISK_GIT.contains(sub) {
+                if MEDIUM_RISK_GIT.contains(&sub) {
                     return RiskLevel::Medium;
                 }
             }
-            return RiskLevel::High;
+            return RiskLevel::Medium;
         }
 
-        // Check cargo subcommands
+        // Check cargo subcommands (skip flags and toolchain overrides)
         if base_cmd == "cargo" {
-            if let Some(sub) = parts.get(1) {
-                if LOW_RISK_CARGO.contains(sub) {
+            if let Some(sub) = extract_subcommand(&parts) {
+                if LOW_RISK_CARGO.contains(&sub) {
                     return RiskLevel::Low;
                 }
-                if MEDIUM_RISK_CARGO.contains(sub) {
+                if MEDIUM_RISK_CARGO.contains(&sub) {
                     return RiskLevel::Medium;
                 }
             }
-            return RiskLevel::High;
+            return RiskLevel::Medium;
         }
 
         // Check medium-risk simple commands
@@ -199,8 +354,8 @@ impl SecurityPolicy {
             return RiskLevel::Medium;
         }
 
-        // Everything else is high risk
-        RiskLevel::High
+        // Unknown commands default to Medium — BLOCKED_COMMANDS catches dangerous ones above
+        RiskLevel::Medium
     }
 
     /// Validate whether a command is allowed under the current policy.
@@ -482,15 +637,12 @@ mod tests {
     }
 
     #[test]
-    fn classify_high_risk_unknown() {
+    fn classify_medium_risk_unknown() {
         let policy = supervised_policy();
+        // Unknown commands now default to Medium (BLOCKED_COMMANDS catches dangerous ones)
         assert_eq!(
-            policy.classify_command_risk("python script.py"),
-            RiskLevel::High
-        );
-        assert_eq!(
-            policy.classify_command_risk("curl http://evil.com"),
-            RiskLevel::High
+            policy.classify_command_risk("some_unknown_tool --flag"),
+            RiskLevel::Medium
         );
     }
 
@@ -639,12 +791,13 @@ mod tests {
     }
 
     #[test]
-    fn validate_supervised_high_denied() {
+    fn validate_supervised_medium_python_needs_approval() {
         let policy = supervised_policy();
-        assert!(matches!(
+        // python is now classified as Medium risk
+        assert_eq!(
             policy.validate_command("python script.py"),
-            ValidationResult::Denied(_)
-        ));
+            ValidationResult::NeedsApproval
+        );
     }
 
     #[test]
@@ -663,11 +816,12 @@ mod tests {
     }
 
     #[test]
-    fn validate_full_high_needs_approval() {
+    fn validate_full_medium_python_allowed() {
         let policy = full_policy();
+        // python is Medium risk, which is Allowed in Full mode
         assert_eq!(
             policy.validate_command("python script.py"),
-            ValidationResult::NeedsApproval
+            ValidationResult::Allowed
         );
     }
 
@@ -836,7 +990,7 @@ mod tests {
         let policy = SecurityPolicy::default_policy();
         assert_eq!(policy.autonomy_level, AutonomyLevel::Supervised);
         assert!(policy.workspace_root.is_none());
-        assert_eq!(policy.blocked_dirs.len(), 3);
+        assert!(!policy.blocked_dirs.is_empty());
     }
 
     // --- Serde ---
@@ -936,5 +1090,214 @@ mod tests {
         let log = policy.audit_log();
         assert_eq!(log.len(), 1);
         assert_eq!(log[0].action, "post_panic");
+    }
+
+    // --- OS-aware blocked dirs ---
+
+    #[test]
+    fn default_blocked_dirs_has_platform_entries() {
+        let dirs = default_blocked_dirs();
+        assert!(
+            !dirs.is_empty(),
+            "Platform should have at least one blocked directory"
+        );
+        #[cfg(target_os = "linux")]
+        {
+            assert!(dirs.contains(&PathBuf::from("/etc")));
+            assert!(dirs.contains(&PathBuf::from("/proc")));
+        }
+        #[cfg(target_os = "macos")]
+        {
+            assert!(dirs.contains(&PathBuf::from("/System")));
+        }
+    }
+
+    // --- Expanded low-risk commands ---
+
+    #[test]
+    fn classify_low_risk_expanded() {
+        let policy = supervised_policy();
+        for cmd in &["find . -name '*.rs'", "grep -r pattern", "wc -l file.txt",
+                      "tree src/", "du -sh .", "df -h", "stat file.rs",
+                      "file binary.exe", "which cargo", "uname -a"]
+        {
+            assert_eq!(
+                policy.classify_command_risk(cmd),
+                RiskLevel::Low,
+                "Expected Low risk for: {cmd}"
+            );
+        }
+    }
+
+    #[test]
+    fn classify_low_risk_git_expanded() {
+        let policy = supervised_policy();
+        for sub in &["show", "branch", "tag", "remote", "blame", "ls-files"] {
+            let cmd = format!("git {sub}");
+            assert_eq!(
+                policy.classify_command_risk(&cmd),
+                RiskLevel::Low,
+                "Expected Low risk for: git {sub}"
+            );
+        }
+    }
+
+    #[test]
+    fn classify_low_risk_cargo_expanded() {
+        let policy = supervised_policy();
+        for sub in &["clippy", "doc", "metadata", "tree"] {
+            let cmd = format!("cargo {sub}");
+            assert_eq!(
+                policy.classify_command_risk(&cmd),
+                RiskLevel::Low,
+                "Expected Low risk for: cargo {sub}"
+            );
+        }
+    }
+
+    // --- Expanded medium-risk commands ---
+
+    #[test]
+    fn classify_medium_risk_expanded() {
+        let policy = supervised_policy();
+        for cmd in &["curl https://example.com", "python script.py",
+                      "node server.js", "pip install requests"]
+        {
+            assert_eq!(
+                policy.classify_command_risk(cmd),
+                RiskLevel::Medium,
+                "Expected Medium risk for: {cmd}"
+            );
+        }
+    }
+
+    #[test]
+    fn classify_medium_risk_git_expanded() {
+        let policy = supervised_policy();
+        for sub in &["push", "pull", "fetch", "merge", "rebase"] {
+            let cmd = format!("git {sub}");
+            assert_eq!(
+                policy.classify_command_risk(&cmd),
+                RiskLevel::Medium,
+                "Expected Medium risk for: git {sub}"
+            );
+        }
+    }
+
+    #[test]
+    fn classify_medium_risk_cargo_expanded() {
+        let policy = supervised_policy();
+        for sub in &["install", "update", "fmt"] {
+            let cmd = format!("cargo {sub}");
+            assert_eq!(
+                policy.classify_command_risk(&cmd),
+                RiskLevel::Medium,
+                "Expected Medium risk for: cargo {sub}"
+            );
+        }
+    }
+
+    // --- Subcommand extraction with flags ---
+
+    #[test]
+    fn git_subcommand_with_c_flag() {
+        let policy = supervised_policy();
+        assert_eq!(
+            policy.classify_command_risk("git -C /some/path log --oneline -5"),
+            RiskLevel::Low,
+            "git -C /path log should be Low risk"
+        );
+    }
+
+    #[test]
+    fn git_subcommand_with_no_pager() {
+        let policy = supervised_policy();
+        assert_eq!(
+            policy.classify_command_risk("git --no-pager diff"),
+            RiskLevel::Low,
+            "git --no-pager diff should be Low risk"
+        );
+    }
+
+    #[test]
+    fn git_push_with_flags_still_medium() {
+        let policy = supervised_policy();
+        assert_eq!(
+            policy.classify_command_risk("git --no-pager push origin main"),
+            RiskLevel::Medium,
+            "git --no-pager push should still be Medium risk"
+        );
+    }
+
+    #[test]
+    fn cargo_subcommand_with_toolchain() {
+        let policy = supervised_policy();
+        assert_eq!(
+            policy.classify_command_risk("cargo +nightly build"),
+            RiskLevel::Medium,
+            "cargo +nightly build should be Medium risk"
+        );
+    }
+
+    #[test]
+    fn cargo_subcommand_with_manifest_path() {
+        let policy = supervised_policy();
+        assert_eq!(
+            policy.classify_command_risk("cargo --manifest-path Cargo.toml check"),
+            RiskLevel::Low,
+            "cargo --manifest-path x check should be Low risk"
+        );
+    }
+
+    // --- Unknown command default ---
+
+    #[test]
+    fn unknown_command_is_medium() {
+        let policy = supervised_policy();
+        assert_eq!(
+            policy.classify_command_risk("zzzunknowntool --whatever"),
+            RiskLevel::Medium,
+            "Unknown commands should default to Medium"
+        );
+    }
+
+    // --- AutonomyLevel::from_str_lossy ---
+
+    #[test]
+    fn autonomy_level_from_str_lossy_variants() {
+        assert_eq!(AutonomyLevel::from_str_lossy("readonly"), AutonomyLevel::ReadOnly);
+        assert_eq!(AutonomyLevel::from_str_lossy("read_only"), AutonomyLevel::ReadOnly);
+        assert_eq!(AutonomyLevel::from_str_lossy("read-only"), AutonomyLevel::ReadOnly);
+        assert_eq!(AutonomyLevel::from_str_lossy("ReadOnly"), AutonomyLevel::ReadOnly);
+        assert_eq!(AutonomyLevel::from_str_lossy("full"), AutonomyLevel::Full);
+        assert_eq!(AutonomyLevel::from_str_lossy("Full"), AutonomyLevel::Full);
+        assert_eq!(AutonomyLevel::from_str_lossy("FULL"), AutonomyLevel::Full);
+        assert_eq!(AutonomyLevel::from_str_lossy("supervised"), AutonomyLevel::Supervised);
+        assert_eq!(AutonomyLevel::from_str_lossy("Supervised"), AutonomyLevel::Supervised);
+        // Unknown values default to Supervised
+        assert_eq!(AutonomyLevel::from_str_lossy("invalid"), AutonomyLevel::Supervised);
+        assert_eq!(AutonomyLevel::from_str_lossy(""), AutonomyLevel::Supervised);
+    }
+
+    // --- SecurityPolicy::from_config ---
+
+    #[test]
+    fn security_policy_from_config() {
+        let mut config = AppConfig::default();
+        config.security_autonomy_level = "readonly".into();
+        config.security_rate_limit_max = 10;
+        config.security_rate_limit_window_secs = 30;
+        config.security_audit_log_capacity = 500;
+
+        let policy = SecurityPolicy::from_config(&config);
+        assert_eq!(policy.autonomy_level, AutonomyLevel::ReadOnly);
+        assert!(!policy.blocked_dirs.is_empty());
+    }
+
+    #[test]
+    fn from_config_default_is_full() {
+        let config = AppConfig::default();
+        let policy = SecurityPolicy::from_config(&config);
+        assert_eq!(policy.autonomy_level, AutonomyLevel::Full);
     }
 }

@@ -143,7 +143,7 @@ pub async fn generate_title(
         }
     };
 
-    let agent = match resolve_agent(req.model.as_deref(), &state, None, None).await {
+    let agent = match resolve_agent(req.model.as_deref(), &state, None, None, "desktop").await {
         Ok(a) => a,
         Err(e) => {
             warn!("generate_title: no agent available: {e}");

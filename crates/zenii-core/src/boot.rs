@@ -270,8 +270,8 @@ pub async fn init_services(config: AppConfig) -> Result<Services> {
         }
     };
 
-    // 5. Security
-    let security = Arc::new(SecurityPolicy::default_policy());
+    // 5. Security (reads autonomy level, rate limits, etc. from config)
+    let security = Arc::new(SecurityPolicy::from_config(&config));
 
     // 6. Tools
     let tool_registry = ToolRegistry::new();

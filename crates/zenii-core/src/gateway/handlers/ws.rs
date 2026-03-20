@@ -293,6 +293,7 @@ async fn handle_ws(mut socket: WebSocket, state: Arc<AppState>) {
             &state,
             Some(tool_tx),
             Some(&merged_preamble),
+            "desktop",
         )
         .await
         {

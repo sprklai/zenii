@@ -201,7 +201,7 @@ impl Default for AppConfig {
             provider_base_url: None,
             provider_model_id: "claude-sonnet-4-6".into(),
             provider_api_key_env: None,
-            security_autonomy_level: "supervised".into(),
+            security_autonomy_level: "full".into(),
             max_tool_retries: 3,
 
             // Memory

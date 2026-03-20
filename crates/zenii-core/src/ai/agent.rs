@@ -335,12 +335,16 @@ impl ZeniiAgent {
 /// so tool calls are visible to the caller.
 ///
 /// If `preamble_override` is provided, it replaces the default system prompt.
+///
+/// `surface` identifies the interaction surface ("desktop", "cli", "tui", "telegram", etc.)
+/// and is used to filter tools via `ToolPermissions` config.
 #[cfg(feature = "ai")]
 pub async fn resolve_agent(
     requested_model: Option<&str>,
     state: &AppState,
     tool_event_tx: Option<broadcast::Sender<ToolCallEvent>>,
     preamble_override: Option<&str>,
+    surface: &str,
 ) -> Result<Arc<ZeniiAgent>> {
     resolve_agent_with_tools(
         requested_model,
@@ -348,18 +352,21 @@ pub async fn resolve_agent(
         tool_event_tx,
         preamble_override,
         None,
+        surface,
     )
     .await
 }
 
 /// Like `resolve_agent`, but accepts an optional tool override for channel tool policy filtering.
 /// When `tool_override` is `Some`, those tools are used instead of the full registry.
+/// When `tool_override` is `None`, tools are filtered by `ToolPermissions` for the given `surface`.
 pub async fn resolve_agent_with_tools(
     requested_model: Option<&str>,
     state: &AppState,
     tool_event_tx: Option<broadcast::Sender<ToolCallEvent>>,
     preamble_override: Option<&str>,
     tool_override: Option<Vec<Arc<dyn crate::tools::traits::Tool>>>,
+    surface: &str,
 ) -> Result<Arc<ZeniiAgent>> {
     // Try requested model first, then last_used, then default model
     let model_spec = if let Some(spec) = requested_model {
@@ -404,7 +411,14 @@ pub async fn resolve_agent_with_tools(
             )));
         }
 
-        let tools = tool_override.unwrap_or_else(|| state.tools.to_vec());
+        let tools = tool_override.unwrap_or_else(|| {
+            let cfg = state.config.load();
+            crate::security::permissions::PermissionResolver::allowed_tools(
+                &cfg.tool_permissions,
+                surface,
+                &state.tools,
+            )
+        });
 
         // Create per-request dedup cache if enabled
         let config = state.config.load();

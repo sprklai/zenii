@@ -173,7 +173,7 @@ mod tests {
         }
 
         // resolve_agent with no explicit model should use last_used_model
-        let agent = crate::ai::resolve_agent(None, &state, None, None).await;
+        let agent = crate::ai::resolve_agent(None, &state, None, None, "desktop").await;
         assert!(agent.is_ok(), "Should resolve using last_used_model");
     }
 
@@ -194,7 +194,7 @@ mod tests {
         }
 
         // Explicit model should override
-        let agent = crate::ai::resolve_agent(Some("openai:gpt-4o"), &state, None, None).await;
+        let agent = crate::ai::resolve_agent(Some("openai:gpt-4o"), &state, None, None, "desktop").await;
         assert!(agent.is_ok());
 
         // Verify last_used_model was updated to the explicit one
@@ -216,7 +216,7 @@ mod tests {
         assert!(state.last_used_model.read().await.is_none());
 
         // Resolve with explicit model
-        let _ = crate::ai::resolve_agent(Some("openai:gpt-4o"), &state, None, None).await;
+        let _ = crate::ai::resolve_agent(Some("openai:gpt-4o"), &state, None, None, "desktop").await;
 
         // Should now be set
         let last = state.last_used_model.read().await;

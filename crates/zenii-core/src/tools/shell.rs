@@ -65,10 +65,21 @@ impl Tool for ShellTool {
 
         let output = tokio::time::timeout(
             std::time::Duration::from_secs(self.timeout_secs),
-            tokio::process::Command::new("sh")
-                .arg("-c")
-                .arg(command)
-                .output(),
+            {
+                #[cfg(unix)]
+                {
+                    tokio::process::Command::new("sh")
+                        .arg("-c")
+                        .arg(command)
+                        .output()
+                }
+                #[cfg(windows)]
+                {
+                    tokio::process::Command::new("cmd")
+                        .args(["/C", command])
+                        .output()
+                }
+            },
         )
         .await
         .map_err(|_| ZeniiError::Tool("command timed out".into()))?
@@ -133,6 +144,17 @@ mod tests {
             .unwrap();
         assert!(!result.success);
         assert!(result.output.contains("Denied"));
+    }
+
+    #[tokio::test]
+    async fn shell_executes_on_current_os() {
+        let tool = ShellTool::new(policy(AutonomyLevel::Full), 30);
+        let result = tool
+            .execute(serde_json::json!({"command": "echo cross-platform"}))
+            .await
+            .unwrap();
+        assert!(result.success);
+        assert!(result.output.contains("cross-platform"));
     }
 
     #[test]
