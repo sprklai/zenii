@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Workflow CLI command (`zenii workflow list/create/get/show/run/delete/history/cancel`)
+- Example workflow TOML files in `examples/workflows/`
+- Channel notifications (Telegram, etc.) on workflow completion via SchedulerNotification event
+- Desktop OS notifications on workflow completion
+- Auto-refresh workflow list in frontend when workflow completes
+- `get_text()` method on ZeniiClient for plain text API responses
+
+### Docs
+- CLI reference: workflow command section with 8 subcommands and recipe
+- API reference: added missing `/workflows/{id}/raw` and `/workflows/{id}/cancel` endpoints
+- README: workflow CLI commands in quick reference table
+
 ## [0.0.33] - 2026-03-20
 
 ### Added

@@ -764,6 +764,14 @@ zenii plugin update <name>                # Update a plugin
 zenii plugin enable <name>                # Enable a plugin
 zenii plugin disable <name>               # Disable a plugin
 zenii plugin info <name>                  # Show plugin details
+zenii workflow list                       # List all workflows
+zenii workflow create <file>              # Create workflow from TOML file
+zenii workflow run <id>                   # Run a workflow
+zenii workflow get <id>                   # Show workflow details
+zenii workflow show <id>                  # Print raw TOML definition
+zenii workflow history <id>               # Show execution history
+zenii workflow delete <id>                # Delete a workflow
+zenii workflow cancel <id>                # Cancel a running workflow
 ```
 
 Global options: `--host`, `--port`, `--token` (or `ZENII_TOKEN` env var)
@@ -789,7 +797,7 @@ Global options: `--host`, `--port`, `--token` (or `ZENII_TOKEN` env var)
 | Embeddings | `GET /embeddings/status`, `POST /embeddings/test`, `POST /embeddings/embed`, `POST /embeddings/download`, `POST /embeddings/reindex` | Semantic memory embedding management |
 | Plugins | `GET /plugins`, `POST /plugins/install`, `GET/DELETE /plugins/{name}`, `PUT /plugins/{name}/toggle`, `POST /plugins/{name}/update`, `GET/PUT /plugins/{name}/config` | Plugin management (install, remove, enable/disable, config) |
 | Agent Delegation | `GET /agents/active`, `POST /agents/{id}/cancel` | Multi-agent task delegation |
-| Workflows | `POST /workflows`, `GET /workflows`, `GET/DELETE /workflows/{id}`, `POST /workflows/{id}/run`, `GET /workflows/{id}/history`, `GET /workflows/{id}/runs/{run_id}` (feature-gated: `workflows`) | TOML workflow engine |
+| Workflows | `POST /workflows`, `GET /workflows`, `GET/DELETE /workflows/{id}`, `GET /workflows/{id}/raw`, `POST /workflows/{id}/run`, `POST /workflows/{id}/cancel`, `GET /workflows/{id}/history`, `GET /workflows/{id}/runs/{run_id}` (feature-gated: `workflows`) | TOML workflow engine |
 | Channels | `POST /channels/{name}/test` (always); `GET /channels`, `GET /channels/{name}/status`, `POST /channels/{name}/send`, `POST /channels/{name}/connect`, `POST /channels/{name}/disconnect`, `GET /channels/{name}/health`, `POST /channels/{name}/message`, `GET /channels/sessions`, `GET /channels/sessions/{id}/messages` (feature-gated) | Messaging channels |
 | Scheduler | `GET/POST /scheduler/jobs`, `PUT /scheduler/jobs/{id}/toggle`, `DELETE /scheduler/jobs/{id}`, `GET /scheduler/jobs/{id}/history`, `GET /scheduler/status` (feature-gated) | Cron job management |
 | WebSocket | `GET /ws/chat`, `GET /ws/notifications` | Streaming chat + notification push |

@@ -100,6 +100,11 @@ enum Commands {
         #[command(subcommand)]
         action: ChannelAction,
     },
+    /// Manage workflows (create, run, list, delete)
+    Workflow {
+        #[command(subcommand)]
+        action: WorkflowAction,
+    },
     /// Interactive onboarding wizard
     Onboard,
     /// Generate shell completions (hidden from --help)
@@ -349,6 +354,47 @@ enum ChannelAction {
 }
 
 #[derive(Subcommand)]
+enum WorkflowAction {
+    /// List all workflows
+    List,
+    /// Show workflow details
+    Get {
+        /// Workflow ID
+        id: String,
+    },
+    /// Show raw TOML definition
+    Show {
+        /// Workflow ID
+        id: String,
+    },
+    /// Create a workflow from a TOML file
+    Create {
+        /// Path to TOML workflow file
+        file: String,
+    },
+    /// Run a workflow
+    Run {
+        /// Workflow ID
+        id: String,
+    },
+    /// Delete a workflow
+    Delete {
+        /// Workflow ID
+        id: String,
+    },
+    /// Show execution history for a workflow
+    History {
+        /// Workflow ID
+        id: String,
+    },
+    /// Cancel a running workflow
+    Cancel {
+        /// Workflow ID
+        id: String,
+    },
+}
+
+#[derive(Subcommand)]
 enum EmbeddingAction {
     /// Show current embedding provider status
     Status,
@@ -570,6 +616,16 @@ async fn main() {
                 limit,
                 before,
             } => commands::channel::messages(&client, &session_id, limit, before.as_deref()).await,
+        },
+        Commands::Workflow { action } => match action {
+            WorkflowAction::List => commands::workflow::list(&client).await,
+            WorkflowAction::Get { id } => commands::workflow::get(&client, &id).await,
+            WorkflowAction::Show { id } => commands::workflow::show(&client, &id).await,
+            WorkflowAction::Create { file } => commands::workflow::create(&client, &file).await,
+            WorkflowAction::Run { id } => commands::workflow::run(&client, &id).await,
+            WorkflowAction::Delete { id } => commands::workflow::delete(&client, &id).await,
+            WorkflowAction::History { id } => commands::workflow::history(&client, &id).await,
+            WorkflowAction::Cancel { id } => commands::workflow::cancel(&client, &id).await,
         },
         Commands::Onboard => commands::onboard::run(&client).await,
         Commands::Completions { shell } => {
@@ -1184,5 +1240,107 @@ mod tests {
     fn parse_no_setup_flag() {
         let cli = parse(&["zenii", "--no-setup", "chat"]);
         assert!(cli.no_setup);
+    }
+
+    #[test]
+    fn parse_workflow_list() {
+        let cli = parse(&["zenii", "workflow", "list"]);
+        assert!(matches!(
+            cli.command,
+            Commands::Workflow {
+                action: WorkflowAction::List
+            }
+        ));
+    }
+
+    #[test]
+    fn parse_workflow_get() {
+        let cli = parse(&["zenii", "workflow", "get", "my-workflow"]);
+        match cli.command {
+            Commands::Workflow {
+                action: WorkflowAction::Get { id },
+            } => {
+                assert_eq!(id, "my-workflow");
+            }
+            _ => panic!("expected Workflow Get"),
+        }
+    }
+
+    #[test]
+    fn parse_workflow_show() {
+        let cli = parse(&["zenii", "workflow", "show", "my-workflow"]);
+        match cli.command {
+            Commands::Workflow {
+                action: WorkflowAction::Show { id },
+            } => {
+                assert_eq!(id, "my-workflow");
+            }
+            _ => panic!("expected Workflow Show"),
+        }
+    }
+
+    #[test]
+    fn parse_workflow_create() {
+        let cli = parse(&["zenii", "workflow", "create", "/tmp/wf.toml"]);
+        match cli.command {
+            Commands::Workflow {
+                action: WorkflowAction::Create { file },
+            } => {
+                assert_eq!(file, "/tmp/wf.toml");
+            }
+            _ => panic!("expected Workflow Create"),
+        }
+    }
+
+    #[test]
+    fn parse_workflow_run() {
+        let cli = parse(&["zenii", "workflow", "run", "health-check"]);
+        match cli.command {
+            Commands::Workflow {
+                action: WorkflowAction::Run { id },
+            } => {
+                assert_eq!(id, "health-check");
+            }
+            _ => panic!("expected Workflow Run"),
+        }
+    }
+
+    #[test]
+    fn parse_workflow_delete() {
+        let cli = parse(&["zenii", "workflow", "delete", "old-wf"]);
+        match cli.command {
+            Commands::Workflow {
+                action: WorkflowAction::Delete { id },
+            } => {
+                assert_eq!(id, "old-wf");
+            }
+            _ => panic!("expected Workflow Delete"),
+        }
+    }
+
+    #[test]
+    fn parse_workflow_history() {
+        let cli = parse(&["zenii", "workflow", "history", "wf-123"]);
+        match cli.command {
+            Commands::Workflow {
+                action: WorkflowAction::History { id },
+            } => {
+                assert_eq!(id, "wf-123");
+            }
+            _ => panic!("expected Workflow History"),
+        }
+    }
+
+    #[test]
+    fn parse_workflow_cancel() {
+        let cli = parse(&["zenii", "workflow", "cancel", "wf-456"]);
+        match cli.command {
+            Commands::Workflow {
+                action: WorkflowAction::Cancel { id },
+            } => {
+                assert_eq!(id, "wf-456");
+            }
+            _ => panic!("expected Workflow Cancel"),
+        }
     }
 }

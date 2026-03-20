@@ -208,6 +208,25 @@ impl WorkflowExecutor {
             status: status_str.into(),
         });
 
+        // Publish a notification event so channels (Telegram, etc.) and desktop get notified
+        let notif_message = match overall_status {
+            WorkflowRunStatus::Completed => {
+                format!("Workflow '{}' completed successfully", workflow.name)
+            }
+            _ => {
+                let err_detail = overall_error
+                    .as_deref()
+                    .map(|e| format!(": {e}"))
+                    .unwrap_or_default();
+                format!("Workflow '{}' failed{err_detail}", workflow.name)
+            }
+        };
+        let _ = event_bus.publish(crate::event_bus::AppEvent::SchedulerNotification {
+            job_id: workflow.id.clone(),
+            job_name: workflow.name.clone(),
+            message: notif_message,
+        });
+
         info!(
             workflow_id = %workflow.id,
             run_id = %run_id,

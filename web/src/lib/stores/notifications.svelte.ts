@@ -139,8 +139,19 @@ class NotificationStore {
             data.run_id,
             data.status,
           );
-          if (data.status === "completed") toast.success("Workflow completed");
-          else if (data.status === "failed") toast.error("Workflow failed");
+          // Refresh workflow list so history is available immediately
+          workflowsStore.load();
+          if (data.status === "completed") {
+            toast.success(`Workflow "${data.workflow_id}" completed`);
+          } else if (data.status === "failed") {
+            toast.error(`Workflow "${data.workflow_id}" failed`);
+          }
+          // Desktop notification for workflow completion
+          if (isTauri) {
+            const detail =
+              data.status === "completed" ? "completed successfully" : "failed";
+            showNotification(`Workflow "${data.workflow_id}"`, detail);
+          }
         } else if (data.type === "notification") {
           const notification: SchedulerNotification = {
             eventType: data.event_type,

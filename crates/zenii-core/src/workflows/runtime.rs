@@ -13,10 +13,33 @@ pub async fn dispatch_step(
 ) -> Result<String> {
     match step_type {
         StepType::Tool { tool, args } => {
-            // Resolve templates in args
+            // Resolve templates in args.
+            // Step outputs may contain newlines, quotes, etc. that would break JSON
+            // if injected raw. We JSON-escape each output before template resolution
+            // so the resulting string remains valid JSON.
+            let escaped_outputs: HashMap<String, StepOutput> = step_outputs
+                .iter()
+                .map(|(k, v)| {
+                    let escaped = serde_json::to_string(&v.output).unwrap_or_default();
+                    // Strip surrounding quotes added by serde_json::to_string
+                    let escaped = escaped
+                        .strip_prefix('"')
+                        .and_then(|s| s.strip_suffix('"'))
+                        .unwrap_or(&escaped)
+                        .to_string();
+                    (
+                        k.clone(),
+                        StepOutput {
+                            output: escaped,
+                            ..v.clone()
+                        },
+                    )
+                })
+                .collect();
+
             let args_str = serde_json::to_string(args)
                 .map_err(|e| ZeniiError::Workflow(format!("args serialize error: {e}")))?;
-            let resolved_args_str = templates::resolve(&args_str, step_outputs)?;
+            let resolved_args_str = templates::resolve(&args_str, &escaped_outputs)?;
             let resolved_args: serde_json::Value = serde_json::from_str(&resolved_args_str)
                 .map_err(|e| {
                     ZeniiError::Workflow(format!("args parse error after template: {e}"))

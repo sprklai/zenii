@@ -787,6 +787,111 @@ zenii plugin info weather
 
 ---
 
+### `workflow` -- Manage workflows
+
+Create, run, and manage TOML-defined multi-step workflow pipelines. Requires the `workflows` feature flag.
+
+#### `workflow list`
+
+List all registered workflows.
+
+```bash
+zenii workflow list
+```
+
+#### `workflow get`
+
+Show workflow details including steps and dependencies.
+
+```
+zenii workflow get <ID>
+```
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `<ID>` | Yes | Workflow ID |
+
+#### `workflow show`
+
+Print the raw TOML definition of a workflow.
+
+```
+zenii workflow show <ID>
+```
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `<ID>` | Yes | Workflow ID |
+
+#### `workflow create`
+
+Create a workflow from a TOML file on disk.
+
+```
+zenii workflow create <FILE>
+```
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `<FILE>` | Yes | Path to a TOML workflow definition file |
+
+Examples:
+
+```bash
+zenii workflow create examples/workflows/system-health-check.toml
+zenii workflow create ~/my-workflows/daily-report.toml
+```
+
+#### `workflow run`
+
+Execute a workflow. The workflow runs asynchronously in the background.
+
+```
+zenii workflow run <ID>
+```
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `<ID>` | Yes | Workflow ID to execute |
+
+#### `workflow delete`
+
+Delete a workflow.
+
+```
+zenii workflow delete <ID>
+```
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `<ID>` | Yes | Workflow ID to delete |
+
+#### `workflow history`
+
+Show execution history for a workflow, including status, timestamps, and errors.
+
+```
+zenii workflow history <ID>
+```
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `<ID>` | Yes | Workflow ID |
+
+#### `workflow cancel`
+
+Cancel a running workflow execution.
+
+```
+zenii workflow cancel <ID>
+```
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `<ID>` | Yes | Workflow ID to cancel |
+
+---
+
 ### `completions` -- Generate shell completions (hidden)
 
 Generate shell completion scripts. This command is hidden from `--help` output.
@@ -926,6 +1031,25 @@ zenii key list
 
 # Test the channel (if channels feature is enabled)
 # The daemon will pick up the credentials automatically
+```
+
+### Create and run a workflow
+
+```bash
+# Create a workflow from a TOML file
+zenii workflow create examples/workflows/system-health-check.toml
+
+# List all workflows
+zenii workflow list
+
+# Run the workflow
+zenii workflow run system-health-check
+
+# Check execution history
+zenii workflow history system-health-check
+
+# View the raw TOML definition
+zenii workflow show system-health-check
 ```
 
 ### Backup and restore memory

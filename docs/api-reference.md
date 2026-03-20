@@ -1604,11 +1604,23 @@ Get a workflow definition by ID.
 
 **Response:** Full workflow object with steps, schedule, and metadata.
 
+#### GET /workflows/{id}/raw
+
+Get the raw TOML definition of a workflow as plain text.
+
+**Response:** `200 OK` with `Content-Type: text/plain` — the original TOML source.
+
 #### DELETE /workflows/{id}
 
 Delete a workflow.
 
 **Response:** `204 No Content`
+
+#### POST /workflows/{id}/cancel
+
+Cancel a running workflow execution.
+
+**Response:** `200 OK`
 
 #### POST /workflows/{id}/run
 
