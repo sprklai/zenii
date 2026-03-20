@@ -5,8 +5,8 @@ use axum::extract::{State, WebSocketUpgrade};
 use axum::response::IntoResponse;
 use serde::{Deserialize, Serialize};
 use tokio::sync::broadcast;
-use tracing::{debug, info, warn};
 use tokio::task::JoinHandle;
+use tracing::{debug, info, warn};
 
 use crate::ai::adapter::{ToolCallEvent, ToolCallPhase};
 use crate::ai::prompt::AssemblyRequest;

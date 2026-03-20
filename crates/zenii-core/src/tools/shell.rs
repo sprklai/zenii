@@ -63,24 +63,21 @@ impl Tool for ShellTool {
             }
         }
 
-        let output = tokio::time::timeout(
-            std::time::Duration::from_secs(self.timeout_secs),
+        let output = tokio::time::timeout(std::time::Duration::from_secs(self.timeout_secs), {
+            #[cfg(unix)]
             {
-                #[cfg(unix)]
-                {
-                    tokio::process::Command::new("sh")
-                        .arg("-c")
-                        .arg(command)
-                        .output()
-                }
-                #[cfg(windows)]
-                {
-                    tokio::process::Command::new("cmd")
-                        .args(["/C", command])
-                        .output()
-                }
-            },
-        )
+                tokio::process::Command::new("sh")
+                    .arg("-c")
+                    .arg(command)
+                    .output()
+            }
+            #[cfg(windows)]
+            {
+                tokio::process::Command::new("cmd")
+                    .args(["/C", command])
+                    .output()
+            }
+        })
         .await
         .map_err(|_| ZeniiError::Tool("command timed out".into()))?
         .map_err(|e| ZeniiError::Tool(format!("command failed: {e}")))?;

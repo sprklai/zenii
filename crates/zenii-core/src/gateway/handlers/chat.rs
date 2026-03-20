@@ -72,7 +72,14 @@ pub async fn chat(
     };
     let preamble = state.prompt_strategy.assemble(&assembly_request).await?;
 
-    let agent = resolve_agent(req.model.as_deref(), &state, None, Some(&preamble), "desktop").await?;
+    let agent = resolve_agent(
+        req.model.as_deref(),
+        &state,
+        None,
+        Some(&preamble),
+        "desktop",
+    )
+    .await?;
 
     // If session_id provided, store the user message
     if let Some(ref sid) = req.session_id {

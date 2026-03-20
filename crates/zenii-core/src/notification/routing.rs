@@ -152,7 +152,11 @@ mod tests {
         let routing: NotificationRouting = toml::from_str(toml_str).unwrap();
         assert_eq!(routing.heartbeat_alert.len(), 2);
         assert!(routing.heartbeat_alert.contains(&NotificationTarget::Toast));
-        assert!(routing.heartbeat_alert.contains(&NotificationTarget::Telegram));
+        assert!(
+            routing
+                .heartbeat_alert
+                .contains(&NotificationTarget::Telegram)
+        );
     }
 
     // 8.12.11 — TOML deserialization with channel targets

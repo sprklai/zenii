@@ -27,9 +27,7 @@ impl AutonomyLevel {
             "full" => Self::Full,
             "supervised" => Self::Supervised,
             other => {
-                warn!(
-                    "Unrecognized autonomy level '{other}', defaulting to Supervised"
-                );
+                warn!("Unrecognized autonomy level '{other}', defaulting to Supervised");
                 Self::Supervised
             }
         }
@@ -103,39 +101,118 @@ impl RateLimiter {
 
 /// Commands that are always denied regardless of autonomy level.
 const BLOCKED_COMMANDS: &[&str] = &[
-    "rm", "sudo", "chmod", "chown", "kill", "pkill", "shutdown", "reboot", "dd", "mkfs", "fdisk",
+    "rm",
+    "sudo",
+    "chmod",
+    "chown",
+    "kill",
+    "pkill",
+    "shutdown",
+    "reboot",
+    "dd",
+    "mkfs",
+    "fdisk",
     // Arbitrary code execution
-    "eval", "exec",
+    "eval",
+    "exec",
     // Network backdoors
-    "nc", "ncat", "socat",
+    "nc",
+    "ncat",
+    "socat",
     // Container / service control (can run arbitrary images or restart services)
-    "docker", "systemctl",
+    "docker",
+    "systemctl",
     // Desktop openers (can launch arbitrary URLs/protocols)
-    "xdg-open", "open",
+    "xdg-open",
+    "open",
     // Windows equivalents
-    "format", "runas",
+    "format",
+    "runas",
 ];
 
 /// Commands classified as low risk (read-only / informational).
 const LOW_RISK_COMMANDS: &[&str] = &[
     // Unix read-only
-    "ls", "cat", "head", "tail", "echo", "pwd", "whoami", "date",
-    "find", "grep", "rg", "ag", "wc", "sort", "uniq", "cut", "tr",
-    "diff", "comm", "tree", "du", "df", "stat", "file", "which", "type",
-    "realpath", "readlink", "basename", "dirname", "uname", "hostname",
-    "uptime", "free", "id", "groups", "env", "printenv", "less", "more",
-    "strings", "man", "ps", "lsblk", "lscpu", "sha256sum", "sha1sum",
-    "md5sum", "test",
+    "ls",
+    "cat",
+    "head",
+    "tail",
+    "echo",
+    "pwd",
+    "whoami",
+    "date",
+    "find",
+    "grep",
+    "rg",
+    "ag",
+    "wc",
+    "sort",
+    "uniq",
+    "cut",
+    "tr",
+    "diff",
+    "comm",
+    "tree",
+    "du",
+    "df",
+    "stat",
+    "file",
+    "which",
+    "type",
+    "realpath",
+    "readlink",
+    "basename",
+    "dirname",
+    "uname",
+    "hostname",
+    "uptime",
+    "free",
+    "id",
+    "groups",
+    "env",
+    "printenv",
+    "less",
+    "more",
+    "strings",
+    "man",
+    "ps",
+    "lsblk",
+    "lscpu",
+    "sha256sum",
+    "sha1sum",
+    "md5sum",
+    "test",
     // Windows read-only
-    "dir", "where", "findstr", "systeminfo", "tasklist", "ipconfig",
-    "netstat", "pathping", "tracert", "certutil",
+    "dir",
+    "where",
+    "findstr",
+    "systeminfo",
+    "tasklist",
+    "ipconfig",
+    "netstat",
+    "pathping",
+    "tracert",
+    "certutil",
 ];
 
 /// Git subcommands classified as low risk.
 const LOW_RISK_GIT: &[&str] = &[
-    "status", "log", "diff", "show", "branch", "tag", "remote",
-    "rev-parse", "describe", "shortlog", "blame", "ls-files", "ls-tree",
-    "cat-file", "rev-list", "reflog",
+    "status",
+    "log",
+    "diff",
+    "show",
+    "branch",
+    "tag",
+    "remote",
+    "rev-parse",
+    "describe",
+    "shortlog",
+    "blame",
+    "ls-files",
+    "ls-tree",
+    "cat-file",
+    "rev-list",
+    "reflog",
 ];
 
 /// Cargo subcommands classified as low risk.
@@ -146,23 +223,56 @@ const LOW_RISK_CARGO: &[&str] = &[
 /// Commands classified as medium risk (write / network operations).
 const MEDIUM_RISK_COMMANDS: &[&str] = &[
     // Unix write/network
-    "mkdir", "cp", "mv", "touch", "npm", "bun",
-    "curl", "wget", "python", "python3", "node", "ruby", "perl", "pip", "gem", "tee",
+    "mkdir",
+    "cp",
+    "mv",
+    "touch",
+    "npm",
+    "bun",
+    "curl",
+    "wget",
+    "python",
+    "python3",
+    "node",
+    "ruby",
+    "perl",
+    "pip",
+    "gem",
+    "tee",
     // Windows write/network
-    "powershell", "del", "rmdir", "move", "copy", "ren", "attrib", "icacls",
-    "taskkill", "wmic", "schtasks",
+    "powershell",
+    "del",
+    "rmdir",
+    "move",
+    "copy",
+    "ren",
+    "attrib",
+    "icacls",
+    "taskkill",
+    "wmic",
+    "schtasks",
 ];
 
 /// Git subcommands classified as medium risk.
 const MEDIUM_RISK_GIT: &[&str] = &[
-    "add", "commit", "push", "pull", "fetch", "merge", "rebase",
-    "checkout", "switch", "clone", "stash", "reset", "cherry-pick",
+    "add",
+    "commit",
+    "push",
+    "pull",
+    "fetch",
+    "merge",
+    "rebase",
+    "checkout",
+    "switch",
+    "clone",
+    "stash",
+    "reset",
+    "cherry-pick",
 ];
 
 /// Cargo subcommands classified as medium risk.
 const MEDIUM_RISK_CARGO: &[&str] = &[
-    "build", "test", "run", "install", "update", "publish", "add",
-    "remove", "upgrade", "fmt",
+    "build", "test", "run", "install", "update", "publish", "add", "remove", "upgrade", "fmt",
 ];
 
 /// Shell injection patterns that are always denied.
@@ -186,11 +296,7 @@ fn default_blocked_dirs() -> Vec<PathBuf> {
 
     #[cfg(target_os = "linux")]
     {
-        dirs.extend(
-            ["/etc", "/boot", "/sys", "/proc"]
-                .iter()
-                .map(PathBuf::from),
-        );
+        dirs.extend(["/etc", "/boot", "/sys", "/proc"].iter().map(PathBuf::from));
     }
 
     #[cfg(target_os = "macos")]
@@ -250,7 +356,11 @@ fn extract_subcommand<'a>(parts: &[&'a str]) -> Option<&'a str> {
         }
 
         // Check if this flag takes a value (skip next token too)
-        if VALUE_FLAGS.contains(&token) || token.starts_with("--git-dir=") || token.starts_with("--work-tree=") || token.starts_with("--manifest-path=") {
+        if VALUE_FLAGS.contains(&token)
+            || token.starts_with("--git-dir=")
+            || token.starts_with("--work-tree=")
+            || token.starts_with("--manifest-path=")
+        {
             // If it's --flag=value form, just skip this one token
             if token.contains('=') {
                 i += 1;
@@ -1125,10 +1235,18 @@ mod tests {
     #[test]
     fn classify_low_risk_expanded() {
         let policy = supervised_policy();
-        for cmd in &["find . -name '*.rs'", "grep -r pattern", "wc -l file.txt",
-                      "tree src/", "du -sh .", "df -h", "stat file.rs",
-                      "file binary.exe", "which cargo", "uname -a"]
-        {
+        for cmd in &[
+            "find . -name '*.rs'",
+            "grep -r pattern",
+            "wc -l file.txt",
+            "tree src/",
+            "du -sh .",
+            "df -h",
+            "stat file.rs",
+            "file binary.exe",
+            "which cargo",
+            "uname -a",
+        ] {
             assert_eq!(
                 policy.classify_command_risk(cmd),
                 RiskLevel::Low,
@@ -1168,9 +1286,12 @@ mod tests {
     #[test]
     fn classify_medium_risk_expanded() {
         let policy = supervised_policy();
-        for cmd in &["curl https://example.com", "python script.py",
-                      "node server.js", "pip install requests"]
-        {
+        for cmd in &[
+            "curl https://example.com",
+            "python script.py",
+            "node server.js",
+            "pip install requests",
+        ] {
             assert_eq!(
                 policy.classify_command_risk(cmd),
                 RiskLevel::Medium,
@@ -1273,17 +1394,38 @@ mod tests {
 
     #[test]
     fn autonomy_level_from_str_lossy_variants() {
-        assert_eq!(AutonomyLevel::from_str_lossy("readonly"), AutonomyLevel::ReadOnly);
-        assert_eq!(AutonomyLevel::from_str_lossy("read_only"), AutonomyLevel::ReadOnly);
-        assert_eq!(AutonomyLevel::from_str_lossy("read-only"), AutonomyLevel::ReadOnly);
-        assert_eq!(AutonomyLevel::from_str_lossy("ReadOnly"), AutonomyLevel::ReadOnly);
+        assert_eq!(
+            AutonomyLevel::from_str_lossy("readonly"),
+            AutonomyLevel::ReadOnly
+        );
+        assert_eq!(
+            AutonomyLevel::from_str_lossy("read_only"),
+            AutonomyLevel::ReadOnly
+        );
+        assert_eq!(
+            AutonomyLevel::from_str_lossy("read-only"),
+            AutonomyLevel::ReadOnly
+        );
+        assert_eq!(
+            AutonomyLevel::from_str_lossy("ReadOnly"),
+            AutonomyLevel::ReadOnly
+        );
         assert_eq!(AutonomyLevel::from_str_lossy("full"), AutonomyLevel::Full);
         assert_eq!(AutonomyLevel::from_str_lossy("Full"), AutonomyLevel::Full);
         assert_eq!(AutonomyLevel::from_str_lossy("FULL"), AutonomyLevel::Full);
-        assert_eq!(AutonomyLevel::from_str_lossy("supervised"), AutonomyLevel::Supervised);
-        assert_eq!(AutonomyLevel::from_str_lossy("Supervised"), AutonomyLevel::Supervised);
+        assert_eq!(
+            AutonomyLevel::from_str_lossy("supervised"),
+            AutonomyLevel::Supervised
+        );
+        assert_eq!(
+            AutonomyLevel::from_str_lossy("Supervised"),
+            AutonomyLevel::Supervised
+        );
         // Unknown values default to Supervised
-        assert_eq!(AutonomyLevel::from_str_lossy("invalid"), AutonomyLevel::Supervised);
+        assert_eq!(
+            AutonomyLevel::from_str_lossy("invalid"),
+            AutonomyLevel::Supervised
+        );
         assert_eq!(AutonomyLevel::from_str_lossy(""), AutonomyLevel::Supervised);
     }
 
@@ -1316,9 +1458,15 @@ mod tests {
     fn audit_c1_new_blocked_commands_denied() {
         let policy = full_policy();
         // These commands were added in the audit to prevent arbitrary code/network access
-        let blocked = ["nc -l 4444", "ncat --listen 8080", "socat TCP4:1234",
-                        "docker run alpine", "systemctl restart nginx",
-                        "xdg-open https://example.com", "open /Applications/Terminal.app"];
+        let blocked = [
+            "nc -l 4444",
+            "ncat --listen 8080",
+            "socat TCP4:1234",
+            "docker run alpine",
+            "systemctl restart nginx",
+            "xdg-open https://example.com",
+            "open /Applications/Terminal.app",
+        ];
         for cmd in &blocked {
             assert!(
                 matches!(policy.validate_command(cmd), ValidationResult::Denied(_)),
@@ -1331,7 +1479,15 @@ mod tests {
     #[test]
     fn audit_c1_new_blocked_high_risk() {
         let policy = supervised_policy();
-        for cmd in &["nc", "ncat", "socat", "docker", "systemctl", "xdg-open", "open"] {
+        for cmd in &[
+            "nc",
+            "ncat",
+            "socat",
+            "docker",
+            "systemctl",
+            "xdg-open",
+            "open",
+        ] {
             assert_eq!(
                 policy.classify_command_risk(cmd),
                 RiskLevel::High,

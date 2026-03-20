@@ -734,9 +734,11 @@ pub async fn init_services(config: AppConfig) -> Result<Services> {
     // Clean up old tracing log files alongside usage logs
     let log_dir = crate::logging::resolve_log_dir(&config);
     let keep_days = config.log_keep_days;
-    tokio::task::spawn_blocking(move || crate::logging::cleanup_old_tracing_files(&log_dir, keep_days))
-        .await
-        .ok();
+    tokio::task::spawn_blocking(move || {
+        crate::logging::cleanup_old_tracing_files(&log_dir, keep_days)
+    })
+    .await
+    .ok();
 
     // H3: Cleanup old sessions on boot
     #[cfg(feature = "ai")]

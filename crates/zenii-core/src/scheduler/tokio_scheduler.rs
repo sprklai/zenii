@@ -173,9 +173,7 @@ impl TokioScheduler {
                     None => true,
                     Some(t) => t < (now - grace),
                 };
-                if needs_recompute
-                    && let Ok(next) = Self::compute_next_run(&entry.schedule)
-                {
+                if needs_recompute && let Ok(next) = Self::compute_next_run(&entry.schedule) {
                     entry.next_run = Some(next);
                 }
             }
@@ -258,14 +256,11 @@ impl TokioScheduler {
                 ))
             })?;
 
-        let local_dt = Local
-            .from_local_datetime(&naive)
-            .single()
-            .ok_or_else(|| {
-                ZeniiError::Scheduler(format!(
-                    "ambiguous or invalid local time '{datetime}' (DST transition?)"
-                ))
-            })?;
+        let local_dt = Local.from_local_datetime(&naive).single().ok_or_else(|| {
+            ZeniiError::Scheduler(format!(
+                "ambiguous or invalid local time '{datetime}' (DST transition?)"
+            ))
+        })?;
 
         let utc_dt = local_dt.with_timezone(&Utc);
         if utc_dt <= Utc::now() {
