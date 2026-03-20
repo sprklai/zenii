@@ -17,7 +17,7 @@ Parse the arguments string for these options:
 | Arg | Values | Default | Description |
 |-----|--------|---------|-------------|
 | SCOPE | `uncommitted`, `branch:NAME`, `commit:SHA`, `files:p1,p2`, `full` | `uncommitted` | What code to review |
-| --focus | `security`, `performance`, `logic`, `error-handling`, `concurrency`, `api`, `frontend`, `architecture`, `all` | `all` | Narrow the audit focus |
+| --focus | `security`, `performance`, `logic`, `error-handling`, `concurrency`, `race-conditions`, `api`, `frontend`, `architecture`, `all` | `all` | Narrow the audit focus |
 | --fix | flag | off | Auto-apply "Apply" findings without asking |
 | --dry-run | flag | off | Show Codex findings only, no validation or fixes |
 
@@ -108,14 +108,15 @@ ARCHITECTURE RULES:
 Based on `--focus` value, append one of:
 
 - **security**: "Focus on: SQL injection, command injection, credential exposure, unsafe unwrap on user input, missing input validation at API boundaries, XSS in frontend, insecure defaults, authentication/authorization gaps."
-- **performance**: "Focus on: unnecessary allocations, missing async, blocking calls in async context, N+1 queries, missing caching opportunities, large clones where references suffice, inefficient string building."
-- **logic**: "Focus on: off-by-one errors, incorrect error handling flow, unreachable code, logic inversions, missing edge cases, incorrect state machine transitions, race conditions."
+- **performance**: "Focus on: unnecessary allocations and large clones where references or Cow suffice, blocking calls in async context (spawn_blocking missing), N+1 queries, missing caching opportunities, inefficient string building (repeated format! vs push_str), hot-path Vec/HashMap pre-allocation, unnecessary Arc/Mutex overhead, excessive serialization/deserialization, unbounded collection growth, redundant database round-trips, missing connection pooling, slow startup paths, large response payloads, iterator vs collect tradeoffs, lock contention in concurrent paths."
+- **logic**: "Focus on: off-by-one errors, incorrect error handling flow, unreachable code, logic inversions, missing edge cases, incorrect state machine transitions, silent data truncation, integer overflow/underflow, incorrect boolean logic, missing None/Err handling on Option/Result chains."
 - **error-handling**: "Focus on: swallowed errors, unwrap/expect on fallible operations, incorrect error propagation, missing error context, catch-all error handlers that hide bugs."
-- **concurrency**: "Focus on: data races, deadlock potential, incorrect lock ordering, holding locks across await points, missing synchronization, channel misuse."
+- **concurrency**: "Focus on: data races, deadlock potential, incorrect lock ordering, holding locks across await points, missing synchronization, channel misuse, unbounded channel/queue growth, task cancellation safety (drop during await), missing JoinHandle collection (fire-and-forget spawns that silently fail)."
+- **race-conditions**: "Focus on: TOCTOU (time-of-check-to-time-of-use) bugs, check-then-act without atomic operations, concurrent read-modify-write without synchronization, shared mutable state accessed from multiple tasks without locks, event ordering assumptions (WebSocket messages arriving out of order, broadcast receivers missing messages), database read-then-write without transactions, file system races (check existence then create/read), DashMap entry API misuse (get then insert instead of entry), tokio::select! cancellation leaving state inconsistent, double-free or double-init in startup/shutdown sequences, missing fencing in pub/sub patterns."
 - **api**: "Focus on: API contract violations, missing request validation, incorrect HTTP status codes, inconsistent error response format, missing CORS handling, undocumented endpoints."
 - **frontend**: "Focus on: Svelte 5 reactivity issues, missing error states, accessibility problems, broken dark mode, stale state, memory leaks from unsubscribed stores."
 - **architecture**: "Focus on: trait/abstraction boundaries, module coupling and cohesion, dependency direction violations (binary crates importing business logic, circular deps), single-responsibility violations, leaky abstractions, god structs/modules, misplaced logic (business logic outside zenii-core, presentation logic in core), unused or vestigial abstractions, inconsistent patterns across similar modules, feature-flag boundary correctness, config sprawl. This project follows a strict shared-core architecture: ALL business logic in zenii-core, binary crates are thin shells. Check for violations."
-- **all**: "Review all aspects: correctness, security, performance, error handling, API design, architecture, code quality, test coverage gaps."
+- **all**: "Review all aspects: correctness, security, performance, race conditions, error handling, concurrency, API design, architecture, code quality, test coverage gaps."
 
 #### 1c. Output format instructions
 
@@ -130,7 +131,7 @@ OUTPUT FORMAT — use this exact structure for each finding:
 - **Suggested fix**: Specific code change or approach
 - **Effort**: trivial | small | medium | large
 
-Categories: SECURITY, PERFORMANCE, LOGIC, ERROR-HANDLING, CONCURRENCY, API, ARCHITECTURE, CODE-QUALITY, TEST-GAP, STALE-CODE, CONVENTION
+Categories: SECURITY, PERFORMANCE, LOGIC, ERROR-HANDLING, CONCURRENCY, RACE-CONDITION, API, ARCHITECTURE, CODE-QUALITY, TEST-GAP, STALE-CODE, CONVENTION
 
 If you find no issues, output exactly: NO_ISSUES_FOUND
 ```
