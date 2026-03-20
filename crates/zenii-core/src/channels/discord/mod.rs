@@ -95,19 +95,27 @@ impl ChannelSender for DiscordChannel {
             .get()
             .ok_or_else(|| ZeniiError::Channel("discord: not connected".into()))?;
 
-        let channel_id_str = message
-            .metadata
-            .get("channel_id")
-            .ok_or_else(|| ZeniiError::Channel("discord: missing channel_id in metadata".into()))?;
+        // If channel_id is in metadata, send to that specific channel.
+        // Otherwise broadcast to all allowed_channel_ids (for scheduler/notification use).
+        let channel_ids: Vec<u64> = if let Some(cid_str) = message.metadata.get("channel_id") {
+            let id: u64 = cid_str.parse().map_err(|_| {
+                ZeniiError::Channel(format!("discord: invalid channel_id: {cid_str}"))
+            })?;
+            vec![id]
+        } else if !self.config.allowed_channel_ids.is_empty() {
+            self.config.allowed_channel_ids.clone()
+        } else {
+            return Err(ZeniiError::Channel(
+                "discord: no channel_id in metadata and no allowed_channel_ids configured".into(),
+            ));
+        };
 
-        let channel_id: u64 = channel_id_str.parse().map_err(|_| {
-            ZeniiError::Channel(format!("discord: invalid channel_id: {channel_id_str}"))
-        })?;
-
-        ChannelId::new(channel_id)
-            .say(http.as_ref(), &message.content)
-            .await
-            .map_err(|e| ZeniiError::Channel(format!("discord send failed: {e}")))?;
+        for &cid in &channel_ids {
+            ChannelId::new(cid)
+                .say(http.as_ref(), &message.content)
+                .await
+                .map_err(|e| ZeniiError::Channel(format!("discord send failed: {e}")))?;
+        }
 
         Ok(())
     }

@@ -30,7 +30,8 @@
 	let scheduleType = $state<'interval' | 'cron' | 'human'>('interval');
 	let intervalSecs = $state(60);
 	let cronExpr = $state('');
-	let humanDatetime = $state('');
+	let humanDate = $state('');
+	let humanTime = $state('');
 	let payloadType = $state<'notify' | 'heartbeat' | 'agent_turn' | 'send_via_channel'>('notify');
 	let payloadMessage = $state('');
 	let payloadPrompt = $state('');
@@ -52,7 +53,8 @@
 		scheduleType = 'interval';
 		intervalSecs = 60;
 		cronExpr = '';
-		humanDatetime = '';
+		humanDate = '';
+		humanTime = '';
 		payloadType = 'notify';
 		payloadMessage = '';
 		payloadPrompt = '';
@@ -86,11 +88,12 @@
 		}
 
 		if (scheduleType === 'human') {
-			if (!humanDatetime) {
-				formError = 'Date and time is required';
+			if (!humanDate || !humanTime) {
+				formError = 'Both date and time are required';
 				return;
 			}
-			if (new Date(humanDatetime) <= new Date()) {
+			const combined = `${humanDate}T${humanTime}`;
+			if (new Date(combined) <= new Date()) {
 				formError = 'Date and time must be in the future';
 				return;
 			}
@@ -101,7 +104,7 @@
 				? { type: 'interval' as const, secs: intervalSecs }
 				: scheduleType === 'cron'
 					? { type: 'cron' as const, expr: cronExpr }
-					: { type: 'human' as const, datetime: humanDatetime };
+					: { type: 'human' as const, datetime: `${humanDate}T${humanTime}` };
 
 		let payload: ScheduledJob['payload'];
 		if (payloadType === 'heartbeat') {
@@ -270,16 +273,28 @@
 						</div>
 					{:else}
 						<div class="space-y-2">
-							<Label for="human-datetime">Date & Time</Label>
+							<Label for="human-date">Date</Label>
 							<input
-								id="human-datetime"
-								type="datetime-local"
-								bind:value={humanDatetime}
+								id="human-date"
+								type="date"
+								bind:value={humanDate}
 								class="w-full rounded-md border bg-background text-foreground px-3 py-2 text-sm"
 							/>
 						</div>
 					{/if}
 				</div>
+
+				{#if scheduleType === 'human'}
+				<div class="space-y-2">
+					<Label for="human-time">Time</Label>
+					<input
+						id="human-time"
+						type="time"
+						bind:value={humanTime}
+						class="w-full rounded-md border bg-background text-foreground px-3 py-2 text-sm"
+					/>
+				</div>
+				{/if}
 
 				<div class="space-y-2">
 					<Label>Payload</Label>

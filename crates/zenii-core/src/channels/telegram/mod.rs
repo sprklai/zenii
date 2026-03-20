@@ -155,22 +155,30 @@ impl ChannelSender for TelegramChannel {
             .get()
             .ok_or_else(|| ZeniiError::Channel("telegram: not connected".into()))?;
 
-        let chat_id_str = message
-            .metadata
-            .get("chat_id")
-            .ok_or_else(|| ZeniiError::Channel("telegram: missing chat_id in metadata".into()))?;
-
-        let chat_id: i64 = chat_id_str.parse().map_err(|_| {
-            ZeniiError::Channel(format!("telegram: invalid chat_id: {chat_id_str}"))
-        })?;
+        // If chat_id is in metadata, send to that specific chat.
+        // Otherwise broadcast to all allowed_chat_ids (for scheduler/notification use).
+        let chat_ids: Vec<i64> = if let Some(chat_id_str) = message.metadata.get("chat_id") {
+            let id: i64 = chat_id_str.parse().map_err(|_| {
+                ZeniiError::Channel(format!("telegram: invalid chat_id: {chat_id_str}"))
+            })?;
+            vec![id]
+        } else if !self.config.allowed_chat_ids.is_empty() {
+            self.config.allowed_chat_ids.clone()
+        } else {
+            return Err(ZeniiError::Channel(
+                "telegram: no chat_id in metadata and no allowed_chat_ids configured".into(),
+            ));
+        };
 
         // Split oversized messages to respect Telegram's 4096 byte limit
         let parts = super::format::split_message(&message.content, TELEGRAM_MAX_MESSAGE_BYTES);
-        for part in parts {
-            bot.send_message(ChatId(chat_id), &part)
-                .parse_mode(ParseMode::Html)
-                .await
-                .map_err(|e| ZeniiError::Channel(format!("telegram send failed: {e}")))?;
+        for &cid in &chat_ids {
+            for part in &parts {
+                bot.send_message(ChatId(cid), part)
+                    .parse_mode(ParseMode::Html)
+                    .await
+                    .map_err(|e| ZeniiError::Channel(format!("telegram send failed: {e}")))?;
+            }
         }
 
         Ok(())

@@ -142,36 +142,46 @@ impl ChannelSender for SlackChannel {
             .get()
             .ok_or_else(|| ZeniiError::Channel("slack: not connected".into()))?;
 
-        let channel_id = message
-            .metadata
-            .get("channel_id")
-            .ok_or_else(|| ZeniiError::Channel("slack: missing channel_id in metadata".into()))?;
+        // If channel_id is in metadata, send to that specific channel.
+        // Otherwise broadcast to all allowed_channel_ids (for scheduler/notification use).
+        let channel_ids: Vec<String> = if let Some(cid) = message.metadata.get("channel_id") {
+            vec![cid.clone()]
+        } else if !self.allowed_channel_ids.is_empty() {
+            self.allowed_channel_ids.clone()
+        } else {
+            return Err(ZeniiError::Channel(
+                "slack: no channel_id in metadata and no allowed_channel_ids configured".into(),
+            ));
+        };
 
         let formatted = super::slack::fmt::to_mrkdwn(&message.content);
-        let mut payload = api::post_message_payload(channel_id, &formatted);
 
-        // Thread reply if thread_ts is present
-        if let Some(thread_ts) = message.metadata.get("thread_ts") {
-            payload["thread_ts"] = serde_json::Value::String(thread_ts.clone());
-        }
+        for channel_id in &channel_ids {
+            let mut payload = api::post_message_payload(channel_id, &formatted);
 
-        let resp = self
-            .http_client
-            .post("https://slack.com/api/chat.postMessage")
-            .bearer_auth(bot_token)
-            .json(&payload)
-            .send()
-            .await
-            .map_err(|e| ZeniiError::Channel(format!("slack send failed: {e}")))?;
+            // Thread reply if thread_ts is present
+            if let Some(thread_ts) = message.metadata.get("thread_ts") {
+                payload["thread_ts"] = serde_json::Value::String(thread_ts.clone());
+            }
 
-        let body: serde_json::Value = resp
-            .json()
-            .await
-            .map_err(|e| ZeniiError::Channel(format!("slack send parse failed: {e}")))?;
+            let resp = self
+                .http_client
+                .post("https://slack.com/api/chat.postMessage")
+                .bearer_auth(bot_token)
+                .json(&payload)
+                .send()
+                .await
+                .map_err(|e| ZeniiError::Channel(format!("slack send failed: {e}")))?;
 
-        if !body["ok"].as_bool().unwrap_or(false) {
-            let err = body["error"].as_str().unwrap_or("unknown");
-            return Err(ZeniiError::Channel(format!("slack send error: {err}")));
+            let body: serde_json::Value = resp
+                .json()
+                .await
+                .map_err(|e| ZeniiError::Channel(format!("slack send parse failed: {e}")))?;
+
+            if !body["ok"].as_bool().unwrap_or(false) {
+                let err = body["error"].as_str().unwrap_or("unknown");
+                return Err(ZeniiError::Channel(format!("slack send error: {err}")));
+            }
         }
 
         Ok(())
