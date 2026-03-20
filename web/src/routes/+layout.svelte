@@ -25,8 +25,16 @@
 	let { children } = $props();
 	let appVersion = $state<string | null>(null);
 
+	function handleVisibilityChange() {
+		if (document.visibilityState === 'visible') {
+			sessionsStore.load();
+		}
+	}
+
 	onMount(async () => {
 		sessionsStore.load();
+		document.addEventListener('visibilitychange', handleVisibilityChange);
+
 		const baseUrl = getBaseUrl();
 		const wsBase = baseUrl.replace(/^http/, 'ws');
 		const token = getToken();
@@ -39,6 +47,7 @@
 	});
 
 	onDestroy(() => {
+		document.removeEventListener('visibilitychange', handleVisibilityChange);
 		notificationStore.disconnect();
 	});
 

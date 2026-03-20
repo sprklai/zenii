@@ -4,9 +4,11 @@
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import MessageSquarePlus from '@lucide/svelte/icons/message-square-plus';
 	import MessageSquare from '@lucide/svelte/icons/message-square';
+	import RefreshCw from '@lucide/svelte/icons/refresh-cw';
 	import Trash2 from '@lucide/svelte/icons/trash-2';
 	import Pencil from '@lucide/svelte/icons/pencil';
 	import { sessionsStore } from '$lib/stores/sessions.svelte';
+	import { messagesStore } from '$lib/stores/messages.svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 
@@ -21,6 +23,13 @@
 			editInputRef.focus();
 		}
 	});
+
+	async function handleRefresh() {
+		await sessionsStore.load();
+		if (page.params.id) {
+			await messagesStore.load(page.params.id);
+		}
+	}
 
 	async function handleNew() {
 		const session = await sessionsStore.create('New Chat');
@@ -72,9 +81,14 @@
 <Sidebar.Group>
 	<Sidebar.GroupLabel class="flex items-center justify-between">
 		<span>Chats</span>
-		<Button variant="ghost" size="icon" class="h-5 w-5" onclick={handleNew}>
-			<MessageSquarePlus class="h-3.5 w-3.5" />
-		</Button>
+		<div class="flex items-center gap-0.5">
+			<Button variant="ghost" size="icon" class="h-5 w-5" onclick={handleRefresh} disabled={sessionsStore.loading}>
+				<RefreshCw class="h-3.5 w-3.5 {sessionsStore.loading ? 'animate-spin' : ''}" />
+			</Button>
+			<Button variant="ghost" size="icon" class="h-5 w-5" onclick={handleNew}>
+				<MessageSquarePlus class="h-3.5 w-3.5" />
+			</Button>
+		</div>
 	</Sidebar.GroupLabel>
 	<Sidebar.GroupContent>
 		<Sidebar.Menu>
