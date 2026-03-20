@@ -11,6 +11,7 @@
 	import Settings from '@lucide/svelte/icons/settings';
 	import Calendar from '@lucide/svelte/icons/calendar';
 	import BookOpen from '@lucide/svelte/icons/book-open';
+	import FileText from '@lucide/svelte/icons/file-text';
 	import { inboxStore } from '$lib/stores/inbox.svelte';
 	import '$lib/stores/theme.svelte';
 	import { goto } from '$app/navigation';
@@ -99,6 +100,12 @@
 
 			<Sidebar.Footer class="sticky bottom-0 z-10 bg-sidebar-accent/50 border-t border-sidebar-border">
 				<Sidebar.Menu>
+					<Sidebar.MenuItem>
+						<Sidebar.MenuButton onclick={() => openInBrowser('https://docs.zenii.sprklai.com/installation-and-usage')}>
+							<FileText class="h-4 w-4" />
+							<span>Documentation</span>
+						</Sidebar.MenuButton>
+					</Sidebar.MenuItem>
 					<Sidebar.MenuItem>
 						<Sidebar.MenuButton onclick={handleApiDocs}>
 							<BookOpen class="h-4 w-4" />
