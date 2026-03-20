@@ -8,7 +8,7 @@ slug: /architecture
 
 ## Table of Contents
 
-- [System Architecture](#system-architecture)
+- [System Architecture](#system-architecture) 
 - [Data Flow](#data-flow)
 - [Crate Dependency Graph](#crate-dependency-graph)
 - [Project Structure](#project-structure)
