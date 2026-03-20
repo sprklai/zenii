@@ -1,3 +1,8 @@
 [advisories]
-# time 0.3.45 DoS via stack exhaustion in RFC 2822 parsing — pinned by tauri's cookie dependency
-ignore = ["RUSTSEC-2026-0009"]
+ignore = [
+    # time 0.3.45 DoS via stack exhaustion in RFC 2822 parsing — pinned by tauri's cookie dependency
+    "RUSTSEC-2026-0009",
+    # rustls-webpki CRL matching bug — 0.101.7 (websearch→reqwest 0.11) and 0.102.8 (serenity→rustls 0.22)
+    # are stuck on older semver branches; 0.103.9→0.103.10 fixed via cargo update
+    "RUSTSEC-2026-0049",
+]
