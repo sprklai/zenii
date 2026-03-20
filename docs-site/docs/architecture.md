@@ -8,7 +8,7 @@ slug: /architecture
 
 ## Table of Contents
 
-- [System Architecture](#system-architecture) 
+- [System Architecture](#system-architecture)
 - [Data Flow](#data-flow)
 - [Crate Dependency Graph](#crate-dependency-graph)
 - [Project Structure](#project-structure)
@@ -33,6 +33,7 @@ slug: /architecture
 - [Autonomous Reasoning Engine](#autonomous-reasoning-engine-phase-811)
 - [Semantic Memory and Embeddings](#semantic-memory-and-embeddings-phase-811)
 - [Phase 18 Hardening](#phase-18-hardening)
+- [Workflow Audit Hardening](#workflow-audit-hardening)
 - [Plugin Architecture](#plugin-architecture-phase-9)
 - [Context-Driven Auto-Discovery](#context-driven-auto-discovery)
 - [AgentSelfTool](#agentselftool)
@@ -49,10 +50,6 @@ slug: /architecture
 ---
 
 ## System Architecture
-
-<p align="center">
-  <img src="/img/system-architecture.png" alt="Zenii System Architecture" width="720" />
-</p>
 
 ```mermaid
 graph TD
@@ -155,7 +152,7 @@ graph TD
     core --> rusqlite["rusqlite<br>#40;database#41;"]
     core --> rigcore["rig-core<br>#40;AI#41;"]
     core --> tokio["tokio<br>#40;async runtime#41;"]
-    core --> keyring["keyring + aes-gcm<br>#40;credentials#41;"]
+    core --> keyring["keyring<br>#40;credentials#41;"]
     core --> sysinfo["sysinfo<br>#40;system info + processes#41;"]
     core --> ignore["ignore<br>#40;file search#41;"]
     core --> diffy["diffy<br>#40;patch/diff#41;"]
@@ -198,7 +195,7 @@ zenii/
 │   │   │   ├── memory/     # Memory trait + SqliteMemoryStore (FTS5 + vectors) + InMemoryStore
 │   │   │   ├── credential/ # CredentialStore trait + KeyringStore + FileCredentialStore + InMemoryCredentialStore
 │   │   │   ├── security/   # SecurityPolicy + AutonomyLevel + rate limiter + audit log
-│   │   │   ├── tools/      # Tool trait + ToolRegistry (DashMap) + 16 tools (14 base + 2 feature-gated)
+│   │   │   ├── tools/      # Tool trait + ToolRegistry (DashMap) + 17 tools (14 base + 3 feature-gated)
 │   │   │   ├── ai/         # AI agent (rig-core), providers, session manager, tool adapter, context engine, delegation
 │   │   │   │   └── delegation/ # Coordinator, SubAgent, DelegationTask, dependency-wave execution
 │   │   │   ├── workflows/  # WorkflowRegistry, WorkflowExecutor, StepRuntime, templates (feature-gated)
@@ -308,6 +305,8 @@ graph TD
     Dashboard --> CoreWD[zenii-core/web-dashboard]
     CoreWD --> CoreGW
     Wkflows --> CoreWF[zenii-core/workflows]
+    CoreWF --> Petgraph[petgraph]
+    CoreWF --> Minijinja[minijinja]
 ```
 
 ## Trait-Driven Architecture
@@ -318,7 +317,7 @@ All major subsystems are abstracted behind traits, allowing swappable implementa
 graph TB
     subgraph TraitAbstractions["Trait Abstractions - zenii-core"]
         Memory["dyn Memory<br>SQLite now<br>PostgreSQL + pgvector later"]
-        CredStore["dyn CredentialStore<br>Keyring / encrypted file now<br>Vault / cloud KMS later"]
+        CredStore["dyn CredentialStore<br>Keyring now<br>Vault / cloud KMS later"]
         Channel["dyn Channel<br>openclaw-channels"]
         EvBus["dyn EventBus<br>tokio::broadcast now<br>NATS / Redis later"]
         CompModel["Rig CompletionModel<br>built-in providers now<br>custom providers later"]
@@ -369,7 +368,7 @@ graph TB
     subgraph CredModule["Credential Module"]
         Mod["mod.rs<br>CredentialStore trait<br>get / set / delete / list"]
         KR["keyring.rs<br>KeyringStore #40;production#41;<br>OS keychain integration"]
-        FS["file_store.rs<br>FileCredentialStore #40;fallback#41;<br>AES-256-GCM encrypted JSON"]
+        FS["file_store.rs<br>FileCredentialStore<br>AES-256-GCM encrypted JSON"]
         Mem["memory.rs<br>InMemoryStore #40;tests/CI#41;<br>DashMap-backed"]
     end
 
@@ -407,17 +406,15 @@ graph TB
 | **TUI** | Via gateway | Connects to daemon over HTTP |
 | **Daemon** | Direct | Headless, runs as service |
 
-All credential values are wrapped with `zeroize` for secure memory cleanup.
-
 ### Fallback Chain
 
-The credential system uses a 3-tier fallback chain, determined at boot time:
+At boot, the credential store is selected via a three-tier fallback:
 
-1. **KeyringStore** (preferred) -- Uses the OS keyring (macOS Keychain, Windows Credential Manager, Linux Secret Service). Selected when the OS keyring is available and functional.
-2. **FileCredentialStore** (fallback) -- AES-256-GCM encrypted JSON file at `{data_dir}/credentials.enc`. Activates when the OS keyring is unavailable (e.g., macOS code-signature revocation, Linux without Secret Service/gnome-keyring, headless environments like Raspberry Pi). The encryption key is derived from `SHA-256(hostname:username:data_dir:service_id)`. File permissions are set to `0o600` on Unix. Writes are atomic (tmp + rename).
-3. **InMemoryCredentialStore** (last resort) -- Volatile DashMap-backed store. Used only when both keyring and file store fail, or in tests/CI. Credentials are lost on restart.
+1. **KeyringStore** — OS keyring (macOS Keychain, Windows Credential Manager, Linux Secret Service). Preferred when available.
+2. **FileCredentialStore** — AES-256-GCM encrypted JSON file at `{data_dir}/credentials.enc`. Key derived from SHA-256 of machine characteristics (hostname, username, data_dir, service_id). Activated when keyring is unavailable (e.g., macOS after binary recompilation changes code signature).
+3. **InMemoryCredentialStore** — Volatile RAM-only store. Last resort when both persistent stores fail.
 
-The `credential_file_path` config option allows overriding the default file location. Dependencies: `aes-gcm` and `sha2` crates (pure Rust, no C dependencies).
+All credential values are wrapped with `zeroize` for secure memory cleanup.
 
 ## Provider Registry
 
@@ -532,6 +529,7 @@ graph TB
 | `channels-telegram` | `channels` | TelegramChannel + teloxide dependency |
 | `channels-slack` | `channels` | SlackChannel (uses existing reqwest/tungstenite) |
 | `channels-discord` | `channels` | DiscordChannel + serenity dependency |
+| `workflows` | (none) | WorkflowRegistry + WorkflowExecutor + petgraph + minijinja + 7 gateway routes |
 
 ## Identity / Soul System
 
@@ -798,7 +796,7 @@ graph TB
 
 ## Gateway Routes
 
-All clients communicate via the HTTP+WebSocket gateway at `localhost:18981`. Routes are grouped by subsystem (79 base + 24 feature-gated = 103 total).
+All clients communicate via the HTTP+WebSocket gateway at `localhost:18981`. Routes are grouped by subsystem (83 base + 26 feature-gated = 109 total).
 
 ### Health (1 route, no auth)
 
@@ -1010,7 +1008,7 @@ All clients communicate via the HTTP+WebSocket gateway at `localhost:18981`. Rou
 | DELETE | `/workflows/{id}` | `workflows` | Delete workflow |
 | POST | `/workflows/{id}/run` | `workflows` | Execute workflow |
 | GET | `/workflows/{id}/history` | `workflows` | Get run history |
-| GET | `/workflows/{id}/runs/{run_id}` | `workflows` | Get specific run details |
+| GET | `/workflows/{id}/runs/{run_id}` | `workflows` | Get run details with step results |
 
 ### WebSocket Endpoints (2 routes)
 
@@ -1265,7 +1263,7 @@ Four new agent-callable tools give the AI agent direct control over system funct
 
 ```mermaid
 graph TD
-    subgraph ToolRegistry["ToolRegistry - 16 tools"]
+    subgraph ToolRegistry["ToolRegistry - 17 tools"]
         subgraph Base["Base Tools - 14"]
             SysInfo[system_info]
             WebSearch[web_search]
@@ -1282,9 +1280,10 @@ graph TD
             ConfigT[config]
             AgentSelf["agent_notes"]
         end
-        subgraph FeatureGated["Feature-Gated - 2"]
+        subgraph FeatureGated["Feature-Gated - 3"]
             ChanSend["channel_send<br>#40;channels#41;"]
             SchedT["scheduler<br>#40;scheduler#41;"]
+            WorkflowT["workflows<br>#40;workflows#41;"]
         end
     end
 
@@ -1381,6 +1380,75 @@ Phase 18 addressed 51 issues from two code audits across 8 parallel work streams
 - **Channel reliability** -- UTF-8 safe message splitting, Slack echo loop prevention
 - **Frontend** -- svelte-check warnings reduced from 19 to 0
 - **CI/CD** -- all-features testing added to CI pipeline
+
+## Workflow Audit Hardening
+
+A whole-app workflow audit addressing security, agent safety, session lifecycle, event bus hygiene, and frontend resilience. 16 new tests added (1,306 total).
+
+### Security Hardening
+
+9 additional commands added to `BLOCKED_COMMANDS` in `security/policy.rs`: `eval`, `exec`, `nc`, `ncat`, `socat`, `docker`, `systemctl`, `xdg-open`, `open`. Pipe-to-shell patterns (e.g., `curl | sh`) were already caught by `|` in `INJECTION_PATTERNS`.
+
+### Agent Execution Safety
+
+```mermaid
+flowchart TD
+    WS([WS chat message]) --> Spawn["tokio::spawn agent task<br>store JoinHandle"]
+    Spawn --> Select["tokio::select!"]
+
+    Select -->|agent completes| Done["Send response tokens"]
+    Select -->|timeout| Abort["abort JoinHandle<br>send ZeniiError::Agent"]
+    Select -->|client disconnects| Abort2["abort JoinHandle<br>log warning, clean up"]
+
+    Done --> Persist["Persist to DB<br>retry once after 100ms on failure<br>send WsOutbound::Warning on final failure"]
+
+    subgraph ToolEvents["Tool Event Handling"]
+        ToolRx["tool_rx channel"] --> Lag{"lagged?"}
+        Lag -->|yes| Warn["Send WsOutbound::Warning<br>with dropped event count"]
+        Lag -->|no| Forward["Forward tool event to client"]
+    end
+
+    style Select fill:#FF9800,color:#fff
+    style Abort fill:#F44336,color:#fff
+    style Abort2 fill:#F44336,color:#fff
+    style Warn fill:#FF9800,color:#fff
+```
+
+Key changes in `gateway/handlers/ws.rs`:
+- **Agent timeout**: `tokio::time::timeout()` with configurable `agent_timeout_secs` (default 300s)
+- **Client disconnect abort**: `JoinHandle` stored, `tokio::select!` detects WS close and aborts the agent task
+- **Tool event lag handling**: when `tool_rx` lags, sends `WsOutbound::Warning` with count of dropped events
+- **DB persistence retry**: one retry after 100ms on failure, `WsOutbound::Warning` sent to client on final failure
+
+### Session Lifecycle
+
+`SessionManager::cleanup_old_sessions()` added in `ai/session.rs`. Deletes sessions older than `session_max_age_days` (default 90). Runs automatically on boot during `init_services()`.
+
+### Event Bus Cleanup
+
+- 10 never-published `AppEvent` variants removed from `event_bus/mod.rs`: `SessionCreated`, `SessionDeleted`, `MessageReceived`, `StreamChunk`, `StreamDone`, `ToolExecutionStarted`, `ToolExecutionCompleted`, `ProviderChanged`, `MemoryStored`, `GatewayStarted`
+- Event bus capacity now reads from `config.event_bus_capacity` (default 256) instead of being hardcoded
+
+### Notification Routing
+
+`heartbeat_alert` field added to `NotificationRouting` (backend `routing.rs` + frontend `notifications.svelte.ts`). Frontend now uses `hasTarget("heartbeat_alert", ...)` instead of piggybacking on `scheduler_job_completed`.
+
+### Frontend Resilience
+
+- `activeToolCalls` array capped at 50 entries in `messages.svelte.ts`
+- Session store retry replaced with exponential backoff (3 attempts: 1s, 2s, 4s) in `sessions.svelte.ts`
+
+### Scheduler Validation
+
+`add_job()` validates `start_hour != end_hour` in active hours configuration (`tokio_scheduler.rs`).
+
+### New Config Fields
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `agent_timeout_secs` | u64 | 300 | Maximum seconds for agent execution before timeout |
+| `event_bus_capacity` | usize | 256 | Capacity of the tokio broadcast event bus |
+| `session_max_age_days` | u32 | 90 | Days before old sessions are cleaned up on boot |
 
 ## Plugin Architecture (Phase 9)
 
@@ -2072,6 +2140,14 @@ depends_on = ["fetch"]
 |---|---|---|---|
 | `workflow_dir` | Option | None | Workflow TOML directory (default: `data_dir/workflows`) |
 | `workflow_max_concurrent` | usize | 5 | Max concurrent workflow runs |
+| `workflow_max_steps` | usize | 50 | Max steps per workflow |
+| `workflow_step_timeout_secs` | u64 | 300 | Default step timeout in seconds |
+| `workflow_step_max_retries` | u32 | 3 | Default step retry count |
+
+### DB Schema
+
+- `workflow_runs` -- run history: id, workflow_id, workflow_name, status, started_at, completed_at, error
+- `workflow_step_results` -- per-step results: id, run_id, step_name, output, success, duration_ms, error, executed_at
 
 ---
 

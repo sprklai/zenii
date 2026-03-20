@@ -466,7 +466,7 @@ curl http://localhost:18981/setup/status
 
 #### POST /credentials
 
-Store a credential (key-value pair) in the secure store (OS keyring, encrypted file fallback, or in-memory fallback).
+Store a credential (key-value pair) in the secure store (OS keyring or in-memory fallback).
 
 **Request Body:**
 ```json

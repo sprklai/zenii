@@ -65,8 +65,8 @@ sequenceDiagram
         CE-->>G: Context preamble string
 
         G->>AI: resolve_agent(model, preamble)
+        AI->>LLM: Send prompt with context preamble
     end
-    AI->>LLM: Send prompt with context preamble
 
     loop Tool calling loop
         LLM-->>AI: Response (may contain tool calls)
@@ -98,12 +98,13 @@ sequenceDiagram
     App->>App: Initialize tracing/logging
     App->>DB: Open/create database
     DB->>DB: Run pending migrations
-    App->>Cred: Initialize credential store (KeyringStore / FileCredentialStore / InMemoryStore)
+    App->>Cred: Initialize credential store (KeyringStore / InMemoryStore)
     App->>AI: Register providers + load API keys
-    App->>AI: Register 14 base + 2 feature-gated agent tools into ToolRegistry (DashMap)
+    App->>AI: Register 14 base + 3 feature-gated agent tools into ToolRegistry (DashMap)
     App->>App: Load identity (SoulLoader from data_dir/identity/)
     App->>App: Load skills (SkillRegistry from data_dir/skills/)
     App->>App: Init user learner (UserLearner from DB pool)
+    App->>App: Cleanup old sessions (session_max_age_days, default 90)
     App->>App: Init ContextEngine + store_all_summaries()
     opt channels feature enabled
         App->>App: Init ChannelRegistry (DashMap)
@@ -192,9 +193,30 @@ sequenceDiagram
 
     C->>S: WS Connect /ws/chat?token=xxx
     C->>S: { "prompt": "hello", "session_id": "optional-uuid" }
-    Note over S: Validate JSON, check agent, call ZeniiAgent.prompt
-    S-->>C: { "type": "text", "content": "Hi there!" }
-    S-->>C: { "type": "done" }
+    Note over S: Validate JSON, check agent, spawn agent task with JoinHandle
+    Note over S: tokio::select! on agent / timeout / client disconnect
+
+    alt Agent completes within timeout
+        S-->>C: { "type": "text", "content": "Hi there!" }
+        S-->>C: { "type": "done" }
+        Note over S: Persist to DB (retry once on failure)
+    else Agent exceeds agent_timeout_secs
+        Note over S: Abort JoinHandle
+        S-->>C: { "type": "error", "error": "agent timeout" }
+    else Client disconnects during execution
+        Note over S: Abort JoinHandle, log warning
+    end
+
+    Note over C,S: Tool event lag
+    alt tool_rx channel lags
+        S-->>C: { "type": "warning", "message": "N tool events dropped" }
+    end
+
+    Note over C,S: DB persistence failure
+    alt DB write fails after retry
+        S-->>C: { "type": "warning", "message": "failed to persist messages" }
+    end
+
     Note over C,S: Error cases
     C->>S: invalid-json
     S-->>C: { "type": "error", "error": "invalid JSON: ..." }
@@ -433,7 +455,6 @@ sequenceDiagram
     CS-->>AG: API key
 
     Note over KS: All binaries share same keyring namespace (same OS user)
-    Note over KS: Fallback chain: KeyringStore -> FileCredentialStore -> InMemoryStore
     Note over KS: CI/test: InMemoryStore used instead of keyring
 ```
 
@@ -963,8 +984,6 @@ sequenceDiagram
 
 **Key files**: `tools/agent_self_tool.rs`, `ai/context.rs` (`load_agent_rules()`)
 
----
-
 ## Agent Delegation Flow
 
 When a chat request includes `delegation: true`, the Coordinator decomposes the task into independent sub-tasks, spawns isolated sub-agents in dependency waves, and aggregates the results into a unified response.
@@ -1019,8 +1038,6 @@ sequenceDiagram
 Active delegation runs can be cancelled via `POST /agents/{id}/cancel`, which aborts all sub-agent `JoinHandle`s. `GET /agents/active` lists active run IDs.
 
 **Key files**: `ai/delegation/coordinator.rs`, `ai/delegation/sub_agent.rs`, `ai/delegation/task.rs`, `gateway/handlers/delegation.rs`
-
----
 
 ## Workflow Execution Flow
 

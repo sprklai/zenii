@@ -195,7 +195,7 @@ zenii/
 │   │   │   ├── memory/     # Memory trait + SqliteMemoryStore (FTS5 + vectors) + InMemoryStore
 │   │   │   ├── credential/ # CredentialStore trait + KeyringStore + FileCredentialStore + InMemoryCredentialStore
 │   │   │   ├── security/   # SecurityPolicy + AutonomyLevel + rate limiter + audit log
-│   │   │   ├── tools/      # Tool trait + ToolRegistry (DashMap) + 16 tools (14 base + 2 feature-gated)
+│   │   │   ├── tools/      # Tool trait + ToolRegistry (DashMap) + 17 tools (14 base + 3 feature-gated)
 │   │   │   ├── ai/         # AI agent (rig-core), providers, session manager, tool adapter, context engine, delegation
 │   │   │   │   └── delegation/ # Coordinator, SubAgent, DelegationTask, dependency-wave execution
 │   │   │   ├── workflows/  # WorkflowRegistry, WorkflowExecutor, StepRuntime, templates (feature-gated)
@@ -796,7 +796,7 @@ graph TB
 
 ## Gateway Routes
 
-All clients communicate via the HTTP+WebSocket gateway at `localhost:18981`. Routes are grouped by subsystem (81 base + 24 feature-gated = 105 total).
+All clients communicate via the HTTP+WebSocket gateway at `localhost:18981`. Routes are grouped by subsystem (83 base + 26 feature-gated = 109 total).
 
 ### Health (1 route, no auth)
 
@@ -1263,7 +1263,7 @@ Four new agent-callable tools give the AI agent direct control over system funct
 
 ```mermaid
 graph TD
-    subgraph ToolRegistry["ToolRegistry - 16 tools"]
+    subgraph ToolRegistry["ToolRegistry - 17 tools"]
         subgraph Base["Base Tools - 14"]
             SysInfo[system_info]
             WebSearch[web_search]
@@ -1280,9 +1280,10 @@ graph TD
             ConfigT[config]
             AgentSelf["agent_notes"]
         end
-        subgraph FeatureGated["Feature-Gated - 2"]
+        subgraph FeatureGated["Feature-Gated - 3"]
             ChanSend["channel_send<br>#40;channels#41;"]
             SchedT["scheduler<br>#40;scheduler#41;"]
+            WorkflowT["workflows<br>#40;workflows#41;"]
         end
     end
 
