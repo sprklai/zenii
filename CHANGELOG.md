@@ -7,9 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.32] - 2026-03-20
+
 ### Added
 - Workflow Engine: multi-step automation pipelines defined in TOML with DAG-based execution (petgraph), 5 step types (tool, LLM, condition, parallel, delay), minijinja template resolution between steps, retry/timeout/failure policies, DB-persisted run history, scheduler integration, and 7 API endpoints (feature-gated: `--features workflows`)
 - Agent Delegation: parallel sub-agent execution for complex tasks with LLM-powered task decomposition, isolated sessions per sub-agent, tool filtering via allowlist, dependency-based wave execution, token budget and timeout controls, real-time event bus updates, cancel support, and 2 API endpoints
+- Multi-agent state display with real-time delegation tracking in frontend
+- Copy and retry action buttons on user messages in chat UI
+
+### Fixed
+- Windows startup failure + cross-platform compatibility audit
+
+### Style
+- Applied cargo fmt across workspace
 
 ## [0.0.31] - 2026-03-20
 
