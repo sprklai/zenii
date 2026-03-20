@@ -13,6 +13,8 @@ pub enum Schedule {
     Interval { secs: u64 },
     /// Run according to a cron expression.
     Cron { expr: String },
+    /// Run once at a specific local datetime (e.g. "2026-03-20T00:53" or "2026-03-20 00:53").
+    Human { datetime: String },
 }
 
 /// Optional local-time window during which a job may fire.
@@ -130,6 +132,17 @@ mod tests {
     fn schedule_cron_serde() {
         let s = Schedule::Cron {
             expr: "0 */5 * * * *".into(),
+        };
+        let json = serde_json::to_string(&s).unwrap();
+        let back: Schedule = serde_json::from_str(&json).unwrap();
+        assert_eq!(s, back);
+    }
+
+    // 16.2b — Schedule::Human serialization round-trip
+    #[test]
+    fn schedule_human_serde() {
+        let s = Schedule::Human {
+            datetime: "2026-03-20T00:53".into(),
         };
         let json = serde_json::to_string(&s).unwrap();
         let back: Schedule = serde_json::from_str(&json).unwrap();

@@ -705,6 +705,9 @@ impl ContextEngine {
                                 crate::scheduler::traits::Schedule::Interval { secs } => {
                                     format!("every {secs}s")
                                 }
+                                crate::scheduler::traits::Schedule::Human { datetime } => {
+                                    format!("once at {datetime}")
+                                }
                             };
                             let next = j
                                 .next_run

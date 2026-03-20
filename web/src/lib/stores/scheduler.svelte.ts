@@ -3,7 +3,7 @@ import { apiGet, apiPost, apiPut, apiDelete } from "$lib/api/client";
 export interface ScheduledJob {
   id: string;
   name: string;
-  schedule: { type: "interval"; secs: number } | { type: "cron"; expr: string };
+  schedule: { type: "interval"; secs: number } | { type: "cron"; expr: string } | { type: "human"; datetime: string };
   session_target: "main" | "isolated";
   payload:
     | { type: "heartbeat" }

@@ -238,6 +238,45 @@ impl TokioScheduler {
         .await
     }
 
+    /// Parse a human datetime string as local time → UTC.
+    fn parse_human_datetime(datetime: &str) -> Result<DateTime<Utc>> {
+        use chrono::{Local, NaiveDateTime, TimeZone};
+
+        let formats = [
+            "%Y-%m-%dT%H:%M:%S",
+            "%Y-%m-%dT%H:%M",
+            "%Y-%m-%d %H:%M:%S",
+            "%Y-%m-%d %H:%M",
+        ];
+
+        let naive = formats
+            .iter()
+            .find_map(|fmt| NaiveDateTime::parse_from_str(datetime, fmt).ok())
+            .ok_or_else(|| {
+                ZeniiError::Scheduler(format!(
+                    "cannot parse datetime '{datetime}' — expected format like 2026-03-20T00:53 or 2026-03-20 00:53"
+                ))
+            })?;
+
+        let local_dt = Local
+            .from_local_datetime(&naive)
+            .single()
+            .ok_or_else(|| {
+                ZeniiError::Scheduler(format!(
+                    "ambiguous or invalid local time '{datetime}' (DST transition?)"
+                ))
+            })?;
+
+        let utc_dt = local_dt.with_timezone(&Utc);
+        if utc_dt <= Utc::now() {
+            return Err(ZeniiError::Scheduler(format!(
+                "datetime '{datetime}' is in the past"
+            )));
+        }
+
+        Ok(utc_dt)
+    }
+
     /// Compute the next run time for a schedule.
     pub fn compute_next_run(schedule: &Schedule) -> Result<DateTime<Utc>> {
         match schedule {
@@ -252,10 +291,12 @@ impl TokioScheduler {
                 let schedule = cron::Schedule::from_str(&full_expr)
                     .map_err(|e| ZeniiError::Scheduler(format!("invalid cron: {e}")))?;
                 schedule
-                    .upcoming(Utc)
+                    .upcoming(chrono::Local)
                     .next()
+                    .map(|dt| dt.with_timezone(&Utc))
                     .ok_or_else(|| ZeniiError::Scheduler("cron has no upcoming time".into()))
             }
+            Schedule::Human { datetime } => Self::parse_human_datetime(datetime),
         }
     }
 
@@ -536,6 +577,11 @@ impl Scheduler for TokioScheduler {
                 "a job named '{}' already exists — use a different name or delete the existing one first",
                 job.name
             )));
+        }
+
+        // Human schedules always auto-delete after execution
+        if matches!(job.schedule, Schedule::Human { .. }) {
+            job.delete_after_run = true;
         }
 
         // Validate cron expression if applicable

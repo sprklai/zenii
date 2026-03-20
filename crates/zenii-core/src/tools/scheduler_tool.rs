@@ -31,7 +31,7 @@ impl Tool for SchedulerTool {
     }
 
     fn description(&self) -> &str {
-        "Create, list, delete, toggle, or view history of scheduled jobs. Your context shows active jobs — check before creating duplicates. Use cron for complex schedules, interval for periodic. Set one_shot=true for one-time events (e.g. 'remind me at 5pm')."
+        "Create, list, delete, toggle, or view history of scheduled jobs. Your context shows active jobs — check before creating duplicates. Use cron for complex schedules, interval for periodic, human for one-time events at a specific local datetime (e.g. schedule_type='human', datetime='2026-03-20T00:53'). Human schedules auto-delete after execution."
     }
 
     fn parameters_schema(&self) -> serde_json::Value {
@@ -53,8 +53,8 @@ impl Tool for SchedulerTool {
                 },
                 "schedule_type": {
                     "type": "string",
-                    "enum": ["cron", "interval"],
-                    "description": "Schedule type (required for create)"
+                    "enum": ["cron", "interval", "human"],
+                    "description": "Schedule type (required for create). Use 'human' for one-time events at a specific local datetime."
                 },
                 "cron_expr": {
                     "type": "string",
@@ -63,6 +63,10 @@ impl Tool for SchedulerTool {
                 "interval_secs": {
                     "type": "integer",
                     "description": "Interval in seconds (required if schedule_type=interval)"
+                },
+                "datetime": {
+                    "type": "string",
+                    "description": "Local datetime for human schedule (required if schedule_type=human), e.g. '2026-03-20T00:53' or '2026-03-20 14:30'"
                 },
                 "payload_type": {
                     "type": "string",
@@ -169,9 +173,17 @@ impl SchedulerTool {
                 })?;
                 Schedule::Interval { secs }
             }
+            "human" => {
+                let datetime = args["datetime"].as_str().ok_or_else(|| {
+                    ZeniiError::Validation("missing 'datetime' for human schedule".into())
+                })?;
+                Schedule::Human {
+                    datetime: datetime.to_string(),
+                }
+            }
             other => {
                 return Ok(ToolResult::err(format!(
-                    "Unknown schedule_type '{other}'. Valid: cron, interval"
+                    "Unknown schedule_type '{other}'. Valid: cron, interval, human"
                 )));
             }
         };
@@ -224,7 +236,8 @@ impl SchedulerTool {
             _ => None,
         };
 
-        let delete_after_run = args["one_shot"].as_bool().unwrap_or(false);
+        let delete_after_run =
+            args["one_shot"].as_bool().unwrap_or(false) || schedule_type == "human";
 
         let job = ScheduledJob {
             id: uuid::Uuid::new_v4().to_string(),

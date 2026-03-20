@@ -729,6 +729,9 @@ impl PromptPlugin for SchedulerContextPlugin {
                     crate::scheduler::traits::Schedule::Interval { secs } => {
                         format!("every {secs}s")
                     }
+                    crate::scheduler::traits::Schedule::Human { datetime } => {
+                        format!("once at {datetime}")
+                    }
                 };
                 lines.push(format!("- {} ({schedule_str})", job.name));
             }

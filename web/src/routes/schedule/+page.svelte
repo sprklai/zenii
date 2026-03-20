@@ -27,9 +27,10 @@
 
 	// Form state
 	let jobName = $state('');
-	let scheduleType = $state<'interval' | 'cron'>('interval');
+	let scheduleType = $state<'interval' | 'cron' | 'human'>('interval');
 	let intervalSecs = $state(60);
 	let cronExpr = $state('');
+	let humanDatetime = $state('');
 	let payloadType = $state<'notify' | 'heartbeat' | 'agent_turn' | 'send_via_channel'>('notify');
 	let payloadMessage = $state('');
 	let payloadPrompt = $state('');
@@ -51,6 +52,7 @@
 		scheduleType = 'interval';
 		intervalSecs = 60;
 		cronExpr = '';
+		humanDatetime = '';
 		payloadType = 'notify';
 		payloadMessage = '';
 		payloadPrompt = '';
@@ -83,10 +85,23 @@
 			}
 		}
 
+		if (scheduleType === 'human') {
+			if (!humanDatetime) {
+				formError = 'Date and time is required';
+				return;
+			}
+			if (new Date(humanDatetime) <= new Date()) {
+				formError = 'Date and time must be in the future';
+				return;
+			}
+		}
+
 		const schedule =
 			scheduleType === 'interval'
 				? { type: 'interval' as const, secs: intervalSecs }
-				: { type: 'cron' as const, expr: cronExpr };
+				: scheduleType === 'cron'
+					? { type: 'cron' as const, expr: cronExpr }
+					: { type: 'human' as const, datetime: humanDatetime };
 
 		let payload: ScheduledJob['payload'];
 		if (payloadType === 'heartbeat') {
@@ -121,7 +136,7 @@
 				schedule,
 				payload,
 				session_target: sessionTarget,
-				delete_after_run: deleteAfterRun,
+				delete_after_run: scheduleType === 'human' ? true : deleteAfterRun,
 				active_hours: activeHoursEnabled
 					? { start_hour: activeStartHour, end_hour: activeEndHour }
 					: null
@@ -158,6 +173,9 @@
 			if (secs >= 3600) return `Every ${Math.round(secs / 3600)}h`;
 			if (secs >= 60) return `Every ${Math.round(secs / 60)}m`;
 			return `Every ${secs}s`;
+		}
+		if (job.schedule.type === 'human') {
+			return `At ${new Date(job.schedule.datetime).toLocaleString()}`;
 		}
 		return `Cron: ${job.schedule.expr}`;
 	}
@@ -227,6 +245,7 @@
 						>
 							<option value="interval">Interval</option>
 							<option value="cron">Cron</option>
+							<option value="human">One-time</option>
 						</select>
 					</div>
 
@@ -240,13 +259,23 @@
 								bind:value={intervalSecs}
 							/>
 						</div>
-					{:else}
+					{:else if scheduleType === 'cron'}
 						<div class="space-y-2">
 							<Label for="cron-expr">Cron Expression</Label>
 							<Input
 								id="cron-expr"
 								bind:value={cronExpr}
 								placeholder="0 */5 * * * *"
+							/>
+						</div>
+					{:else}
+						<div class="space-y-2">
+							<Label for="human-datetime">Date & Time</Label>
+							<input
+								id="human-datetime"
+								type="datetime-local"
+								bind:value={humanDatetime}
+								class="w-full rounded-md border bg-background text-foreground px-3 py-2 text-sm"
 							/>
 						</div>
 					{/if}
@@ -322,8 +351,12 @@
 					</div>
 
 					<div class="flex items-center gap-2 pt-6">
-						<input type="checkbox" id="one-shot" bind:checked={deleteAfterRun} />
-						<Label for="one-shot">One-shot (delete after run)</Label>
+						{#if scheduleType === 'human'}
+							<span class="text-xs text-muted-foreground">Auto-deletes after execution</span>
+						{:else}
+							<input type="checkbox" id="one-shot" bind:checked={deleteAfterRun} />
+							<Label for="one-shot">One-shot (delete after run)</Label>
+						{/if}
 					</div>
 				</div>
 
