@@ -87,6 +87,8 @@ pub(crate) enum WsOutbound {
         duration_ms: u64,
         tool_uses: u32,
         tokens_used: u64,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        error: Option<String>,
     },
     #[serde(rename = "delegation_completed")]
     DelegationDone {
@@ -717,7 +719,8 @@ async fn handle_delegation(socket: &mut WebSocket, state: &Arc<AppState>, prompt
     let prompt_owned = prompt.to_string();
     let (result_tx, mut result_rx) = tokio::sync::oneshot::channel();
 
-    tokio::spawn(async move {
+    // A.2: Store handle so we can abort on disconnect
+    let delegation_handle = tokio::spawn(async move {
         let result = state_clone
             .coordinator
             .delegate(&prompt_owned, &state_clone, "desktop")
@@ -725,18 +728,28 @@ async fn handle_delegation(socket: &mut WebSocket, state: &Arc<AppState>, prompt
         let _ = result_tx.send(result);
     });
 
+    // A.1: Track our delegation_id to filter events
+    let mut my_delegation_id: Option<String> = None;
+
     // Forward delegation events until completion
     loop {
         tokio::select! {
             ws_msg = socket.recv() => {
                 match ws_msg {
-                    Some(Ok(Message::Close(_))) | None => break,
+                    Some(Ok(Message::Close(_))) | None => {
+                        // A.2: Cancel delegation on client disconnect
+                        info!("WS: client disconnected during delegation, aborting");
+                        delegation_handle.abort();
+                        break;
+                    }
                     _ => {}
                 }
             }
             event = event_rx.recv() => {
                 match event {
                     Ok(crate::event_bus::AppEvent::DelegationStarted { delegation_id, agents }) => {
+                        // A.1: Claim this delegation_id
+                        my_delegation_id = Some(delegation_id.clone());
                         let ws_agents: Vec<DelegationAgentWs> = agents
                             .iter()
                             .map(|a| DelegationAgentWs {
@@ -751,7 +764,10 @@ async fn handle_delegation(socket: &mut WebSocket, state: &Arc<AppState>, prompt
                             agents: ws_agents,
                         }).await;
                     }
-                    Ok(crate::event_bus::AppEvent::SubAgentProgress { delegation_id, agent_id, tool_uses, tokens_used, current_activity }) => {
+                    // A.1: Filter all delegation events by our delegation_id
+                    Ok(crate::event_bus::AppEvent::SubAgentProgress { delegation_id, agent_id, tool_uses, tokens_used, current_activity })
+                        if my_delegation_id.as_deref() == Some(delegation_id.as_str()) =>
+                    {
                         send_outbound(socket, &WsOutbound::AgentProgress {
                             delegation_id,
                             agent_id,
@@ -760,7 +776,9 @@ async fn handle_delegation(socket: &mut WebSocket, state: &Arc<AppState>, prompt
                             current_activity,
                         }).await;
                     }
-                    Ok(crate::event_bus::AppEvent::SubAgentCompleted { delegation_id, agent_id, status, duration_ms, tool_uses, tokens_used }) => {
+                    Ok(crate::event_bus::AppEvent::SubAgentCompleted { delegation_id, agent_id, status, duration_ms, tool_uses, tokens_used })
+                        if my_delegation_id.as_deref() == Some(delegation_id.as_str()) =>
+                    {
                         send_outbound(socket, &WsOutbound::AgentCompleted {
                             delegation_id,
                             agent_id,
@@ -768,27 +786,34 @@ async fn handle_delegation(socket: &mut WebSocket, state: &Arc<AppState>, prompt
                             duration_ms,
                             tool_uses,
                             tokens_used,
+                            error: None,
                         }).await;
                     }
-                    Ok(crate::event_bus::AppEvent::SubAgentFailed { delegation_id, agent_id, error, tool_uses }) => {
+                    // A.3: Forward error detail and real duration_ms from SubAgentFailed
+                    Ok(crate::event_bus::AppEvent::SubAgentFailed { delegation_id, agent_id, error, tool_uses, duration_ms })
+                        if my_delegation_id.as_deref() == Some(delegation_id.as_str()) =>
+                    {
                         send_outbound(socket, &WsOutbound::AgentCompleted {
                             delegation_id,
                             agent_id,
                             status: "failed".into(),
-                            duration_ms: 0,
+                            duration_ms,
                             tool_uses,
                             tokens_used: 0,
+                            error: Some(error.clone()),
                         }).await;
                         debug!("Sub-agent failed: {error}");
                     }
-                    Ok(crate::event_bus::AppEvent::DelegationCompleted { delegation_id, total_duration_ms, total_tokens }) => {
+                    Ok(crate::event_bus::AppEvent::DelegationCompleted { delegation_id, total_duration_ms, total_tokens })
+                        if my_delegation_id.as_deref() == Some(delegation_id.as_str()) =>
+                    {
                         send_outbound(socket, &WsOutbound::DelegationDone {
                             delegation_id,
                             total_duration_ms,
                             total_tokens,
                         }).await;
                     }
-                    Ok(_) => {} // Ignore other events
+                    Ok(_) => {} // Ignore other events / non-matching delegation_ids
                     Err(broadcast::error::RecvError::Closed) => break,
                     Err(broadcast::error::RecvError::Lagged(n)) => {
                         warn!("delegation WS lagged by {n} messages");

@@ -65,6 +65,18 @@ impl WorkflowExecutor {
             }
         }
 
+        // Validate fallback step references exist
+        for step in steps {
+            if let FailurePolicy::Fallback { step: ref fb_name } = step.failure_policy {
+                if !indices.contains_key(fb_name) {
+                    return Err(ZeniiError::Workflow(format!(
+                        "step '{}' has fallback to unknown step '{}'",
+                        step.name, fb_name
+                    )));
+                }
+            }
+        }
+
         // Validate acyclic
         toposort(&graph, None)
             .map_err(|_| ZeniiError::Workflow("workflow contains cyclic dependencies".into()))?;
@@ -75,6 +87,18 @@ impl WorkflowExecutor {
     /// Execute a workflow, persisting the run to DB.
     pub async fn execute(
         &self,
+        workflow: &Workflow,
+        tools: &crate::tools::ToolRegistry,
+        event_bus: &dyn crate::event_bus::EventBus,
+    ) -> Result<WorkflowRun> {
+        let run_id = uuid::Uuid::new_v4().to_string();
+        self.execute_with_id(run_id, workflow, tools, event_bus).await
+    }
+
+    /// Execute a workflow with a pre-generated run_id (for external tracking).
+    pub async fn execute_with_id(
+        &self,
+        run_id: String,
         workflow: &Workflow,
         tools: &crate::tools::ToolRegistry,
         event_bus: &dyn crate::event_bus::EventBus,
@@ -91,8 +115,6 @@ impl WorkflowExecutor {
         let (graph, _indices) = Self::build_dag(&workflow.steps)?;
         let topo = toposort(&graph, None)
             .map_err(|_| ZeniiError::Workflow("workflow contains cyclic dependencies".into()))?;
-
-        let run_id = uuid::Uuid::new_v4().to_string();
         let started_at = chrono::Utc::now().to_rfc3339();
 
         // Persist run start
@@ -185,6 +207,14 @@ impl WorkflowExecutor {
                                     error: Some(e.to_string()),
                                 },
                             };
+                            // B.3: Emit event and persist result for fallback step
+                            let _ = event_bus.publish(crate::event_bus::AppEvent::WorkflowStepCompleted {
+                                workflow_id: workflow.id.clone(),
+                                run_id: run_id.clone(),
+                                step_name: fallback_name.clone(),
+                                success: fb_output.success,
+                            });
+                            self.persist_step_result(&run_id, &fb_output).await.ok();
                             step_outputs.insert(fallback_name.clone(), fb_output);
                         }
                     }
@@ -354,7 +384,7 @@ impl WorkflowExecutor {
         .await
     }
 
-    async fn persist_run_end(
+    pub(crate) async fn persist_run_end(
         &self,
         run_id: &str,
         status: &str,

@@ -20,11 +20,39 @@
 		if (tokens >= 1_000) return `${(tokens / 1_000).toFixed(1)}k`;
 		return `${tokens}`;
 	}
+
+	const finishedCount = $derived(
+		delegation.agents.filter((a) => a.status === 'completed' || a.status === 'failed').length
+	);
+	const totalCount = $derived(delegation.agents.length);
+	const allDone = $derived(finishedCount === totalCount);
+
+	function statusIcon(status: string): string {
+		switch (status) {
+			case 'completed': return '\u2713';
+			case 'failed': return '\u2717';
+			case 'running': return '\u25B6';
+			default: return '\u25CF';
+		}
+	}
+
+	function statusColor(status: string): string {
+		switch (status) {
+			case 'completed': return 'text-green-500';
+			case 'failed': return 'text-red-500';
+			case 'running': return 'text-amber-500';
+			default: return 'text-muted-foreground';
+		}
+	}
 </script>
 
 <div class="rounded-lg border border-border bg-muted/30 p-3 font-mono text-sm">
 	<div class="font-semibold text-cyan-500">
-		Running {delegation.agents.length} agents... ({elapsed}s)
+		{#if allDone}
+			All {totalCount} agents finished ({elapsed}s)
+		{:else}
+			Running {finishedCount}/{totalCount} agents... ({elapsed}s)
+		{/if}
 	</div>
 	{#each delegation.agents as agent, i}
 		{@const isLast = i === delegation.agents.length - 1}
@@ -32,16 +60,8 @@
 		{@const subConnector = isLast ? '   ' : '\u2502  '}
 		<div class="mt-1">
 			<span class="text-muted-foreground">{connector} </span>
-			<span
-				class={agent.status === 'completed'
-					? 'text-green-500'
-					: agent.status === 'failed'
-						? 'text-red-500'
-						: ''}
-			>
-				{#if agent.status === 'completed'}&#10003; {/if}
-				{#if agent.status === 'failed'}&#10007; {/if}
-				{agent.description}
+			<span class={statusColor(agent.status)}>
+				{statusIcon(agent.status)} {agent.description}
 			</span>
 			<span class="text-muted-foreground">
 				{#if agent.status === 'completed' && agent.durationMs}

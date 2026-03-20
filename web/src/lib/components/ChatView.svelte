@@ -47,6 +47,7 @@
 	let providersLoaded = $state(false);
 	let activeWs = $state<WebSocket | null>(null);
 	let editText = $state("");
+	let delegationEnabled = $state(false);
 
 	onMount(async () => {
 		await providersStore.load();
@@ -120,6 +121,7 @@
 
 		const capturedSessionId = currentSessionId;
 		const capturedModel = providersStore.selectedModel || undefined;
+		const capturedDelegation = delegationEnabled || undefined;
 		activeWs = createChatStream(
 			prompt,
 			currentSessionId,
@@ -180,7 +182,8 @@
 					console.error('Chat error:', error);
 				}
 			},
-			providersStore.selectedModel || undefined
+			providersStore.selectedModel || undefined,
+			capturedDelegation
 		);
 	}
 
@@ -372,6 +375,10 @@
 						</PromptInputModelSelectContent>
 					</PromptInputModelSelect>
 				{/if}
+				<label class="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer select-none" title="Enable multi-agent delegation">
+					<input type="checkbox" bind:checked={delegationEnabled} class="accent-cyan-500" />
+					Delegate
+				</label>
 				<div class="flex-1"></div>
 				<PromptInputSubmit
 					status={messagesStore.streaming ? 'streaming' : 'idle'}

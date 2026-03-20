@@ -50,6 +50,8 @@ export interface WorkflowRunProgress {
   startedAt: number;
 }
 
+const WORKFLOW_SAFETY_TIMEOUT_MS = 10 * 60 * 1000;
+
 function createWorkflowsStore() {
   let workflows = $state<Workflow[]>([]);
   let loading = $state(false);
@@ -94,7 +96,7 @@ function createWorkflowsStore() {
           () => {
             this.setCompleted(workflowId, runId, "timeout");
           },
-          5 * 60 * 1000,
+          WORKFLOW_SAFETY_TIMEOUT_MS,
         ),
       );
     },
@@ -132,6 +134,11 @@ function createWorkflowsStore() {
       const savedProgress = runningWorkflows.get(workflowId);
       const savedTimeout = timeouts.get(workflowId);
 
+      if (!savedProgress) {
+        error = "No active run to cancel";
+        return;
+      }
+
       // Optimistic remove
       const next = new Map(runningWorkflows);
       next.delete(workflowId);
@@ -144,27 +151,25 @@ function createWorkflowsStore() {
 
       try {
         await apiPost(
-          `/workflows/${encodeURIComponent(workflowId)}/cancel`,
+          `/workflows/${encodeURIComponent(workflowId)}/runs/${encodeURIComponent(savedProgress.runId)}/cancel`,
           {},
         );
       } catch (e: unknown) {
         // Restore running state on failure
-        if (savedProgress) {
-          const restored = new Map(runningWorkflows);
-          restored.set(workflowId, savedProgress);
-          runningWorkflows = restored;
+        const restored = new Map(runningWorkflows);
+        restored.set(workflowId, savedProgress);
+        runningWorkflows = restored;
 
-          if (savedTimeout) {
-            timeouts.set(
-              workflowId,
-              setTimeout(
-                () => {
-                  this.setCompleted(workflowId, savedProgress.runId, "timeout");
-                },
-                5 * 60 * 1000,
-              ),
-            );
-          }
+        if (savedTimeout) {
+          timeouts.set(
+            workflowId,
+            setTimeout(
+              () => {
+                this.setCompleted(workflowId, savedProgress.runId, "timeout");
+              },
+              WORKFLOW_SAFETY_TIMEOUT_MS,
+            ),
+          );
         }
         error = e instanceof Error ? e.message : "Failed to cancel workflow";
       }

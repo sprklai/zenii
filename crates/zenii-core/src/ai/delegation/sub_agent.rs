@@ -137,16 +137,27 @@ impl SubAgent {
         let final_tool_uses = tool_uses.load(std::sync::atomic::Ordering::Relaxed);
 
         match result {
-            Ok(Ok(response)) => TaskResult {
-                task_id: self.task.id,
-                status: TaskStatus::Completed,
-                output: response.output,
-                usage: response.usage,
-                duration_ms: start.elapsed().as_millis() as u64,
-                error: None,
-                session_id: self.session_id,
-                tool_uses: final_tool_uses,
-            },
+            Ok(Ok(response)) => {
+                // A.4: Post-hoc token budget warning
+                if response.usage.total_tokens as usize > self.task.token_budget {
+                    warn!(
+                        task_id = %self.task.id,
+                        budget = self.task.token_budget,
+                        actual = response.usage.total_tokens,
+                        "sub-agent exceeded token budget"
+                    );
+                }
+                TaskResult {
+                    task_id: self.task.id,
+                    status: TaskStatus::Completed,
+                    output: response.output,
+                    usage: response.usage,
+                    duration_ms: start.elapsed().as_millis() as u64,
+                    error: None,
+                    session_id: self.session_id,
+                    tool_uses: final_tool_uses,
+                }
+            }
             Ok(Err(e)) => TaskResult {
                 task_id: self.task.id,
                 status: TaskStatus::Failed,

@@ -54,6 +54,7 @@ export interface WsAgentCompletedMessage {
   duration_ms: number;
   tool_uses: number;
   tokens_used: number;
+  error?: string;
 }
 
 export interface WsDelegationCompletedMessage {
@@ -128,6 +129,7 @@ export interface ChatStreamCallbacks {
     durationMs: number,
     toolUses: number,
     tokensUsed: number,
+    error?: string,
   ) => void;
   onDelegationCompleted?: (
     delegationId: string,
@@ -154,6 +156,7 @@ export function createChatStream(
   sessionId: string | undefined,
   callbacks: ChatStreamCallbacks,
   model?: string,
+  delegation?: boolean,
 ): WebSocket {
   const baseUrl = getBaseUrl().replace(/^http/, "ws");
   const token = getToken();
@@ -172,6 +175,7 @@ export function createChatStream(
         prompt,
         session_id: sessionId,
         model: model || undefined,
+        delegation: delegation || undefined,
       }),
     );
   };
@@ -215,6 +219,7 @@ export function createChatStream(
             msg.duration_ms,
             msg.tool_uses,
             msg.tokens_used,
+            msg.error,
           );
           break;
         case "delegation_completed":

@@ -136,35 +136,54 @@ pub async fn run_workflow(
     let tools = state.tools.clone();
     let event_bus = state.event_bus.clone();
     let active_runs = state.active_workflow_runs.clone();
+
+    // B.1: Generate run_id before spawning so we can key by it
+    let run_id = uuid::Uuid::new_v4().to_string();
+    let run_id_clone = run_id.clone();
     let workflow_id = id.clone();
 
     let handle = tokio::spawn(async move {
         let _result = executor
-            .execute(&workflow, &tools, event_bus.as_ref())
+            .execute_with_id(run_id_clone.clone(), &workflow, &tools, event_bus.as_ref())
             .await;
-        active_runs.remove(&workflow_id);
+        active_runs.remove(&run_id_clone);
     });
 
+    // B.1: Key by run_id, not workflow_id
     state
         .active_workflow_runs
-        .insert(id.clone(), handle.abort_handle());
+        .insert(run_id.clone(), handle.abort_handle());
 
     Ok((
         StatusCode::ACCEPTED,
-        Json(serde_json::json!({ "workflow_id": id })),
+        Json(serde_json::json!({ "workflow_id": workflow_id, "run_id": run_id })),
     ))
 }
 
 pub async fn cancel_workflow_run(
     State(state): State<Arc<AppState>>,
-    Path(id): Path<String>,
+    Path((workflow_id, run_id)): Path<(String, String)>,
 ) -> Result<impl IntoResponse> {
-    if let Some((_, handle)) = state.active_workflow_runs.remove(&id) {
+    if let Some((_, handle)) = state.active_workflow_runs.remove(&run_id) {
         handle.abort();
+
+        // B.2: Persist "cancelled" status to DB and emit terminal event
+        if let Some(ref executor) = state.workflow_executor {
+            let completed_at = chrono::Utc::now().to_rfc3339();
+            let _ = executor
+                .persist_run_end(&run_id, "cancelled", None, &completed_at)
+                .await;
+        }
+        let _ = state.event_bus.publish(crate::event_bus::AppEvent::WorkflowCompleted {
+            workflow_id: workflow_id.clone(),
+            run_id: run_id.clone(),
+            status: "cancelled".into(),
+        });
+
         Ok(StatusCode::NO_CONTENT)
     } else {
         Err(ZeniiError::NotFound(format!(
-            "no active run for workflow '{id}'"
+            "no active run '{run_id}' for workflow '{workflow_id}'"
         )))
     }
 }

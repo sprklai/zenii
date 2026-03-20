@@ -83,6 +83,7 @@ pub enum AppEvent {
         agent_id: String,
         error: String,
         tool_uses: u32,
+        duration_ms: u64,
     },
     DelegationCompleted {
         delegation_id: String,
@@ -422,12 +423,13 @@ mod tests {
             agent_id: "t2".into(),
             error: "task timed out".into(),
             tool_uses: 3,
+            duration_ms: 1200,
         };
         let json = serde_json::to_string(&event).unwrap();
         let back: AppEvent = serde_json::from_str(&json).unwrap();
         assert!(
-            matches!(back, AppEvent::SubAgentFailed { delegation_id, agent_id, error, tool_uses }
-                if delegation_id == "d1" && agent_id == "t2" && error == "task timed out" && tool_uses == 3)
+            matches!(back, AppEvent::SubAgentFailed { delegation_id, agent_id, error, tool_uses, duration_ms }
+                if delegation_id == "d1" && agent_id == "t2" && error == "task timed out" && tool_uses == 3 && duration_ms == 1200)
         );
     }
 

@@ -162,6 +162,8 @@ class NotificationStore {
           workflowsStore.load();
           if (data.status === "completed") {
             toast.success(`Workflow "${data.workflow_id}" completed`);
+          } else if (data.status === "cancelled") {
+            toast.info(`Workflow "${data.workflow_id}" cancelled`);
           } else if (data.status === "failed") {
             toast.error(`Workflow "${data.workflow_id}" failed`);
           }

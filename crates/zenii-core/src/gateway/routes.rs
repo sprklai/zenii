@@ -387,7 +387,7 @@ fn workflow_routes() -> Router<Arc<AppState>> {
                 post(handlers::workflows::run_workflow),
             )
             .route(
-                "/workflows/{id}/cancel",
+                "/workflows/{id}/runs/{run_id}/cancel",
                 post(handlers::workflows::cancel_workflow_run),
             )
             .route(

@@ -252,6 +252,7 @@ impl Coordinator {
                                 agent_id: task_result.task_id.clone(),
                                 error: task_result.error.clone().unwrap_or_default(),
                                 tool_uses: task_result.tool_uses,
+                                duration_ms: task_result.duration_ms,
                             }
                         };
                         let _ = state.event_bus.publish(event);

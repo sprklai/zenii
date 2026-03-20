@@ -121,6 +121,8 @@
 				return 'bg-green-500/10 text-green-500';
 			case 'failed':
 				return 'bg-red-500/10 text-red-500';
+			case 'cancelled':
+				return 'bg-muted text-muted-foreground';
 			default:
 				return 'bg-muted text-muted-foreground';
 		}
@@ -160,7 +162,7 @@
 					<textarea
 						id="toml-content"
 						bind:value={tomlContent}
-						placeholder={'[workflow]\nname = "my-workflow"\ndescription = "A sample workflow"\n\n[[step]]\nname = "step-1"\ntype = "prompt"\nprompt = "Hello, world!"'}
+						placeholder={'id = "my-workflow"\nname = "My Workflow"\ndescription = "A sample workflow"\n\n[[steps]]\nname = "check-system"\ntype = "tool"\ntool = "system_info"\n\n[steps.args]\naction = "os"'}
 						rows="12"
 						class="w-full rounded-md border bg-background text-foreground px-3 py-2 text-sm font-mono resize-y"
 					></textarea>
