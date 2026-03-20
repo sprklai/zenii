@@ -296,7 +296,11 @@ mod tests {
         assert_eq!(resp.status(), StatusCode::NO_CONTENT);
 
         // Verify only m1 remains
-        let remaining = state.session_manager.get_messages(&session.id).await.unwrap();
+        let remaining = state
+            .session_manager
+            .get_messages(&session.id)
+            .await
+            .unwrap();
         assert_eq!(remaining.len(), 1);
         assert_eq!(remaining[0].id, m1.id);
     }

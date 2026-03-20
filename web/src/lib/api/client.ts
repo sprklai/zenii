@@ -44,16 +44,19 @@ export function clearBaseUrl(): void {
  * Used to detect if the daemon requires auth at all.
  */
 export async function healthCheckNoAuth(): Promise<boolean> {
+  const baseUrl = getBaseUrl();
   try {
-    const baseUrl = getBaseUrl();
-    const response = await fetch(`${baseUrl}/health`, {
-      method: "GET",
-      headers: { "Content-Type": "application/json" },
-    });
-    if (!response.ok) return false;
+    const response = await fetch(`${baseUrl}/health`);
+    if (!response.ok) {
+      console.warn(
+        `[API] healthCheckNoAuth: ${baseUrl}/health returned ${response.status}`,
+      );
+      return false;
+    }
     const data = await response.json();
     return data.status === "ok";
-  } catch {
+  } catch (e) {
+    console.warn(`[API] healthCheckNoAuth: ${baseUrl}/health fetch error:`, e);
     return false;
   }
 }
@@ -81,6 +84,7 @@ export async function api<T>(
 ): Promise<T> {
   const token = getToken();
   const baseUrl = getBaseUrl();
+  const url = `${baseUrl}${path}`;
 
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -91,10 +95,16 @@ export async function api<T>(
     headers["Authorization"] = `Bearer ${token}`;
   }
 
-  const response = await fetch(`${baseUrl}${path}`, {
-    ...options,
-    headers,
-  });
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      ...options,
+      headers,
+    });
+  } catch (e) {
+    console.error(`[API] ${options.method ?? "GET"} ${url} fetch error:`, e);
+    throw e;
+  }
 
   if (!response.ok) {
     let errorCode = "ZENII_UNKNOWN";
@@ -106,6 +116,9 @@ export async function api<T>(
     } catch {
       // response wasn't JSON
     }
+    console.warn(
+      `[API] ${options.method ?? "GET"} ${url} -> ${response.status} ${errorCode}: ${details}`,
+    );
     throw new MesoApiError(response.status, errorCode, details);
   }
 

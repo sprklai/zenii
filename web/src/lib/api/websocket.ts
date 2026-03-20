@@ -124,10 +124,12 @@ export function createChatStream(
     ? `${baseUrl}/ws/chat?token=${encodeURIComponent(token)}`
     : `${baseUrl}/ws/chat`;
 
+  console.log(`[WS] Connecting to ${url}`);
   const ws = new WebSocket(url);
   let intentionalClose = false;
 
   ws.onopen = () => {
+    console.log(`[WS] Connected, sending prompt`);
     ws.send(
       JSON.stringify({
         prompt,
@@ -157,10 +159,7 @@ export function createChatStream(
           );
           break;
         case "delegation_started":
-          callbacks.onDelegationStarted?.(
-            msg.delegation_id,
-            msg.agents,
-          );
+          callbacks.onDelegationStarted?.(msg.delegation_id, msg.agents);
           break;
         case "agent_progress":
           callbacks.onAgentProgress?.(
@@ -206,13 +205,17 @@ export function createChatStream(
     }
   };
 
-  ws.onerror = () => {
+  ws.onerror = (e) => {
+    console.error(`[WS] Error:`, e);
     if (!intentionalClose) {
       callbacks.onError("WebSocket connection error");
     }
   };
 
   ws.onclose = (event) => {
+    console.log(
+      `[WS] Closed: code=${event.code} reason=${event.reason} clean=${event.wasClean}`,
+    );
     if (!intentionalClose && !event.wasClean && event.code !== 1000) {
       callbacks.onError(`Connection closed unexpectedly (code: ${event.code})`);
     }

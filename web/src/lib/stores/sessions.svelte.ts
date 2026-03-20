@@ -47,7 +47,9 @@ function createSessionsStore() {
         } catch (e) {
           if (attempt < maxAttempts - 1) {
             // Exponential backoff: 1s, 2s, 4s
-            await new Promise((r) => setTimeout(r, 1000 * Math.pow(2, attempt)));
+            await new Promise((r) =>
+              setTimeout(r, 1000 * Math.pow(2, attempt)),
+            );
           } else {
             const msg = e instanceof Error ? e.message : String(e);
             error = `Failed to load sessions. Is the daemon running? (${msg})`;

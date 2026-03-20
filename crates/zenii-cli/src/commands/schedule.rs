@@ -106,11 +106,7 @@ pub async fn create(client: &ZeniiClient, args: CreateJobArgs<'_>) -> Result<(),
     Ok(())
 }
 
-pub async fn update(
-    client: &ZeniiClient,
-    id: &str,
-    args: CreateJobArgs<'_>,
-) -> Result<(), String> {
+pub async fn update(client: &ZeniiClient, id: &str, args: CreateJobArgs<'_>) -> Result<(), String> {
     let schedule = match args.schedule_type {
         "interval" => {
             let secs = args
@@ -154,9 +150,7 @@ pub async fn update(
         "delete_after_run": args.one_shot,
     });
 
-    let _result: serde_json::Value = client
-        .put(&format!("/scheduler/jobs/{id}"), &body)
-        .await?;
+    let _result: serde_json::Value = client.put(&format!("/scheduler/jobs/{id}"), &body).await?;
     println!("Job {id} updated.");
     Ok(())
 }

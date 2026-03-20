@@ -124,10 +124,8 @@ pub async fn run(
                             if let Some(agents) = chunk.get("agents").and_then(|v| v.as_array()) {
                                 let last = agents.len().saturating_sub(1);
                                 for (i, agent) in agents.iter().enumerate() {
-                                    let id = agent
-                                        .get("id")
-                                        .and_then(|v| v.as_str())
-                                        .unwrap_or("?");
+                                    let id =
+                                        agent.get("id").and_then(|v| v.as_str()).unwrap_or("?");
                                     let desc = agent
                                         .get("description")
                                         .and_then(|v| v.as_str())
@@ -150,10 +148,8 @@ pub async fn run(
                                 .get("current_activity")
                                 .and_then(|v| v.as_str())
                                 .unwrap_or("");
-                            let tools = chunk
-                                .get("tool_uses")
-                                .and_then(|v| v.as_u64())
-                                .unwrap_or(0);
+                            let tools =
+                                chunk.get("tool_uses").and_then(|v| v.as_u64()).unwrap_or(0);
                             let tokens = chunk
                                 .get("tokens_used")
                                 .and_then(|v| v.as_u64())
@@ -175,10 +171,8 @@ pub async fn run(
                                 .get("duration_ms")
                                 .and_then(|v| v.as_f64())
                                 .unwrap_or(0.0);
-                            let tools = chunk
-                                .get("tool_uses")
-                                .and_then(|v| v.as_u64())
-                                .unwrap_or(0);
+                            let tools =
+                                chunk.get("tool_uses").and_then(|v| v.as_u64()).unwrap_or(0);
                             let tokens = chunk
                                 .get("tokens_used")
                                 .and_then(|v| v.as_u64())

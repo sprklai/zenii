@@ -7,8 +7,8 @@
 export const isTauri: boolean =
   typeof window !== "undefined" &&
   (window.location.protocol === "tauri:" ||
-   "__TAURI_INTERNALS__" in window ||
-   "__TAURI__" in window);
+    "__TAURI_INTERNALS__" in window ||
+    "__TAURI__" in window);
 
 /** Show and focus the main window. */
 export async function showWindow(): Promise<void> {

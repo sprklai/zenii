@@ -127,9 +127,18 @@ class NotificationStore {
         } else if (data.type === "workflow_started") {
           workflowsStore.setRunning(data.workflow_id, data.run_id);
         } else if (data.type === "workflow_step_completed") {
-          workflowsStore.stepCompleted(data.workflow_id, data.run_id, data.step_name, data.success);
+          workflowsStore.stepCompleted(
+            data.workflow_id,
+            data.run_id,
+            data.step_name,
+            data.success,
+          );
         } else if (data.type === "workflow_completed") {
-          workflowsStore.setCompleted(data.workflow_id, data.run_id, data.status);
+          workflowsStore.setCompleted(
+            data.workflow_id,
+            data.run_id,
+            data.status,
+          );
           if (data.status === "completed") toast.success("Workflow completed");
           else if (data.status === "failed") toast.error("Workflow failed");
         } else if (data.type === "notification") {

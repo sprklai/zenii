@@ -95,10 +95,7 @@ pub(crate) enum WsOutbound {
         total_tokens: u64,
     },
     #[serde(rename = "workflow_started")]
-    WorkflowStarted {
-        workflow_id: String,
-        run_id: String,
-    },
+    WorkflowStarted { workflow_id: String, run_id: String },
     #[serde(rename = "workflow_step_completed")]
     WorkflowStepCompleted {
         workflow_id: String,
@@ -1054,7 +1051,10 @@ mod tests {
         .unwrap();
 
         let resp = tokio::time::timeout(std::time::Duration::from_secs(2), ws.next()).await;
-        assert!(resp.is_ok(), "Should receive workflow_started within timeout");
+        assert!(
+            resp.is_ok(),
+            "Should receive workflow_started within timeout"
+        );
         let msg = resp.unwrap().unwrap().unwrap();
         let text = msg.into_text().unwrap();
         let parsed: serde_json::Value = serde_json::from_str(&text).unwrap();

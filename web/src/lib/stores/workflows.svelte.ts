@@ -1,4 +1,11 @@
-import { apiGet, apiPost, apiPut, apiDelete, getToken, getBaseUrl } from "$lib/api/client";
+import {
+  apiGet,
+  apiPost,
+  apiPut,
+  apiDelete,
+  getToken,
+  getBaseUrl,
+} from "$lib/api/client";
 
 export interface WorkflowStep {
   name: string;
@@ -79,13 +86,21 @@ function createWorkflowsStore() {
       if (existing) clearTimeout(existing);
       timeouts.set(
         workflowId,
-        setTimeout(() => {
-          this.setCompleted(workflowId, runId, "timeout");
-        }, 5 * 60 * 1000),
+        setTimeout(
+          () => {
+            this.setCompleted(workflowId, runId, "timeout");
+          },
+          5 * 60 * 1000,
+        ),
       );
     },
 
-    stepCompleted(workflowId: string, _runId: string, stepName: string, success: boolean) {
+    stepCompleted(
+      workflowId: string,
+      _runId: string,
+      stepName: string,
+      success: boolean,
+    ) {
       const progress = runningWorkflows.get(workflowId);
       if (!progress) return;
       const next = new Map(runningWorkflows);
@@ -120,7 +135,10 @@ function createWorkflowsStore() {
         timeouts.delete(workflowId);
       }
 
-      await apiPost(`/workflows/${encodeURIComponent(workflowId)}/cancel`, {}).catch(() => {});
+      await apiPost(
+        `/workflows/${encodeURIComponent(workflowId)}/cancel`,
+        {},
+      ).catch(() => {});
     },
 
     async load() {
@@ -135,15 +153,20 @@ function createWorkflowsStore() {
     },
 
     async create(tomlContent: string): Promise<Workflow> {
-      const result = await apiPost<Workflow>("/workflows", { toml_content: tomlContent });
+      const result = await apiPost<Workflow>("/workflows", {
+        toml_content: tomlContent,
+      });
       await this.load();
       return result;
     },
 
     async update(id: string, tomlContent: string): Promise<Workflow> {
-      const result = await apiPut<Workflow>(`/workflows/${encodeURIComponent(id)}`, {
-        toml_content: tomlContent,
-      });
+      const result = await apiPut<Workflow>(
+        `/workflows/${encodeURIComponent(id)}`,
+        {
+          toml_content: tomlContent,
+        },
+      );
       await this.load();
       return result;
     },
@@ -153,10 +176,14 @@ function createWorkflowsStore() {
       const token = getToken();
       const headers: Record<string, string> = {};
       if (token) headers["Authorization"] = `Bearer ${token}`;
-      const response = await fetch(`${baseUrl}/workflows/${encodeURIComponent(id)}/raw`, {
-        headers,
-      });
-      if (!response.ok) throw new Error(`Failed to fetch raw TOML: ${response.statusText}`);
+      const response = await fetch(
+        `${baseUrl}/workflows/${encodeURIComponent(id)}/raw`,
+        {
+          headers,
+        },
+      );
+      if (!response.ok)
+        throw new Error(`Failed to fetch raw TOML: ${response.statusText}`);
       return response.text();
     },
 

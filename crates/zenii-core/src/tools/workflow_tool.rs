@@ -125,9 +125,9 @@ impl Tool for WorkflowTool {
             "create" => self.create_workflow(&args).await,
             "list" => self.list_workflows().await,
             "get" => {
-                let id = args["workflow_id"]
-                    .as_str()
-                    .ok_or_else(|| ZeniiError::Validation("missing 'workflow_id' for get".into()))?;
+                let id = args["workflow_id"].as_str().ok_or_else(|| {
+                    ZeniiError::Validation("missing 'workflow_id' for get".into())
+                })?;
                 match self.registry.get(id) {
                     Some(wf) => {
                         let json = serde_json::to_string_pretty(&wf).unwrap_or_default();
@@ -173,10 +173,7 @@ impl WorkflowTool {
         let name = args["name"]
             .as_str()
             .ok_or_else(|| ZeniiError::Validation("missing 'name' for create".into()))?;
-        let description = args["description"]
-            .as_str()
-            .unwrap_or("")
-            .to_string();
+        let description = args["description"].as_str().unwrap_or("").to_string();
         let schedule = args["schedule"].as_str().map(|s| s.to_string());
 
         let steps_json = args["steps"]
@@ -285,9 +282,7 @@ impl WorkflowTool {
             "tool" => {
                 let tool = json["tool"]
                     .as_str()
-                    .ok_or_else(|| {
-                        ZeniiError::Validation("tool step missing 'tool' field".into())
-                    })?
+                    .ok_or_else(|| ZeniiError::Validation("tool step missing 'tool' field".into()))?
                     .to_string();
                 let args = json.get("args").cloned().unwrap_or(json!({}));
                 crate::workflows::StepType::Tool { tool, args }
@@ -492,10 +487,7 @@ mod tests {
         .await
         .unwrap();
 
-        let result = tool
-            .execute(json!({ "action": "list" }))
-            .await
-            .unwrap();
+        let result = tool.execute(json!({ "action": "list" })).await.unwrap();
         assert!(result.success);
         assert!(result.output.contains("list-test"));
     }
@@ -602,10 +594,7 @@ mod tests {
     #[tokio::test]
     async fn workflow_tool_invalid_action() {
         let (_dir, tool) = setup().await;
-        let result = tool
-            .execute(json!({ "action": "invalid" }))
-            .await
-            .unwrap();
+        let result = tool.execute(json!({ "action": "invalid" })).await.unwrap();
         assert!(!result.success);
         assert!(result.output.contains("Unknown action"));
     }

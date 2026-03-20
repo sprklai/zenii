@@ -621,9 +621,7 @@ pub async fn init_services(config: AppConfig) -> Result<Services> {
 
     // Register WorkflowTool (post-Arc, DashMap allows it)
     #[cfg(feature = "workflows")]
-    if let (Some(wf_reg), Some(wf_exec)) =
-        (&workflow_registry_init, &workflow_executor_init)
-    {
+    if let (Some(wf_reg), Some(wf_exec)) = (&workflow_registry_init, &workflow_executor_init) {
         tools
             .register(Arc::new(crate::tools::workflow_tool::WorkflowTool::new(
                 wf_reg.clone(),

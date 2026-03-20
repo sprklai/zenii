@@ -37,6 +37,14 @@
 	const MAX_RETRIES = 10;
 	const BOOT_MAX_RETRIES = 40;
 
+	// Diagnostic log for debugging startup issues
+	let diagLog = $state<string[]>([]);
+	function diag(msg: string) {
+		const ts = new Date().toISOString().slice(11, 23);
+		diagLog = [...diagLog, `[${ts}] ${msg}`];
+		console.log(`[AuthGate] ${msg}`);
+	}
+
 	function clearPollTimeout() {
 		if (pollTimeoutId !== undefined) {
 			clearTimeout(pollTimeoutId);
@@ -50,30 +58,35 @@
 		connectionFailed = false;
 		bootErrorMessage = '';
 		let attempt = 0;
+		diag('waitForBoot started');
 
 		// Listen for Tauri events for instant notification
 		if (isTauri) {
 			unlistenReady = await onGatewayReady(() => {
+				diag('EVENT: gateway-ready received');
 				clearPollTimeout();
 				authenticated = true;
 				booting = false;
 				checkSetupStatus();
 			});
 			unlistenFailed = await onGatewayFailed((message) => {
+				diag(`EVENT: gateway-failed: ${message}`);
 				clearPollTimeout();
 				booting = false;
 				connectionFailed = true;
 				bootErrorMessage = message;
 			});
+			diag('Tauri event listeners registered');
 		}
 
 		const poll = async () => {
 			if (attempt >= BOOT_MAX_RETRIES) {
+				diag(`Max retries (${BOOT_MAX_RETRIES}) exhausted`);
 				booting = false;
 				connectionFailed = true;
-				// Try to get the actual error from boot status
 				if (isTauri && !bootErrorMessage) {
 					const status = await getBootStatus();
+					diag(`Final IPC boot status: ${JSON.stringify(status)}`);
 					if (status?.status === 'Failed') {
 						bootErrorMessage = status.message;
 					}
@@ -81,16 +94,40 @@
 				return;
 			}
 
-			const ok = await healthCheckNoAuth();
-			if (ok) {
-				authenticated = true;
-				booting = false;
-				checkSetupStatus();
-				return;
+			// In Tauri mode, use IPC to check boot status (bypasses CORS/mixed-content issues on Windows)
+			if (isTauri) {
+				try {
+					const status = await getBootStatus();
+					if (attempt % 5 === 0) diag(`Poll #${attempt} IPC status: ${JSON.stringify(status)}`);
+					if (status?.status === 'Ready') {
+						diag('IPC: boot status Ready — authenticating');
+						authenticated = true;
+						booting = false;
+						checkSetupStatus();
+						return;
+					}
+					if (status?.status === 'Failed') {
+						diag(`IPC: boot status Failed: ${status.message}`);
+						booting = false;
+						connectionFailed = true;
+						bootErrorMessage = status.message;
+						return;
+					}
+				} catch (e) {
+					diag(`IPC getBootStatus error: ${e}`);
+				}
+			} else {
+				const ok = await healthCheckNoAuth();
+				if (attempt % 5 === 0) diag(`Poll #${attempt} HTTP health: ${ok}`);
+				if (ok) {
+					authenticated = true;
+					booting = false;
+					checkSetupStatus();
+					return;
+				}
 			}
 
 			attempt++;
-			// Short fixed intervals for boot (500ms), not exponential backoff
 			pollTimeoutId = setTimeout(poll, 500);
 		};
 
@@ -127,22 +164,40 @@
 	}
 
 	async function init() {
-		// Try without auth first -- if health returns 200, gateway is ready
+		diag(`init: isTauri=${isTauri}, protocol=${typeof window !== 'undefined' ? window.location.protocol : 'N/A'}, origin=${typeof window !== 'undefined' ? window.location.origin : 'N/A'}`);
+
+		if (isTauri) {
+			try {
+				const status = await getBootStatus();
+				diag(`init IPC boot status: ${JSON.stringify(status)}`);
+				if (status?.status === 'Ready') {
+					diag('init: gateway already ready via IPC');
+					authenticated = true;
+					checkSetupStatus();
+				} else {
+					diag('init: gateway not ready, starting waitForBoot');
+					waitForBoot();
+				}
+			} catch (e) {
+				diag(`init IPC error: ${e}`);
+				waitForBoot();
+			}
+			return;
+		}
+
+		// Browser mode: try without auth first
+		diag('init: browser mode, trying healthCheckNoAuth');
 		const noAuthOk = await healthCheckNoAuth();
+		diag(`init: healthCheckNoAuth=${noAuthOk}`);
 		if (noAuthOk) {
 			authenticated = true;
 			checkSetupStatus();
 			return;
 		}
 
-		if (isTauri) {
-			// Desktop app: embedded gateway is still booting, wait for it
-			waitForBoot();
-		} else if (getToken()) {
-			// Browser with cached token: poll with auth
+		if (getToken()) {
 			waitForGateway();
 		}
-		// Browser without token: fall through to token dialog
 	}
 
 	init();
@@ -213,7 +268,7 @@
 	{/if}
 {:else if booting}
 	<div class="flex h-screen items-center justify-center">
-		<div class="flex flex-col items-center gap-4">
+		<div class="flex flex-col items-center gap-4 max-w-lg">
 			<svg
 				class="h-8 w-8 animate-spin text-muted-foreground"
 				xmlns="http://www.w3.org/2000/svg"
@@ -229,6 +284,9 @@
 				></path>
 			</svg>
 			<p class="text-sm text-muted-foreground">Starting Zenii...</p>
+			{#if diagLog.length > 0}
+				<pre class="w-full mt-2 text-[10px] leading-tight text-muted-foreground bg-muted p-2 rounded max-h-32 overflow-auto whitespace-pre-wrap">{diagLog.join('\n')}</pre>
+			{/if}
 		</div>
 	</div>
 {:else if connecting}
@@ -256,7 +314,7 @@
 	</div>
 {:else if connectionFailed}
 	<div class="flex h-screen items-center justify-center">
-		<div class="flex flex-col items-center gap-4 max-w-md text-center">
+		<div class="flex flex-col items-center gap-4 max-w-lg text-center">
 			{#if isTauri}
 				<p class="text-sm text-destructive">
 					{bootErrorMessage || 'Zenii failed to start. Check the logs for errors.'}
@@ -290,6 +348,12 @@
 						Retry
 					</Button>
 				</div>
+			{/if}
+			{#if diagLog.length > 0}
+				<details class="w-full text-left mt-4">
+					<summary class="text-xs text-muted-foreground cursor-pointer">Diagnostic log ({diagLog.length} entries)</summary>
+					<pre class="mt-2 text-[10px] leading-tight text-muted-foreground bg-muted p-2 rounded max-h-48 overflow-auto whitespace-pre-wrap">{diagLog.join('\n')}</pre>
+				</details>
 			{/if}
 		</div>
 	</div>
