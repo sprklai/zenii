@@ -6,6 +6,8 @@
 	import Plus from '@lucide/svelte/icons/plus';
 	import Trash2 from '@lucide/svelte/icons/trash-2';
 	import Play from '@lucide/svelte/icons/play';
+	import Square from '@lucide/svelte/icons/square';
+	import Loader2 from '@lucide/svelte/icons/loader-2';
 	import History from '@lucide/svelte/icons/history';
 	import Pencil from '@lucide/svelte/icons/pencil';
 	import X from '@lucide/svelte/icons/x';
@@ -79,13 +81,13 @@
 	async function handleRun(id: string) {
 		try {
 			await workflowsStore.run(id);
-			// Refresh history if viewing this workflow's history
-			if (showHistory === id) {
-				historyEntries = await workflowsStore.history(id);
-			}
-		} catch (e) {
+		} catch {
 			// Could show a toast here
 		}
+	}
+
+	async function handleCancel(id: string) {
+		await workflowsStore.cancel(id);
 	}
 
 	function handleDelete(id: string) {
@@ -213,14 +215,25 @@
 								>
 									<Pencil class="h-4 w-4" />
 								</Button>
-								<Button
-									variant="ghost"
-									size="icon"
-									onclick={() => handleRun(workflow.id)}
-									title="Run"
-								>
-									<Play class="h-4 w-4" />
-								</Button>
+								{#if workflowsStore.isRunning(workflow.id)}
+									<Button
+										variant="ghost"
+										size="icon"
+										onclick={() => handleCancel(workflow.id)}
+										title="Stop"
+									>
+										<Square class="h-4 w-4 text-red-500" />
+									</Button>
+								{:else}
+									<Button
+										variant="ghost"
+										size="icon"
+										onclick={() => handleRun(workflow.id)}
+										title="Run"
+									>
+										<Play class="h-4 w-4" />
+									</Button>
+								{/if}
 								<Button
 									variant="ghost"
 									size="icon"
@@ -239,6 +252,20 @@
 								</Button>
 							</div>
 						</div>
+						{#if workflowsStore.isRunning(workflow.id)}
+							{@const progress = workflowsStore.getProgress(workflow.id)}
+							{#if progress}
+								<div class="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
+									<Loader2 class="h-3 w-3 animate-spin" />
+									<span>
+										{progress.completedSteps.length}/{workflow.steps.length} steps
+										{#if progress.completedSteps.length > 0}
+											— last: {progress.completedSteps[progress.completedSteps.length - 1].stepName}
+										{/if}
+									</span>
+								</div>
+							{/if}
+						{/if}
 					</Card.Content>
 				</Card.Root>
 

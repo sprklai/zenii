@@ -94,6 +94,24 @@ pub(crate) enum WsOutbound {
         total_duration_ms: u64,
         total_tokens: u64,
     },
+    #[serde(rename = "workflow_started")]
+    WorkflowStarted {
+        workflow_id: String,
+        run_id: String,
+    },
+    #[serde(rename = "workflow_step_completed")]
+    WorkflowStepCompleted {
+        workflow_id: String,
+        run_id: String,
+        step_name: String,
+        success: bool,
+    },
+    #[serde(rename = "workflow_completed")]
+    WorkflowCompleted {
+        workflow_id: String,
+        run_id: String,
+        status: String,
+    },
     #[serde(rename = "done")]
     Done,
     #[serde(rename = "warning")]
@@ -206,6 +224,30 @@ async fn handle_notifications(mut socket: WebSocket, state: Arc<AppState>) {
                             status: None,
                             error: None,
                         };
+                        if let Ok(json) = serde_json::to_string(&outbound)
+                            && socket.send(Message::Text(json.into())).await.is_err()
+                        {
+                            break;
+                        }
+                    }
+                    Ok(crate::event_bus::AppEvent::WorkflowStarted { workflow_id, run_id }) => {
+                        let outbound = WsOutbound::WorkflowStarted { workflow_id, run_id };
+                        if let Ok(json) = serde_json::to_string(&outbound)
+                            && socket.send(Message::Text(json.into())).await.is_err()
+                        {
+                            break;
+                        }
+                    }
+                    Ok(crate::event_bus::AppEvent::WorkflowStepCompleted { workflow_id, run_id, step_name, success }) => {
+                        let outbound = WsOutbound::WorkflowStepCompleted { workflow_id, run_id, step_name, success };
+                        if let Ok(json) = serde_json::to_string(&outbound)
+                            && socket.send(Message::Text(json.into())).await.is_err()
+                        {
+                            break;
+                        }
+                    }
+                    Ok(crate::event_bus::AppEvent::WorkflowCompleted { workflow_id, run_id, status }) => {
+                        let outbound = WsOutbound::WorkflowCompleted { workflow_id, run_id, status };
                         if let Ok(json) = serde_json::to_string(&outbound)
                             && socket.send(Message::Text(json.into())).await.is_err()
                         {
@@ -944,6 +986,81 @@ mod tests {
         let json = serde_json::to_value(&msg).unwrap();
         assert_eq!(json["type"], "warning");
         assert!(json["warning"].as_str().unwrap().contains("dropped"));
+    }
+
+    // WF.1 — WsOutbound::WorkflowStarted serializes correctly
+    #[test]
+    fn ws_outbound_workflow_started_serializes() {
+        let msg = WsOutbound::WorkflowStarted {
+            workflow_id: "wf1".into(),
+            run_id: "run1".into(),
+        };
+        let json = serde_json::to_value(&msg).unwrap();
+        assert_eq!(json["type"], "workflow_started");
+        assert_eq!(json["workflow_id"], "wf1");
+        assert_eq!(json["run_id"], "run1");
+    }
+
+    // WF.2 — WsOutbound::WorkflowStepCompleted serializes correctly
+    #[test]
+    fn ws_outbound_workflow_step_completed_serializes() {
+        let msg = WsOutbound::WorkflowStepCompleted {
+            workflow_id: "wf1".into(),
+            run_id: "run1".into(),
+            step_name: "fetch_data".into(),
+            success: true,
+        };
+        let json = serde_json::to_value(&msg).unwrap();
+        assert_eq!(json["type"], "workflow_step_completed");
+        assert_eq!(json["workflow_id"], "wf1");
+        assert_eq!(json["run_id"], "run1");
+        assert_eq!(json["step_name"], "fetch_data");
+        assert_eq!(json["success"], true);
+    }
+
+    // WF.3 — WsOutbound::WorkflowCompleted serializes correctly
+    #[test]
+    fn ws_outbound_workflow_completed_serializes() {
+        let msg = WsOutbound::WorkflowCompleted {
+            workflow_id: "wf1".into(),
+            run_id: "run1".into(),
+            status: "completed".into(),
+        };
+        let json = serde_json::to_value(&msg).unwrap();
+        assert_eq!(json["type"], "workflow_completed");
+        assert_eq!(json["workflow_id"], "wf1");
+        assert_eq!(json["run_id"], "run1");
+        assert_eq!(json["status"], "completed");
+    }
+
+    // WF.4 — WS notifications forwards workflow events
+    #[tokio::test]
+    async fn ws_notifications_forwards_workflow_events() {
+        let (_dir, state) = test_state().await;
+        let bus = state.event_bus.clone();
+        let port = spawn_server(state).await;
+
+        let url = format!("ws://127.0.0.1:{port}/ws/notifications");
+        let (mut ws, _) = tokio_tungstenite::connect_async(&url).await.unwrap();
+
+        // Give the WS handler time to subscribe
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+
+        // Publish workflow started event
+        bus.publish(crate::event_bus::AppEvent::WorkflowStarted {
+            workflow_id: "wf1".into(),
+            run_id: "run1".into(),
+        })
+        .unwrap();
+
+        let resp = tokio::time::timeout(std::time::Duration::from_secs(2), ws.next()).await;
+        assert!(resp.is_ok(), "Should receive workflow_started within timeout");
+        let msg = resp.unwrap().unwrap().unwrap();
+        let text = msg.into_text().unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&text).unwrap();
+        assert_eq!(parsed["type"], "workflow_started");
+        assert_eq!(parsed["workflow_id"], "wf1");
+        assert_eq!(parsed["run_id"], "run1");
     }
 
     // TV.16 — WS upgrade still succeeds

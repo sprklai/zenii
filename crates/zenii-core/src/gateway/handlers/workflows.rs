@@ -130,13 +130,41 @@ pub async fn run_workflow(
     let executor = state
         .workflow_executor
         .as_ref()
-        .ok_or_else(|| ZeniiError::Workflow("workflow executor not initialized".into()))?;
+        .ok_or_else(|| ZeniiError::Workflow("workflow executor not initialized".into()))?
+        .clone();
 
-    let run = executor
-        .execute(&workflow, &state.tools, state.event_bus.as_ref())
-        .await?;
+    let tools = state.tools.clone();
+    let event_bus = state.event_bus.clone();
+    let active_runs = state.active_workflow_runs.clone();
+    let workflow_id = id.clone();
 
-    Ok((StatusCode::ACCEPTED, Json(run)))
+    let handle = tokio::spawn(async move {
+        let _result = executor.execute(&workflow, &tools, event_bus.as_ref()).await;
+        active_runs.remove(&workflow_id);
+    });
+
+    state
+        .active_workflow_runs
+        .insert(id.clone(), handle.abort_handle());
+
+    Ok((
+        StatusCode::ACCEPTED,
+        Json(serde_json::json!({ "workflow_id": id })),
+    ))
+}
+
+pub async fn cancel_workflow_run(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<String>,
+) -> Result<impl IntoResponse> {
+    if let Some((_, handle)) = state.active_workflow_runs.remove(&id) {
+        handle.abort();
+        Ok(StatusCode::NO_CONTENT)
+    } else {
+        Err(ZeniiError::NotFound(format!(
+            "no active run for workflow '{id}'"
+        )))
+    }
 }
 
 pub async fn workflow_history(

@@ -37,9 +37,17 @@ export interface WorkflowRun {
   error: string | null;
 }
 
+export interface WorkflowRunProgress {
+  runId: string;
+  completedSteps: { stepName: string; success: boolean }[];
+  startedAt: number;
+}
+
 function createWorkflowsStore() {
   let workflows = $state<Workflow[]>([]);
   let loading = $state(false);
+  let runningWorkflows = $state<Map<string, WorkflowRunProgress>>(new Map());
+  const timeouts = new Map<string, ReturnType<typeof setTimeout>>();
 
   return {
     get workflows() {
@@ -47,6 +55,72 @@ function createWorkflowsStore() {
     },
     get loading() {
       return loading;
+    },
+
+    isRunning(workflowId: string): boolean {
+      return runningWorkflows.has(workflowId);
+    },
+
+    getProgress(workflowId: string): WorkflowRunProgress | undefined {
+      return runningWorkflows.get(workflowId);
+    },
+
+    setRunning(workflowId: string, runId: string) {
+      const next = new Map(runningWorkflows);
+      next.set(workflowId, {
+        runId,
+        completedSteps: [],
+        startedAt: Date.now(),
+      });
+      runningWorkflows = next;
+
+      // Safety timeout: clear running state after 5 minutes
+      const existing = timeouts.get(workflowId);
+      if (existing) clearTimeout(existing);
+      timeouts.set(
+        workflowId,
+        setTimeout(() => {
+          this.setCompleted(workflowId, runId, "timeout");
+        }, 5 * 60 * 1000),
+      );
+    },
+
+    stepCompleted(workflowId: string, _runId: string, stepName: string, success: boolean) {
+      const progress = runningWorkflows.get(workflowId);
+      if (!progress) return;
+      const next = new Map(runningWorkflows);
+      next.set(workflowId, {
+        ...progress,
+        completedSteps: [...progress.completedSteps, { stepName, success }],
+      });
+      runningWorkflows = next;
+    },
+
+    setCompleted(workflowId: string, _runId: string, _status: string) {
+      const next = new Map(runningWorkflows);
+      next.delete(workflowId);
+      runningWorkflows = next;
+
+      const timeout = timeouts.get(workflowId);
+      if (timeout) {
+        clearTimeout(timeout);
+        timeouts.delete(workflowId);
+      }
+    },
+
+    async cancel(workflowId: string) {
+      // Optimistic remove
+      const next = new Map(runningWorkflows);
+      next.delete(workflowId);
+      runningWorkflows = next;
+
+      const timeout = timeouts.get(workflowId);
+      if (timeout) {
+        clearTimeout(timeout);
+        timeouts.delete(workflowId);
+      }
+
+      await apiPost(`/workflows/${encodeURIComponent(workflowId)}/cancel`, {}).catch(() => {});
     },
 
     async load() {
@@ -91,11 +165,8 @@ function createWorkflowsStore() {
       await this.load();
     },
 
-    async run(id: string): Promise<WorkflowRun> {
-      return apiPost<WorkflowRun>(
-        `/workflows/${encodeURIComponent(id)}/run`,
-        {},
-      );
+    async run(id: string): Promise<void> {
+      await apiPost(`/workflows/${encodeURIComponent(id)}/run`, {});
     },
 
     async history(id: string): Promise<WorkflowRun[]> {

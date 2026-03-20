@@ -151,6 +151,8 @@ pub(crate) mod tests {
             workflow_registry: None,
             #[cfg(feature = "workflows")]
             workflow_executor: None,
+            #[cfg(feature = "workflows")]
+            active_workflow_runs: Arc::new(dashmap::DashMap::new()),
             usage_logger: Arc::new(crate::logging::UsageLogger::new(
                 &crate::config::AppConfig::default(),
                 "test",

@@ -2,6 +2,7 @@ import { toast } from "svelte-sonner";
 import { inboxStore } from "./inbox.svelte";
 import { configStore } from "./config.svelte";
 import { isTauri, showNotification } from "$lib/tauri";
+import { workflowsStore } from "./workflows.svelte";
 
 export interface NotificationRouting {
   scheduler_notification: string[];
@@ -123,6 +124,14 @@ class NotificationStore {
               data.content_preview.slice(0, 120),
             );
           }
+        } else if (data.type === "workflow_started") {
+          workflowsStore.setRunning(data.workflow_id, data.run_id);
+        } else if (data.type === "workflow_step_completed") {
+          workflowsStore.stepCompleted(data.workflow_id, data.run_id, data.step_name, data.success);
+        } else if (data.type === "workflow_completed") {
+          workflowsStore.setCompleted(data.workflow_id, data.run_id, data.status);
+          if (data.status === "completed") toast.success("Workflow completed");
+          else if (data.status === "failed") toast.error("Workflow failed");
         } else if (data.type === "notification") {
           const notification: SchedulerNotification = {
             eventType: data.event_type,

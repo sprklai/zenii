@@ -360,6 +360,8 @@ mod tests {
             workflow_registry: None,
             #[cfg(feature = "workflows")]
             workflow_executor: None,
+            #[cfg(feature = "workflows")]
+            active_workflow_runs: Arc::new(dashmap::DashMap::new()),
             usage_logger: base_state.usage_logger.clone(),
             embedding_model_available: base_state.embedding_model_available.clone(),
         });

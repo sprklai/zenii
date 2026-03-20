@@ -921,6 +921,8 @@ impl From<Services> for AppState {
             workflow_registry: s.workflow_registry,
             #[cfg(feature = "workflows")]
             workflow_executor: s.workflow_executor,
+            #[cfg(feature = "workflows")]
+            active_workflow_runs: Arc::new(dashmap::DashMap::new()),
             usage_logger: s.usage_logger,
             embedding_model_available: s.embedding_model_available,
         }
