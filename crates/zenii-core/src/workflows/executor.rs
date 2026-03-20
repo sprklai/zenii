@@ -67,13 +67,13 @@ impl WorkflowExecutor {
 
         // Validate fallback step references exist
         for step in steps {
-            if let FailurePolicy::Fallback { step: ref fb_name } = step.failure_policy {
-                if !indices.contains_key(fb_name) {
-                    return Err(ZeniiError::Workflow(format!(
-                        "step '{}' has fallback to unknown step '{}'",
-                        step.name, fb_name
-                    )));
-                }
+            if let FailurePolicy::Fallback { step: ref fb_name } = step.failure_policy
+                && !indices.contains_key(fb_name)
+            {
+                return Err(ZeniiError::Workflow(format!(
+                    "step '{}' has fallback to unknown step '{}'",
+                    step.name, fb_name
+                )));
             }
         }
 
@@ -174,8 +174,15 @@ impl WorkflowExecutor {
                 success: output.success,
             });
 
-            // Persist step result
-            self.persist_step_result(&run_id, &output).await.ok();
+            // Persist step result (non-blocking: log on failure, don't halt workflow)
+            if let Err(e) = self.persist_step_result(&run_id, &output).await {
+                tracing::warn!(
+                    run_id = %run_id,
+                    step = %output.step_name,
+                    error = %e,
+                    "failed to persist step result"
+                );
+            }
 
             let step_failed = !output.success;
             step_outputs.insert(step.name.clone(), output);
@@ -214,8 +221,24 @@ impl WorkflowExecutor {
                                 step_name: fallback_name.clone(),
                                 success: fb_output.success,
                             });
-                            self.persist_step_result(&run_id, &fb_output).await.ok();
+                            if let Err(e) = self.persist_step_result(&run_id, &fb_output).await {
+                                tracing::warn!(
+                                    run_id = %run_id,
+                                    step = %fallback_name,
+                                    error = %e,
+                                    "failed to persist fallback step result"
+                                );
+                            }
+                            let fallback_failed = !fb_output.success;
                             step_outputs.insert(fallback_name.clone(), fb_output);
+                            if fallback_failed {
+                                overall_status = WorkflowRunStatus::Failed;
+                                overall_error = Some(format!(
+                                    "step '{}' and its fallback '{}' both failed",
+                                    step.name, fallback_name
+                                ));
+                                break;
+                            }
                         }
                     }
                 }

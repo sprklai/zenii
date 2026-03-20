@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.34] - 2026-03-20
+
 ### Added
 - Tool approval system: `needs_approval()` trait method, `ApprovalBroker`, approval rules with persistent storage
 - 3 new API routes: `GET /approvals/rules`, `DELETE /approvals/rules/{id}`, `POST /approvals/{id}/respond`
