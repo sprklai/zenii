@@ -25,11 +25,15 @@ impl GatewayServer {
     }
 
     /// Start the gateway server with a shutdown signal.
+    ///
+    /// If `ready_tx` is provided, a message is sent once the TCP listener is bound
+    /// and the server is ready to accept connections.
     pub async fn start_with_shutdown(
         self,
         host: &str,
         port: u16,
         shutdown: impl std::future::Future<Output = ()> + Send + 'static,
+        ready_tx: Option<tokio::sync::oneshot::Sender<()>>,
     ) -> Result<()> {
         let router = routes::build_router(self.state);
         let addr = format!("{host}:{port}");
@@ -39,6 +43,10 @@ impl GatewayServer {
             .map_err(|e| ZeniiError::Gateway(format!("failed to bind to {addr}: {e}")))?;
 
         info!("Gateway listening on {addr}");
+
+        if let Some(tx) = ready_tx {
+            let _ = tx.send(());
+        }
 
         axum::serve(listener, router)
             .with_graceful_shutdown(shutdown)
@@ -79,7 +87,7 @@ mod tests {
             server
                 .start_with_shutdown("127.0.0.1", port, async {
                     let _ = rx.await;
-                })
+                }, None)
                 .await
         });
 
@@ -108,7 +116,7 @@ mod tests {
             server
                 .start_with_shutdown("127.0.0.1", port, async {
                     let _ = rx.await;
-                })
+                }, None)
                 .await
         });
 

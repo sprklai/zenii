@@ -6,7 +6,9 @@
 /** True when running inside a Tauri webview, false in browser. */
 export const isTauri: boolean =
   typeof window !== "undefined" &&
-  ("__TAURI_INTERNALS__" in window || "__TAURI__" in window);
+  (window.location.protocol === "tauri:" ||
+   "__TAURI_INTERNALS__" in window ||
+   "__TAURI__" in window);
 
 /** Show and focus the main window. */
 export async function showWindow(): Promise<void> {
@@ -58,4 +60,35 @@ export async function openConfigFile(): Promise<string | null> {
   if (!isTauri) return null;
   const { invoke } = await import("@tauri-apps/api/core");
   return invoke<string>("open_config_file");
+}
+
+/** Boot status reported by the embedded gateway. */
+export type BootStatus =
+  | { status: "Booting" }
+  | { status: "Ready" }
+  | { status: "Failed"; message: string };
+
+/** Query the current boot status of the embedded gateway. */
+export async function getBootStatus(): Promise<BootStatus | null> {
+  if (!isTauri) return null;
+  const { invoke } = await import("@tauri-apps/api/core");
+  return invoke<BootStatus>("get_boot_status");
+}
+
+/** Listen for the gateway-ready event. Returns an unlisten function. */
+export async function onGatewayReady(
+  callback: () => void,
+): Promise<(() => void) | null> {
+  if (!isTauri) return null;
+  const { listen } = await import("@tauri-apps/api/event");
+  return listen("gateway-ready", callback);
+}
+
+/** Listen for the gateway-failed event. Returns an unlisten function. */
+export async function onGatewayFailed(
+  callback: (message: string) => void,
+): Promise<(() => void) | null> {
+  if (!isTauri) return null;
+  const { listen } = await import("@tauri-apps/api/event");
+  return listen<string>("gateway-failed", (event) => callback(event.payload));
 }

@@ -191,11 +191,32 @@ impl CredentialStore for KeyringStore {
 /// Fallback chain: KeyringStore (OS keyring) → FileCredentialStore (encrypted JSON) → InMemory (volatile).
 /// Performs an async probe (set+get+delete via spawn_blocking) to verify the keyring
 /// actually works end-to-end, since some Linux backends pass sync probes but fail async.
+/// The initial sync probe is wrapped in a timeout to prevent hangs on Windows.
 pub async fn keyring_or_fallback(config: &AppConfig) -> std::sync::Arc<dyn CredentialStore> {
-    let store = match KeyringStore::new(config) {
-        Ok(ks) => ks,
-        Err(e) => {
+    let timeout_secs = config.keyring_probe_timeout_secs;
+    let config_clone = config.clone();
+
+    // Wrap the sync probe in spawn_blocking + timeout to prevent hangs
+    let probe_result = tokio::time::timeout(
+        std::time::Duration::from_secs(timeout_secs),
+        tokio::task::spawn_blocking(move || KeyringStore::new(&config_clone)),
+    )
+    .await;
+
+    let store = match probe_result {
+        Ok(Ok(Ok(ks))) => ks,
+        Ok(Ok(Err(e))) => {
             tracing::warn!("Keyring unavailable ({e}), trying file-based credential store");
+            return file_or_in_memory_fallback(config);
+        }
+        Ok(Err(e)) => {
+            tracing::warn!("Keyring probe task failed ({e}), trying file-based credential store");
+            return file_or_in_memory_fallback(config);
+        }
+        Err(_) => {
+            tracing::warn!(
+                "Keyring probe timed out after {timeout_secs}s, trying file-based credential store"
+            );
             return file_or_in_memory_fallback(config);
         }
     };

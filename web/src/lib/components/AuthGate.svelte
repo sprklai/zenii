@@ -12,7 +12,7 @@
 		healthCheckNoAuth,
 		apiGet
 	} from '$lib/api/client';
-	import { isTauri } from '$lib/tauri';
+	import { isTauri, onGatewayReady, onGatewayFailed, getBootStatus } from '$lib/tauri';
 	import { onDestroy } from 'svelte';
 	import OnboardingWizard from '$lib/components/OnboardingWizard.svelte';
 
@@ -28,11 +28,14 @@
 	let error = $state('');
 	let checking = $state(false);
 	let connectionFailed = $state(false);
+	let bootErrorMessage = $state('');
 
 	let pollTimeoutId: ReturnType<typeof setTimeout> | undefined;
+	let unlistenReady: (() => void) | null = null;
+	let unlistenFailed: (() => void) | null = null;
 
 	const MAX_RETRIES = 10;
-	const BOOT_MAX_RETRIES = 20;
+	const BOOT_MAX_RETRIES = 40;
 
 	function clearPollTimeout() {
 		if (pollTimeoutId !== undefined) {
@@ -45,12 +48,36 @@
 	async function waitForBoot() {
 		booting = true;
 		connectionFailed = false;
+		bootErrorMessage = '';
 		let attempt = 0;
+
+		// Listen for Tauri events for instant notification
+		if (isTauri) {
+			unlistenReady = await onGatewayReady(() => {
+				clearPollTimeout();
+				authenticated = true;
+				booting = false;
+				checkSetupStatus();
+			});
+			unlistenFailed = await onGatewayFailed((message) => {
+				clearPollTimeout();
+				booting = false;
+				connectionFailed = true;
+				bootErrorMessage = message;
+			});
+		}
 
 		const poll = async () => {
 			if (attempt >= BOOT_MAX_RETRIES) {
 				booting = false;
 				connectionFailed = true;
+				// Try to get the actual error from boot status
+				if (isTauri && !bootErrorMessage) {
+					const status = await getBootStatus();
+					if (status?.status === 'Failed') {
+						bootErrorMessage = status.message;
+					}
+				}
 				return;
 			}
 
@@ -169,6 +196,8 @@
 
 	onDestroy(() => {
 		clearPollTimeout();
+		unlistenReady?.();
+		unlistenFailed?.();
 	});
 </script>
 
@@ -230,7 +259,7 @@
 		<div class="flex flex-col items-center gap-4 max-w-md text-center">
 			{#if isTauri}
 				<p class="text-sm text-destructive">
-					Zenii failed to start. Check the logs for errors.
+					{bootErrorMessage || 'Zenii failed to start. Check the logs for errors.'}
 				</p>
 				<Button
 					variant="default"

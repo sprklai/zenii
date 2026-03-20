@@ -49,17 +49,18 @@ pub(crate) mod test_helpers {
 
     /// Returns the real zenii-plugins path, or None if not available.
     pub fn real_plugins_path() -> Option<PathBuf> {
-        let path = std::env::var("ZENII_PLUGINS_PATH")
-            .map(PathBuf::from)
-            .unwrap_or_else(|_| {
-                PathBuf::from("/home/rakesh/RD/NSRTech/Tauri/zenii-plugins/plugins")
-            });
+        let path = std::env::var("ZENII_PLUGINS_PATH").ok().map(PathBuf::from)?;
         if path.exists() { Some(path) } else { None }
     }
 
     /// Check if an interpreter is available on PATH.
     pub fn has_interpreter(name: &str) -> bool {
-        std::process::Command::new("which")
+        #[cfg(unix)]
+        let cmd = "which";
+        #[cfg(windows)]
+        let cmd = "where.exe";
+
+        std::process::Command::new(cmd)
             .arg(name)
             .output()
             .map(|o| o.status.success())

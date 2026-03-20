@@ -69,6 +69,8 @@ pub struct AppConfig {
     pub keyring_service_id: String,
     /// Override path for encrypted credential file. Default: {data_dir}/credentials.enc
     pub credential_file_path: Option<String>,
+    /// Timeout in seconds for the initial keyring probe. Falls back to file/in-memory on timeout.
+    pub keyring_probe_timeout_secs: u64,
 
     // Phase 19: Tool Permissions
     pub tool_permissions: ToolPermissions,
@@ -272,6 +274,7 @@ impl Default for AppConfig {
             // Credentials
             keyring_service_id: "com.sprklai.zenii".into(),
             credential_file_path: None,
+            keyring_probe_timeout_secs: 5,
 
             // Tool Permissions
             tool_permissions: ToolPermissions::default(),

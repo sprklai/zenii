@@ -64,8 +64,8 @@ mod tests {
 
     #[test]
     fn load_default_when_missing() {
-        let path = Path::new("/tmp/nonexistent_zenii_test.toml");
-        let config = load_config(path).unwrap();
+        let path = std::env::temp_dir().join("nonexistent_zenii_test.toml");
+        let config = load_config(&path).unwrap();
         assert_eq!(config, AppConfig::default());
     }
 

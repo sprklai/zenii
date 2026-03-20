@@ -102,6 +102,7 @@ done
     }
 
     // 9.0.11 — Adapter implements Tool trait
+    #[cfg(unix)]
     #[tokio::test]
     async fn adapter_implements_tool_trait() {
         let (_dir, script_path) = mock_plugin_script();
@@ -127,6 +128,7 @@ done
     }
 
     // 9.0.12 — Adapter lazy-starts process
+    #[cfg(unix)]
     #[tokio::test]
     async fn adapter_lazy_starts_process() {
         let (_dir, script_path) = mock_plugin_script();

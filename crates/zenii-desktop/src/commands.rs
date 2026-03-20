@@ -1,14 +1,24 @@
 use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 use tokio::sync::oneshot;
 use tracing::info;
+
+/// Current boot status of the embedded gateway.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "status", content = "message")]
+pub enum BootStatus {
+    Booting,
+    Ready,
+    Failed(String),
+}
 
 /// Holds the gateway shutdown sender so we can stop it when the app exits.
 pub struct GatewayState {
     pub shutdown_tx: Option<oneshot::Sender<()>>,
     pub external_url: Option<String>,
+    pub boot_status: Arc<std::sync::Mutex<BootStatus>>,
 }
 
 /// Configuration for the gateway boot decision.
@@ -47,15 +57,19 @@ pub fn resolve_data_dir() -> std::path::PathBuf {
 /// Boot the embedded gateway server in a background task.
 ///
 /// This is called from the Tauri `.setup()` hook when no external URL is configured.
+/// Emits `gateway-ready` or `gateway-failed` Tauri events to notify the frontend.
 #[allow(clippy::unwrap_used)]
 pub fn boot_gateway(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     let mode = resolve_gateway_mode().map_err(|e| e.to_string())?;
+    let boot_status = Arc::new(std::sync::Mutex::new(BootStatus::Booting));
 
     if mode.external_url.is_some() {
         // External gateway — just store the state, no embedded boot needed
+        *boot_status.lock().unwrap() = BootStatus::Ready;
         app.manage(Arc::new(tokio::sync::Mutex::new(GatewayState {
             shutdown_tx: None,
             external_url: mode.external_url,
+            boot_status,
         })));
         return Ok(());
     }
@@ -72,6 +86,10 @@ pub fn boot_gateway(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Erro
     let port = config.gateway_port;
 
     let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
+    let (ready_tx, ready_rx) = oneshot::channel::<()>();
+
+    let boot_status_clone = boot_status.clone();
+    let app_handle = app.handle().clone();
 
     // Spawn the gateway in a background task
     tauri::async_runtime::spawn(async move {
@@ -89,21 +107,39 @@ pub fn boot_gateway(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Erro
                 if let Err(e) = gateway
                     .start_with_shutdown(&host, port, async {
                         let _ = shutdown_rx.await;
-                    })
+                    }, Some(ready_tx))
                     .await
                 {
-                    tracing::error!("Embedded gateway error: {e}");
+                    let msg = format!("Embedded gateway error: {e}");
+                    tracing::error!("{msg}");
+                    *boot_status_clone.lock().unwrap() = BootStatus::Failed(msg.clone());
+                    let _ = app_handle.emit("gateway-failed", msg);
                 }
             }
             Err(e) => {
-                tracing::error!("Failed to initialize services: {e}");
+                let msg = format!("Failed to initialize services: {e}");
+                tracing::error!("{msg}");
+                *boot_status_clone.lock().unwrap() = BootStatus::Failed(msg.clone());
+                let _ = app_handle.emit("gateway-failed", msg);
             }
+        }
+    });
+
+    // Spawn a task to wait for the ready signal and update status
+    let boot_status_ready = boot_status.clone();
+    let app_handle_ready = app.handle().clone();
+    tauri::async_runtime::spawn(async move {
+        if ready_rx.await.is_ok() {
+            *boot_status_ready.lock().unwrap() = BootStatus::Ready;
+            let _ = app_handle_ready.emit("gateway-ready", ());
+            info!("Embedded gateway is ready");
         }
     });
 
     app.manage(Arc::new(tokio::sync::Mutex::new(GatewayState {
         shutdown_tx: Some(shutdown_tx),
         external_url: None,
+        boot_status,
     })));
 
     Ok(())
@@ -138,6 +174,15 @@ pub fn open_data_dir() -> Result<(), String> {
     let data_dir = resolve_data_dir();
     std::fs::create_dir_all(&data_dir).map_err(|e| e.to_string())?;
     opener::open(data_dir.to_string_lossy().as_ref()).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn get_boot_status(
+    state: tauri::State<'_, Arc<tokio::sync::Mutex<GatewayState>>>,
+) -> Result<BootStatus, String> {
+    let guard = state.lock().await;
+    let status = guard.boot_status.lock().map_err(|e| e.to_string())?;
+    Ok(status.clone())
 }
 
 #[tauri::command]

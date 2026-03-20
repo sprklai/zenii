@@ -352,6 +352,7 @@ done
     }
 
     // 9.0.6 — Spawn mock plugin process
+    #[cfg(unix)]
     #[tokio::test]
     async fn spawn_mock_plugin_process() {
         let (_dir, script_path) = mock_plugin_script();
@@ -363,6 +364,7 @@ done
     }
 
     // 9.0.7 — JSON-RPC info call
+    #[cfg(unix)]
     #[tokio::test]
     async fn jsonrpc_info_call() {
         let (_dir, script_path) = mock_plugin_script();
@@ -375,6 +377,7 @@ done
     }
 
     // 9.0.8 — JSON-RPC execute call
+    #[cfg(unix)]
     #[tokio::test]
     async fn jsonrpc_execute_call() {
         let (_dir, script_path) = mock_plugin_script();
@@ -390,6 +393,7 @@ done
     }
 
     // 9.0.9 — Process timeout handling
+    #[cfg(unix)]
     #[tokio::test]
     async fn process_timeout_handling() {
         let dir = tempfile::TempDir::new().unwrap();
@@ -417,6 +421,7 @@ done
     }
 
     // 9.0.10 — Process crash recovery
+    #[cfg(unix)]
     #[tokio::test]
     async fn process_crash_recovery() {
         let dir = tempfile::TempDir::new().unwrap();

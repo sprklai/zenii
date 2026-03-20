@@ -1039,6 +1039,7 @@ mod tests {
 
     // --- Symlink traversal (WS-4.4) ---
 
+    #[cfg(unix)]
     #[test]
     fn symlink_traversal_blocked() {
         let tmp = tempfile::tempdir().unwrap();

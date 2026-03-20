@@ -40,6 +40,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::show_window,
             commands::get_app_version,
+            commands::get_boot_status,
             commands::open_data_dir,
             commands::open_config_file,
             commands::show_notification,
