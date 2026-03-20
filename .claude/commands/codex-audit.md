@@ -138,34 +138,34 @@ If you find no issues, output exactly: NO_ISSUES_FOUND
 
 ### Step 2: Execute Codex
 
-Based on SCOPE, run one of these commands (5-minute timeout). Capture ALL output.
+Based on SCOPE, run one of these commands (15-minute timeout). Capture ALL output.
 
 **uncommitted:**
 ```bash
-timeout 300 codex review --uncommitted "FULL_PROMPT" 2>&1
+timeout 900 codex review --uncommitted "FULL_PROMPT" 2>&1
 ```
 
 **branch:NAME:**
 ```bash
-timeout 300 codex review --base NAME "FULL_PROMPT" 2>&1
+timeout 900 codex review --base NAME "FULL_PROMPT" 2>&1
 ```
 
 **commit:SHA:**
 ```bash
-timeout 300 codex review --commit SHA "FULL_PROMPT" 2>&1
+timeout 900 codex review --commit SHA "FULL_PROMPT" 2>&1
 ```
 
 **files:p1,p2,...:**
 ```bash
-timeout 300 codex exec "Review these files: p1, p2, ... FULL_PROMPT" --sandbox read-only --ephemeral 2>&1
+timeout 900 codex exec "Review these files: p1, p2, ... FULL_PROMPT" --sandbox read-only --ephemeral 2>&1
 ```
 
 **full:**
 ```bash
-timeout 300 codex exec "Full codebase audit of this Rust+Svelte project. FULL_PROMPT" --sandbox read-only --ephemeral 2>&1
+timeout 900 codex exec "Full codebase audit of this Rust+Svelte project. FULL_PROMPT" --sandbox read-only --ephemeral 2>&1
 ```
 
-If the command times out, continue with whatever partial output was captured and print a warning: "Codex timed out after 5 minutes. Working with partial output."
+If the command times out, continue with whatever partial output was captured and print a warning: "Codex timed out after 15 minutes. Working with partial output."
 
 If the output is empty or clearly garbled, print the raw output and say: "Could not parse Codex output. Raw output shown above. Proceed manually." STOP.
 
@@ -385,7 +385,7 @@ These are the highest-signal items — they reveal blind spots in both models.}
 | Codex auth expired | Tell user to run `codex login`, STOP |
 | No uncommitted changes | Print message, STOP |
 | Branch doesn't exist | Error message, STOP |
-| Codex timeout (>5min) | Continue with partial output + warning |
+| Codex timeout (>15min) | Continue with partial output + warning |
 | Unparseable output | Print raw output, suggest manual review, STOP |
 | Fix breaks compilation | Revert that fix, note in report, continue |
 | Fix breaks tests | Revert that fix, note in report, continue |
