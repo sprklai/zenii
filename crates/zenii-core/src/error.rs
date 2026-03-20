@@ -101,6 +101,12 @@ pub enum ZeniiError {
     #[error("model capability error: {0}")]
     ModelCapability(String),
 
+    #[error("approval denied: {0}")]
+    ApprovalDenied(String),
+
+    #[error("approval timed out: {0}")]
+    ApprovalTimeout(String),
+
     #[error("{0}")]
     Other(String),
 }
@@ -141,5 +147,25 @@ mod tests {
     fn workflow_error_variant() {
         let err = ZeniiError::Workflow("step failed".into());
         assert_eq!(err.to_string(), "workflow error: step failed");
+    }
+
+    // TA.11 — ZeniiError::ApprovalDenied display
+    #[test]
+    fn approval_denied_error_display() {
+        let err = ZeniiError::ApprovalDenied("user rejected shell command".into());
+        assert_eq!(
+            err.to_string(),
+            "approval denied: user rejected shell command"
+        );
+    }
+
+    // TA.12 — ZeniiError::ApprovalTimeout display
+    #[test]
+    fn approval_timeout_error_display() {
+        let err = ZeniiError::ApprovalTimeout("shell:cargo build after 120s".into());
+        assert_eq!(
+            err.to_string(),
+            "approval timed out: shell:cargo build after 120s"
+        );
     }
 }

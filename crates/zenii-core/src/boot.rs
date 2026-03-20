@@ -88,6 +88,7 @@ pub struct Services {
     pub usage_logger: Arc<crate::logging::UsageLogger>,
     /// Whether the local embedding model is downloaded and ready.
     pub embedding_model_available: Arc<AtomicBool>,
+    pub approval_broker: Option<Arc<crate::security::approval::ApprovalBroker>>,
 }
 
 /// Initialize all services from config.
@@ -866,6 +867,9 @@ pub async fn init_services(config: AppConfig) -> Result<Services> {
         workflow_executor: workflow_executor_init,
         usage_logger,
         embedding_model_available,
+        approval_broker: Some(Arc::new(crate::security::approval::ApprovalBroker::new(
+            pool,
+        ))),
     })
 }
 
@@ -923,6 +927,7 @@ impl From<Services> for AppState {
             active_workflow_runs: Arc::new(dashmap::DashMap::new()),
             usage_logger: s.usage_logger,
             embedding_model_available: s.embedding_model_available,
+            approval_broker: s.approval_broker,
         }
     }
 }

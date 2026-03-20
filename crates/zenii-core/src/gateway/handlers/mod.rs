@@ -1,3 +1,4 @@
+pub mod approvals;
 #[cfg(feature = "channels")]
 pub mod channels;
 pub mod channels_test;
@@ -158,6 +159,9 @@ pub(crate) mod tests {
                 "test",
             )),
             embedding_model_available: Arc::new(std::sync::atomic::AtomicBool::new(true)),
+            approval_broker: Some(Arc::new(crate::security::approval::ApprovalBroker::new(
+                pool.clone(),
+            ))),
         });
         (dir, state)
     }

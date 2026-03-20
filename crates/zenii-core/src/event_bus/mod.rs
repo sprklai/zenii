@@ -104,6 +104,24 @@ pub enum AppEvent {
         step_name: String,
         success: bool,
     },
+    ChannelAgentStarted {
+        channel: String,
+        session_id: String,
+        sender: String,
+    },
+    ChannelAgentCompleted {
+        channel: String,
+        session_id: String,
+    },
+    ApprovalRequested {
+        approval_id: String,
+        call_id: String,
+        tool_name: String,
+        args_summary: String,
+        risk_level: String,
+        reason: String,
+        timeout_secs: u64,
+    },
     Shutdown,
 }
 
@@ -520,6 +538,59 @@ mod tests {
         assert!(
             matches!(back, AppEvent::WorkflowCompleted { workflow_id, run_id, status }
                 if workflow_id == "wf1" && run_id == "run1" && status == "success")
+        );
+    }
+
+    // TA.1 — ChannelAgentStarted event serde round-trip
+    #[test]
+    fn channel_agent_started_event_serde() {
+        let event = AppEvent::ChannelAgentStarted {
+            channel: "telegram".into(),
+            session_id: "sess-1".into(),
+            sender: "user42".into(),
+        };
+        let json = serde_json::to_string(&event).unwrap();
+        let back: AppEvent = serde_json::from_str(&json).unwrap();
+        assert!(
+            matches!(back, AppEvent::ChannelAgentStarted { channel, session_id, sender }
+                if channel == "telegram" && session_id == "sess-1" && sender == "user42")
+        );
+    }
+
+    // TA.2 — ChannelAgentCompleted event serde round-trip
+    #[test]
+    fn channel_agent_completed_event_serde() {
+        let event = AppEvent::ChannelAgentCompleted {
+            channel: "slack".into(),
+            session_id: "sess-2".into(),
+        };
+        let json = serde_json::to_string(&event).unwrap();
+        let back: AppEvent = serde_json::from_str(&json).unwrap();
+        assert!(
+            matches!(back, AppEvent::ChannelAgentCompleted { channel, session_id }
+                if channel == "slack" && session_id == "sess-2")
+        );
+    }
+
+    // TA.3 — ApprovalRequested event serde round-trip
+    #[test]
+    fn approval_requested_event_serde() {
+        let event = AppEvent::ApprovalRequested {
+            approval_id: "apr-1".into(),
+            call_id: "call-1".into(),
+            tool_name: "shell".into(),
+            args_summary: "cargo build".into(),
+            risk_level: "medium".into(),
+            reason: "Command needs approval: cargo build".into(),
+            timeout_secs: 120,
+        };
+        let json = serde_json::to_string(&event).unwrap();
+        let back: AppEvent = serde_json::from_str(&json).unwrap();
+        assert!(
+            matches!(back, AppEvent::ApprovalRequested { approval_id, call_id, tool_name, args_summary, risk_level, reason, timeout_secs }
+                if approval_id == "apr-1" && call_id == "call-1" && tool_name == "shell"
+                && args_summary == "cargo build" && risk_level == "medium"
+                && reason == "Command needs approval: cargo build" && timeout_secs == 120)
         );
     }
 }

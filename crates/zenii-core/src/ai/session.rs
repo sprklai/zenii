@@ -525,8 +525,10 @@ impl SessionManager {
                         Some(*duration_ms),
                     ));
                 }
-                ToolCallPhase::Cached { .. } => {
-                    // Cached results are dedup replays — don't persist as separate records
+                ToolCallPhase::Cached { .. }
+                | ToolCallPhase::ApprovalRequested { .. }
+                | ToolCallPhase::ApprovalResolved { .. } => {
+                    // Cached/approval events — don't persist as tool call records
                 }
             }
         }

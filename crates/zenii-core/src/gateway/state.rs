@@ -90,6 +90,7 @@ pub struct AppState {
     pub usage_logger: Arc<UsageLogger>,
     /// Whether the local embedding model is downloaded and ready.
     pub embedding_model_available: Arc<AtomicBool>,
+    pub approval_broker: Option<Arc<crate::security::approval::ApprovalBroker>>,
 }
 
 impl AppState {

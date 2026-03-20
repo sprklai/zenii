@@ -323,6 +323,23 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
         )?;
     }
 
+    if version < 12 {
+        conn.execute_batch(
+            "CREATE TABLE IF NOT EXISTS approval_rules (
+                id TEXT PRIMARY KEY,
+                tool_name TEXT NOT NULL,
+                pattern TEXT,
+                decision TEXT NOT NULL CHECK(decision IN ('approve', 'deny')),
+                surface TEXT NOT NULL DEFAULT 'desktop',
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            );
+            CREATE INDEX IF NOT EXISTS idx_approval_rules_tool
+                ON approval_rules(tool_name, surface);
+
+            PRAGMA user_version = 12;",
+        )?;
+    }
+
     Ok(())
 }
 
@@ -372,7 +389,7 @@ mod tests {
         let version: u32 = conn
             .pragma_query_value(None, "user_version", |r| r.get(0))
             .unwrap();
-        assert_eq!(version, 11);
+        assert_eq!(version, 12);
     }
 
     #[test]
@@ -556,7 +573,7 @@ mod tests {
         let version: u32 = conn
             .pragma_query_value(None, "user_version", |r| r.get(0))
             .unwrap();
-        assert_eq!(version, 11);
+        assert_eq!(version, 12);
     }
 
     // IN.9 — Migration v9 adds channel_key column and unique index
@@ -616,6 +633,53 @@ mod tests {
             .query_row("SELECT COUNT(*) FROM workflow_runs", [], |r| r.get(0))
             .unwrap();
         assert_eq!(count, 1);
+    }
+
+    // TA.15 — migration v12 creates approval_rules table
+    #[test]
+    fn migration_v12_creates_approval_rules() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("test.db");
+        let conn = Connection::open(&path).unwrap();
+        run_migrations(&conn).unwrap();
+
+        let tables: Vec<String> = conn
+            .prepare("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
+            .unwrap()
+            .query_map([], |r| r.get(0))
+            .unwrap()
+            .filter_map(|r| r.ok())
+            .collect();
+
+        assert!(tables.contains(&"approval_rules".to_string()));
+
+        // Verify we can insert into approval_rules
+        conn.execute(
+            "INSERT INTO approval_rules (id, tool_name, pattern, decision, surface) VALUES ('r1', 'shell', 'cargo *', 'approve', 'desktop')",
+            [],
+        )
+        .unwrap();
+
+        let count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM approval_rules", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(count, 1);
+
+        // Verify the index exists
+        let indexes: Vec<String> = conn
+            .prepare("SELECT name FROM sqlite_master WHERE type='index' ORDER BY name")
+            .unwrap()
+            .query_map([], |r| r.get(0))
+            .unwrap()
+            .filter_map(|r| r.ok())
+            .collect();
+
+        assert!(indexes.contains(&"idx_approval_rules_tool".to_string()));
+
+        let version: u32 = conn
+            .pragma_query_value(None, "user_version", |r| r.get(0))
+            .unwrap();
+        assert_eq!(version, 12);
     }
 
     // 5.55 — migration v11 creates workflow_step_results table

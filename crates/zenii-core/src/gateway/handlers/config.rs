@@ -386,6 +386,7 @@ mod tests {
             active_workflow_runs: Arc::new(dashmap::DashMap::new()),
             usage_logger: base_state.usage_logger.clone(),
             embedding_model_available: base_state.embedding_model_available.clone(),
+            approval_broker: base_state.approval_broker.clone(),
         });
         (dir, state)
     }

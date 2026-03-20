@@ -35,7 +35,10 @@
 	import { sessionsStore } from '$lib/stores/sessions.svelte';
 	import { providersStore } from '$lib/stores/providers.svelte';
 	import { delegationStore } from '$lib/stores/delegation.svelte';
-	import { createChatStream } from '$lib/api/websocket';
+	import { notificationStore } from '$lib/stores/notifications.svelte';
+	import { approvalsStore } from '$lib/stores/approvals.svelte';
+	import { ToolApproval } from '$lib/components/ai-elements/tool-approval';
+	import { createChatStream, sendApprovalResponse } from '$lib/api/websocket';
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
 
@@ -142,9 +145,16 @@
 				onDelegationCompleted() {
 					delegationStore.completeDelegation();
 				},
+				onApprovalRequest(approvalId, callId, toolName, argsSummary, riskLevel, reason, timeoutSecs) {
+					approvalsStore.addRequest(approvalId, callId, toolName, argsSummary, riskLevel, reason, timeoutSecs);
+				},
+				onApprovalResolved(approvalId) {
+					approvalsStore.resolve(approvalId);
+				},
 				onDone() {
 					activeWs = null;
 					delegationStore.clear();
+					approvalsStore.clear();
 					messagesStore.finishStream(capturedSessionId);
 					if (isFirstMessage) {
 						sessionsStore.generateTitle(capturedSessionId, capturedModel);
@@ -153,6 +163,7 @@
 				onError(error) {
 					activeWs = null;
 					delegationStore.clear();
+					approvalsStore.clear();
 					const friendlyError =
 						error.toLowerCase().includes('no agent configured') ||
 						error.toLowerCase().includes('no provider')
@@ -165,6 +176,13 @@
 			},
 			providersStore.selectedModel || undefined
 		);
+	}
+
+	function handleApprovalResponse(approvalId: string, decision: 'approve' | 'approve_always' | 'deny') {
+		if (activeWs) {
+			sendApprovalResponse(activeWs, approvalId, decision);
+		}
+		approvalsStore.resolve(approvalId);
 	}
 
 	function stopStream() {
@@ -262,16 +280,37 @@
 										</ToolContent>
 									</Tool>
 								{/each}
+								{#each approvalsStore.pending as approval (approval.approvalId)}
+									<div class="my-2">
+										<ToolApproval {approval} onRespond={handleApprovalResponse} />
+									</div>
+								{/each}
 								{#if messagesStore.streamContent}
 									<Response content={messagesStore.streamContent} />
-								{:else if messagesStore.activeToolCalls.length === 0}
-									<Loader />
+								{:else}
+									{@const allToolsDone = messagesStore.activeToolCalls.length > 0 &&
+										messagesStore.activeToolCalls.every(tc => tc.state !== 'input-available')}
+									{#if allToolsDone || messagesStore.activeToolCalls.length === 0}
+										<Loader />
+									{/if}
 								{/if}
 							</MessageContent>
 						</Message>
 					{/if}
 
-					{#if messagesStore.error}
+					{#if notificationStore.channelAgentActivity && !messagesStore.streaming}
+					<Message from="assistant">
+						<MessageContent variant="flat">
+							<div class="flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground">
+								<Shimmer content_length={30} duration={1.5}>
+									Processing {notificationStore.channelAgentActivity.channel} message from @{notificationStore.channelAgentActivity.sender}...
+								</Shimmer>
+							</div>
+						</MessageContent>
+					</Message>
+				{/if}
+
+				{#if messagesStore.error}
 						<div class="mx-auto max-w-xl rounded-md border border-red-300 bg-red-50 p-3 text-sm text-red-700 dark:border-red-800 dark:bg-red-950 dark:text-red-300">
 							{#if messagesStore.error === '__NO_PROVIDER__'}
 								No AI provider configured.

@@ -246,6 +246,16 @@ pub fn build_router(state: Arc<AppState>) -> Router {
             "/agents/{id}/cancel",
             post(handlers::delegation::cancel_agent),
         )
+        // Approvals
+        .route("/approvals/rules", get(handlers::approvals::list_rules))
+        .route(
+            "/approvals/rules/{id}",
+            delete(handlers::approvals::delete_rule),
+        )
+        .route(
+            "/approvals/{id}/respond",
+            post(handlers::approvals::respond_approval),
+        )
         // WebSocket
         .route("/ws/chat", get(handlers::ws::ws_chat))
         .route("/ws/notifications", get(handlers::ws::ws_notifications))

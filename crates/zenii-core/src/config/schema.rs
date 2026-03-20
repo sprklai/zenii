@@ -202,6 +202,9 @@ pub struct AppConfig {
     pub delegation_per_agent_timeout_secs: u64,
     pub delegation_decomposition_model: Option<String>,
 
+    // Tool Approval
+    pub approval_timeout_secs: u64,
+
     // Phase 8: Self-Evolution
     pub self_evolution_enabled: bool,
     pub learning_archive_threshold: f64,
@@ -396,6 +399,9 @@ impl Default for AppConfig {
             delegation_per_agent_token_budget: 4000,
             delegation_per_agent_timeout_secs: 120,
             delegation_decomposition_model: None,
+
+            // Tool Approval
+            approval_timeout_secs: 120,
 
             // Self-Evolution
             self_evolution_enabled: true,
@@ -921,6 +927,23 @@ mod tests {
         assert_eq!(config.agent_timeout_secs, 600);
         assert_eq!(config.event_bus_capacity, 512);
         assert_eq!(config.session_max_age_days, 30);
+    }
+
+    // TA.13 — approval_timeout_secs default value is 120
+    #[test]
+    fn approval_timeout_secs_default() {
+        let config = AppConfig::default();
+        assert_eq!(config.approval_timeout_secs, 120);
+    }
+
+    // TA.14 — approval_timeout_secs from TOML
+    #[test]
+    fn approval_timeout_secs_from_toml() {
+        let toml_str = r#"
+            approval_timeout_secs = 60
+        "#;
+        let config: AppConfig = toml::from_str(toml_str).unwrap();
+        assert_eq!(config.approval_timeout_secs, 60);
     }
 
     // 5.50 — workflow config defaults

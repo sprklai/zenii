@@ -113,8 +113,11 @@ impl SubAgent {
                                     last_emit = tokio::time::Instant::now();
                                 }
                             }
-                            ToolCallPhase::Completed { .. } | ToolCallPhase::Cached { .. } => {
-                                // Already counted on Started
+                            ToolCallPhase::Completed { .. }
+                            | ToolCallPhase::Cached { .. }
+                            | ToolCallPhase::ApprovalRequested { .. }
+                            | ToolCallPhase::ApprovalResolved { .. } => {
+                                // Already counted on Started / approval events are informational
                             }
                         }
                     }

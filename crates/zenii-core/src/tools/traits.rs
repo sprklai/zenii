@@ -48,6 +48,13 @@ pub trait Tool: Send + Sync {
     fn risk_level(&self) -> RiskLevel {
         RiskLevel::Low
     }
+
+    /// Check if this tool call needs user approval before execution.
+    /// Returns `Some(reason)` if approval is needed, `None` if the tool can proceed.
+    /// Default: no approval needed.
+    fn needs_approval(&self, _args: &serde_json::Value) -> Option<String> {
+        None
+    }
 }
 
 #[cfg(test)]
@@ -66,5 +73,33 @@ mod tests {
         let r = ToolResult::err("error");
         assert!(!r.success);
         assert_eq!(r.output, "error");
+    }
+
+    // TA.8 — Default needs_approval returns None
+    #[test]
+    fn default_needs_approval_returns_none() {
+        use async_trait::async_trait;
+
+        struct DummyTool;
+
+        #[async_trait]
+        impl Tool for DummyTool {
+            fn name(&self) -> &str {
+                "dummy"
+            }
+            fn description(&self) -> &str {
+                "A dummy tool"
+            }
+            fn parameters_schema(&self) -> serde_json::Value {
+                serde_json::json!({})
+            }
+            async fn execute(&self, _args: serde_json::Value) -> crate::Result<ToolResult> {
+                Ok(ToolResult::ok("ok"))
+            }
+        }
+
+        let tool = DummyTool;
+        let args = serde_json::json!({"command": "echo hello"});
+        assert!(tool.needs_approval(&args).is_none());
     }
 }

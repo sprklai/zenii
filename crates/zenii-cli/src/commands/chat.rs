@@ -202,6 +202,75 @@ pub async fn run(
                                 "\n\x1b[32m\u{2705} Delegation complete ({dur_s:.1}s, {tokens} tokens)\x1b[0m\n"
                             );
                         }
+                        "approval_request" => {
+                            let tool_name = chunk
+                                .get("tool_name")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("?");
+                            let args_summary = chunk
+                                .get("args_summary")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("");
+                            let risk = chunk
+                                .get("risk_level")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("medium");
+                            let reason = chunk.get("reason").and_then(|v| v.as_str()).unwrap_or("");
+                            let approval_id = chunk
+                                .get("approval_id")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("");
+                            let timeout = chunk
+                                .get("timeout_secs")
+                                .and_then(|v| v.as_u64())
+                                .unwrap_or(120);
+
+                            eprintln!(
+                                "\n\x1b[33m\u{26A0}\u{FE0F}  Tool \"{tool_name}\" needs approval\x1b[0m"
+                            );
+                            eprintln!("    Command: {args_summary}");
+                            eprintln!("    Risk: {risk}");
+                            if !reason.is_empty() {
+                                eprintln!("    Reason: {reason}");
+                            }
+                            eprint!(
+                                "    [a]pprove / [A]lways allow / [d]eny (auto-deny in {timeout}s): "
+                            );
+                            io::stderr().flush().unwrap_or(());
+
+                            // Read approval decision from stdin (blocking in spawn_blocking)
+                            let decision = tokio::task::spawn_blocking(|| {
+                                let mut input = String::new();
+                                if io::stdin().read_line(&mut input).is_ok() {
+                                    match input.trim() {
+                                        "a" | "approve" | "y" | "yes" => "approve",
+                                        "A" | "always" => "approve_always",
+                                        _ => "deny",
+                                    }
+                                } else {
+                                    "deny"
+                                }
+                            })
+                            .await
+                            .unwrap_or("deny");
+
+                            let response = json!({
+                                "type": "approval_response",
+                                "approval_id": approval_id,
+                                "decision": decision,
+                            });
+                            let _ = write
+                                .send(tungstenite::Message::Text(response.to_string().into()))
+                                .await;
+                            eprintln!("    \u{2192} {decision}");
+                        }
+                        "approval_resolved" => {
+                            let decision = chunk
+                                .get("decision")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("?");
+                            eprintln!("\x1b[33m  Approval resolved: {decision}\x1b[0m");
+                        }
                         "done" => break,
                         "error" => {
                             if let Some(err) = chunk.get("error").and_then(|v| v.as_str()) {

@@ -702,7 +702,6 @@ mod tests {
     async fn agent_chained_tool_calls() {
         use crate::ai::adapter::RigToolAdapter;
         use crate::tools::ToolResult;
-        use rig::tool::ToolDyn;
 
         struct CounterTool {
             name: &'static str,

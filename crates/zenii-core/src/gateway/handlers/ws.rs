@@ -109,6 +109,30 @@ pub(crate) enum WsOutbound {
         run_id: String,
         status: String,
     },
+    #[serde(rename = "channel_agent_started")]
+    ChannelAgentStarted {
+        channel: String,
+        session_id: String,
+        sender: String,
+    },
+    #[serde(rename = "channel_agent_completed")]
+    ChannelAgentCompleted { channel: String, session_id: String },
+    #[serde(rename = "approval_request")]
+    ApprovalRequest {
+        approval_id: String,
+        call_id: String,
+        tool_name: String,
+        args_summary: String,
+        risk_level: String,
+        reason: String,
+        timeout_secs: u64,
+    },
+    #[serde(rename = "approval_resolved")]
+    ApprovalResolved {
+        approval_id: String,
+        decision: String,
+        auto: bool,
+    },
     #[serde(rename = "done")]
     Done,
     #[serde(rename = "warning")]
@@ -206,6 +230,30 @@ async fn handle_notifications(mut socket: WebSocket, state: Arc<AppState>) {
                     }
                     Ok(crate::event_bus::AppEvent::ChannelReconnecting { channel, attempt }) => {
                         let outbound = WsOutbound::ChannelReconnecting { channel, attempt };
+                        if let Ok(json) = serde_json::to_string(&outbound)
+                            && socket.send(Message::Text(json.into())).await.is_err()
+                        {
+                            break;
+                        }
+                    }
+                    Ok(crate::event_bus::AppEvent::ChannelAgentStarted { channel, session_id, sender }) => {
+                        let outbound = WsOutbound::ChannelAgentStarted { channel, session_id, sender };
+                        if let Ok(json) = serde_json::to_string(&outbound)
+                            && socket.send(Message::Text(json.into())).await.is_err()
+                        {
+                            break;
+                        }
+                    }
+                    Ok(crate::event_bus::AppEvent::ChannelAgentCompleted { channel, session_id }) => {
+                        let outbound = WsOutbound::ChannelAgentCompleted { channel, session_id };
+                        if let Ok(json) = serde_json::to_string(&outbound)
+                            && socket.send(Message::Text(json.into())).await.is_err()
+                        {
+                            break;
+                        }
+                    }
+                    Ok(crate::event_bus::AppEvent::ApprovalRequested { approval_id, call_id, tool_name, args_summary, risk_level, reason, timeout_secs }) => {
+                        let outbound = WsOutbound::ApprovalRequest { approval_id, call_id, tool_name, args_summary, risk_level, reason, timeout_secs };
                         if let Ok(json) = serde_json::to_string(&outbound)
                             && socket.send(Message::Text(json.into())).await.is_err()
                         {
@@ -441,13 +489,26 @@ async fn handle_ws(mut socket: WebSocket, state: Arc<AppState>) {
         // Concurrently forward tool events, wait for agent result, and detect client disconnect
         loop {
             tokio::select! {
-                // H1: Detect client disconnect during agent execution
+                // H1: Detect client disconnect or approval responses during agent execution
                 ws_msg = socket.recv() => {
                     match ws_msg {
                         Some(Ok(Message::Close(_))) | None => {
                             info!("WS: client disconnected during agent execution, aborting agent task");
                             agent_handle.abort();
                             break;
+                        }
+                        Some(Ok(Message::Text(text))) => {
+                            // Handle approval_response messages from the client
+                            if let Ok(val) = serde_json::from_str::<serde_json::Value>(&text)
+                                && val.get("type").and_then(|v| v.as_str()) == Some("approval_response")
+                            {
+                                let approval_id = val.get("approval_id").and_then(|v| v.as_str()).unwrap_or("");
+                                let decision_str = val.get("decision").and_then(|v| v.as_str()).unwrap_or("deny");
+                                let decision = crate::security::approval::ApprovalDecision::from_str_lossy(decision_str);
+                                if let Some(ref broker) = state.approval_broker {
+                                    broker.resolve(approval_id, decision);
+                                }
+                            }
                         }
                         _ => {} // Ignore other messages during execution
                     }
@@ -475,6 +536,25 @@ async fn handle_ws(mut socket: WebSocket, state: Arc<AppState>) {
                                     success: *success,
                                     duration_ms: 0,
                                 },
+                                ToolCallPhase::ApprovalRequested { approval_id, reason, risk_level, timeout_secs } => {
+                                    let args_summary = evt.tool_name.clone();
+                                    WsOutbound::ApprovalRequest {
+                                        approval_id: approval_id.clone(),
+                                        call_id: evt.call_id.clone(),
+                                        tool_name: evt.tool_name.clone(),
+                                        args_summary,
+                                        risk_level: risk_level.clone(),
+                                        reason: reason.clone(),
+                                        timeout_secs: *timeout_secs,
+                                    }
+                                }
+                                ToolCallPhase::ApprovalResolved { approval_id, decision } => {
+                                    WsOutbound::ApprovalResolved {
+                                        approval_id: approval_id.clone(),
+                                        decision: decision.clone(),
+                                        auto: false,
+                                    }
+                                }
                             };
                             send_outbound(&mut socket, &outbound).await;
                             tool_events.push(evt);
@@ -513,6 +593,24 @@ async fn handle_ws(mut socket: WebSocket, state: Arc<AppState>) {
                                 success: *success,
                                 duration_ms: 0,
                             },
+                            ToolCallPhase::ApprovalRequested { approval_id, reason, risk_level, timeout_secs } => {
+                                WsOutbound::ApprovalRequest {
+                                    approval_id: approval_id.clone(),
+                                    call_id: evt.call_id.clone(),
+                                    tool_name: evt.tool_name.clone(),
+                                    args_summary: evt.tool_name.clone(),
+                                    risk_level: risk_level.clone(),
+                                    reason: reason.clone(),
+                                    timeout_secs: *timeout_secs,
+                                }
+                            }
+                            ToolCallPhase::ApprovalResolved { approval_id, decision } => {
+                                WsOutbound::ApprovalResolved {
+                                    approval_id: approval_id.clone(),
+                                    decision: decision.clone(),
+                                    auto: false,
+                                }
+                            }
                         };
                         send_outbound(&mut socket, &outbound).await;
                         tool_events.push(evt);
@@ -1092,6 +1190,72 @@ mod tests {
         let parsed: serde_json::Value = serde_json::from_str(&text).unwrap();
         assert_eq!(parsed["type"], "error");
         assert!(parsed["error"].as_str().unwrap().contains("invalid JSON"));
+    }
+
+    // TA.4 — WsOutbound::ChannelAgentStarted serializes correctly
+    #[test]
+    fn ws_outbound_channel_agent_started_serializes() {
+        let msg = WsOutbound::ChannelAgentStarted {
+            channel: "telegram".into(),
+            session_id: "sess-1".into(),
+            sender: "user42".into(),
+        };
+        let json = serde_json::to_value(&msg).unwrap();
+        assert_eq!(json["type"], "channel_agent_started");
+        assert_eq!(json["channel"], "telegram");
+        assert_eq!(json["session_id"], "sess-1");
+        assert_eq!(json["sender"], "user42");
+    }
+
+    // TA.5 — WsOutbound::ChannelAgentCompleted serializes correctly
+    #[test]
+    fn ws_outbound_channel_agent_completed_serializes() {
+        let msg = WsOutbound::ChannelAgentCompleted {
+            channel: "slack".into(),
+            session_id: "sess-2".into(),
+        };
+        let json = serde_json::to_value(&msg).unwrap();
+        assert_eq!(json["type"], "channel_agent_completed");
+        assert_eq!(json["channel"], "slack");
+        assert_eq!(json["session_id"], "sess-2");
+    }
+
+    // TA.6 — WsOutbound::ApprovalRequest serializes correctly
+    #[test]
+    fn ws_outbound_approval_request_serializes() {
+        let msg = WsOutbound::ApprovalRequest {
+            approval_id: "apr-1".into(),
+            call_id: "call-1".into(),
+            tool_name: "shell".into(),
+            args_summary: "cargo build".into(),
+            risk_level: "medium".into(),
+            reason: "Command needs approval: cargo build".into(),
+            timeout_secs: 120,
+        };
+        let json = serde_json::to_value(&msg).unwrap();
+        assert_eq!(json["type"], "approval_request");
+        assert_eq!(json["approval_id"], "apr-1");
+        assert_eq!(json["call_id"], "call-1");
+        assert_eq!(json["tool_name"], "shell");
+        assert_eq!(json["args_summary"], "cargo build");
+        assert_eq!(json["risk_level"], "medium");
+        assert_eq!(json["reason"], "Command needs approval: cargo build");
+        assert_eq!(json["timeout_secs"], 120);
+    }
+
+    // TA.7 — WsOutbound::ApprovalResolved serializes correctly
+    #[test]
+    fn ws_outbound_approval_resolved_serializes() {
+        let msg = WsOutbound::ApprovalResolved {
+            approval_id: "apr-1".into(),
+            decision: "approve".into(),
+            auto: false,
+        };
+        let json = serde_json::to_value(&msg).unwrap();
+        assert_eq!(json["type"], "approval_resolved");
+        assert_eq!(json["approval_id"], "apr-1");
+        assert_eq!(json["decision"], "approve");
+        assert_eq!(json["auto"], false);
     }
 
     // 4.2.3 — WS no API key returns credential error

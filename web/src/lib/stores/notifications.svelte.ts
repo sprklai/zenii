@@ -11,6 +11,13 @@ export interface NotificationRouting {
   channel_message: string[];
 }
 
+export interface ChannelAgentActivity {
+  channel: string;
+  sessionId: string;
+  sender: string;
+  startedAt: number;
+}
+
 export interface SchedulerNotification {
   eventType: string;
   jobId: string;
@@ -43,6 +50,7 @@ export function hasTarget(eventType: string, target: string): boolean {
 
 class NotificationStore {
   notifications = $state<SchedulerNotification[]>([]);
+  channelAgentActivity = $state<ChannelAgentActivity | null>(null);
   ws: WebSocket | null = null;
   connected = $state(false);
   disconnectedPermanently = $state(false);
@@ -97,7 +105,18 @@ class NotificationStore {
     this.ws.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
-        if (data.type === "channel_message") {
+        if (data.type === "channel_agent_started") {
+          this.channelAgentActivity = {
+            channel: data.channel,
+            sessionId: data.session_id,
+            sender: data.sender,
+            startedAt: Date.now(),
+          };
+        } else if (data.type === "channel_agent_completed") {
+          if (this.channelAgentActivity?.sessionId === data.session_id) {
+            this.channelAgentActivity = null;
+          }
+        } else if (data.type === "channel_message") {
           inboxStore.handleRealtimeMessage({
             channel: data.channel,
             sender: data.sender,

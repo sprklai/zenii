@@ -1,3 +1,4 @@
+pub mod approval;
 pub mod permissions;
 pub mod policy;
 

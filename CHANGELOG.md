@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Tool approval system: `needs_approval()` trait method, `ApprovalBroker`, approval rules with persistent storage
+- 3 new API routes: `GET /approvals/rules`, `DELETE /approvals/rules/{id}`, `POST /approvals/{id}/respond`
+- WebSocket approval request/response events for real-time UI interaction
+- Shell tool approval for dangerous commands (requires user confirmation)
+- Frontend tool approval UI components and approval store
 - Workflow CLI command (`zenii workflow list/create/get/show/run/delete/history/cancel`)
 - Example workflow TOML files in `examples/workflows/`
 - Channel notifications (Telegram, etc.) on workflow completion via SchedulerNotification event
@@ -16,8 +21,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `get_text()` method on ZeniiClient for plain text API responses
 
 ### Docs
+- Updated route/tool/provider counts across all documentation surfaces (114 routes, 14 tools, 6 providers)
 - CLI reference: workflow command section with 8 subcommands and recipe
 - API reference: added missing `/workflows/{id}/raw` and `/workflows/{id}/cancel` endpoints
+- Architecture: added Approvals section, updated Workflows/Plugins/Sessions route tables
 - README: workflow CLI commands in quick reference table
 
 ## [0.0.33] - 2026-03-20

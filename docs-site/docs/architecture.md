@@ -112,7 +112,7 @@ graph TB
     end
 
     subgraph GW["Gateway :18981"]
-        REST["REST<br>77 base + 24 feature-gated"]
+        REST["REST<br>86 core + 28 feature-gated"]
         WS["WebSocket<br>/ws/chat"]
     end
 
@@ -195,11 +195,11 @@ zenii/
 │   │   │   ├── memory/     # Memory trait + SqliteMemoryStore (FTS5 + vectors) + InMemoryStore
 │   │   │   ├── credential/ # CredentialStore trait + KeyringStore + FileCredentialStore + InMemoryCredentialStore
 │   │   │   ├── security/   # SecurityPolicy + AutonomyLevel + rate limiter + audit log
-│   │   │   ├── tools/      # Tool trait + ToolRegistry (DashMap) + 17 tools (14 base + 3 feature-gated)
+│   │   │   ├── tools/      # Tool trait + ToolRegistry (DashMap) + 14 built-in tools
 │   │   │   ├── ai/         # AI agent (rig-core), providers, session manager, tool adapter, context engine, delegation
 │   │   │   │   └── delegation/ # Coordinator, SubAgent, DelegationTask, dependency-wave execution
 │   │   │   ├── workflows/  # WorkflowRegistry, WorkflowExecutor, StepRuntime, templates (feature-gated)
-│   │   │   ├── gateway/    # axum HTTP+WS gateway (77 base + 24 feature-gated routes, auth middleware, error mapping, ZENII_VALIDATION)
+│   │   │   ├── gateway/    # axum HTTP+WS gateway (86 core + 28 feature-gated = 114 routes, auth middleware, error mapping, ZENII_VALIDATION)
 │   │   │   ├── identity/   # SoulLoader + PromptComposer + defaults (SOUL/IDENTITY/USER.md)
 │   │   │   ├── skills/     # SkillRegistry + bundled/user skills (markdown + YAML frontmatter)
 │   │   │   ├── user/       # UserLearner + SQLite observations + privacy controls
@@ -804,7 +804,7 @@ All clients communicate via the HTTP+WebSocket gateway at `localhost:18981`. Rou
 |---|---|---|
 | GET | `/health` | Health check |
 
-### Sessions & Chat (9 routes)
+### Sessions & Chat (10 routes)
 
 | Method | Path | Description |
 |---|---|---|
@@ -816,6 +816,7 @@ All clients communicate via the HTTP+WebSocket gateway at `localhost:18981`. Rou
 | POST | `/sessions/{id}/generate-title` | Auto-generate session title via AI |
 | GET | `/sessions/{id}/messages` | Get messages for a session |
 | POST | `/sessions/{id}/messages` | Send message to session |
+| DELETE | `/sessions/{id}/messages/{message_id}/and-after` | Delete message and all after it |
 
 ### Chat (1 route)
 
@@ -978,12 +979,13 @@ All clients communicate via the HTTP+WebSocket gateway at `localhost:18981`. Rou
 | POST | `/embeddings/download` | Download local embedding model |
 | POST | `/embeddings/reindex` | Re-embed all stored memories |
 
-### Plugins (8 routes)
+### Plugins (9 routes)
 
 | Method | Path | Description |
 |---|---|---|
 | GET | `/plugins` | List all installed plugins |
 | POST | `/plugins/install` | Install plugin from git URL or local path |
+| GET | `/plugins/available` | List available plugins from registry |
 | DELETE | `/plugins/{name}` | Remove installed plugin |
 | GET | `/plugins/{name}` | Get plugin info and manifest |
 | PUT | `/plugins/{name}/toggle` | Enable or disable a plugin |
@@ -998,15 +1000,26 @@ All clients communicate via the HTTP+WebSocket gateway at `localhost:18981`. Rou
 | GET | `/agents/active` | List active delegation runs |
 | POST | `/agents/{id}/cancel` | Cancel a delegation run |
 
-### Workflows (7 routes, feature-gated)
+### Approvals (3 routes)
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/approvals/rules` | List approval rules |
+| DELETE | `/approvals/rules/{id}` | Delete an approval rule |
+| POST | `/approvals/{id}/respond` | Respond to a pending approval |
+
+### Workflows (10 routes, feature-gated)
 
 | Method | Path | Feature | Description |
 |---|---|---|---|
 | POST | `/workflows` | `workflows` | Create workflow from TOML |
 | GET | `/workflows` | `workflows` | List all workflows |
 | GET | `/workflows/{id}` | `workflows` | Get workflow definition |
+| PUT | `/workflows/{id}` | `workflows` | Update workflow definition |
 | DELETE | `/workflows/{id}` | `workflows` | Delete workflow |
+| GET | `/workflows/{id}/raw` | `workflows` | Get raw TOML source |
 | POST | `/workflows/{id}/run` | `workflows` | Execute workflow |
+| POST | `/workflows/{id}/cancel` | `workflows` | Cancel running workflow |
 | GET | `/workflows/{id}/history` | `workflows` | Get run history |
 | GET | `/workflows/{id}/runs/{run_id}` | `workflows` | Get run details with step results |
 
@@ -1015,7 +1028,7 @@ All clients communicate via the HTTP+WebSocket gateway at `localhost:18981`. Rou
 | Path | Feature | Description |
 |---|---|---|
 | `/ws/chat` | always | Streaming chat responses |
-| `/ws/notifications` | `scheduler` | Push scheduler notifications to clients |
+| `/ws/notifications` | always | Push notifications to clients |
 
 ### API Docs (2 routes, feature-gated)
 
@@ -1263,8 +1276,8 @@ Four new agent-callable tools give the AI agent direct control over system funct
 
 ```mermaid
 graph TD
-    subgraph ToolRegistry["ToolRegistry - 17 tools"]
-        subgraph Base["Base Tools - 14"]
+    subgraph ToolRegistry["ToolRegistry - 14 tools"]
+        subgraph Base["Built-in Tools - 14"]
             SysInfo[system_info]
             WebSearch[web_search]
             FileR[file_read]
@@ -1280,20 +1293,12 @@ graph TD
             ConfigT[config]
             AgentSelf["agent_notes"]
         end
-        subgraph FeatureGated["Feature-Gated - 3"]
-            ChanSend["channel_send<br>#40;channels#41;"]
-            SchedT["scheduler<br>#40;scheduler#41;"]
-            WorkflowT["workflows<br>#40;workflows#41;"]
-        end
     end
 
     ConfigT -->|ArcSwap| Config["AppConfig<br>hot-reload"]
     MemT --> Memory["Memory trait<br>store/recall/forget"]
-    ChanSend --> ChanReg["ChannelRegistry<br>send/list/status"]
-    SchedT --> Sched["TokioScheduler<br>CRUD + history"]
 
     style Base fill:#4CAF50,color:#fff
-    style FeatureGated fill:#FF9800,color:#fff
 ```
 
 ## Autonomous Reasoning Engine (Phase 8.11)

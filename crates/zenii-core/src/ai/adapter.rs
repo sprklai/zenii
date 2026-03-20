@@ -158,6 +158,18 @@ pub enum ToolCallPhase {
     },
     #[serde(rename = "cached")]
     Cached { output: String, success: bool },
+    #[serde(rename = "approval_requested")]
+    ApprovalRequested {
+        approval_id: String,
+        reason: String,
+        risk_level: String,
+        timeout_secs: u64,
+    },
+    #[serde(rename = "approval_resolved")]
+    ApprovalResolved {
+        approval_id: String,
+        decision: String,
+    },
 }
 
 /// Bridges a Zenii `Tool` trait object to rig-core's `ToolDyn` trait,
@@ -166,6 +178,10 @@ pub struct RigToolAdapter {
     tool: Arc<dyn Tool>,
     event_tx: Option<broadcast::Sender<ToolCallEvent>>,
     cache: Option<Arc<ToolCallCache>>,
+    approval_broker: Option<Arc<crate::security::approval::ApprovalBroker>>,
+    event_bus: Option<Arc<dyn crate::event_bus::EventBus>>,
+    surface: String,
+    approval_timeout_secs: u64,
 }
 
 impl RigToolAdapter {
@@ -174,6 +190,10 @@ impl RigToolAdapter {
             tool,
             event_tx: None,
             cache: None,
+            approval_broker: None,
+            event_bus: None,
+            surface: "desktop".into(),
+            approval_timeout_secs: 120,
         }
     }
 
@@ -183,7 +203,26 @@ impl RigToolAdapter {
             tool,
             event_tx: Some(tx),
             cache: None,
+            approval_broker: None,
+            event_bus: None,
+            surface: "desktop".into(),
+            approval_timeout_secs: 120,
         }
+    }
+
+    /// Attach an approval broker for interactive tool approval.
+    pub fn with_approval(
+        mut self,
+        broker: Arc<crate::security::approval::ApprovalBroker>,
+        event_bus: Arc<dyn crate::event_bus::EventBus>,
+        surface: &str,
+        timeout_secs: u64,
+    ) -> Self {
+        self.approval_broker = Some(broker);
+        self.event_bus = Some(event_bus);
+        self.surface = surface.to_string();
+        self.approval_timeout_secs = timeout_secs;
+        self
     }
 
     /// Attach a dedup cache to this adapter (builder pattern).
@@ -310,6 +349,114 @@ impl ToolDyn for RigToolAdapter {
                     };
                 }
             }
+
+            // Approval gate: check if this tool needs user approval
+            if let Some(ref broker) = self.approval_broker
+                && let Some(reason) = self.tool.needs_approval(&args_value) {
+                    let args_summary = args_value
+                        .get("command")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or(&args)
+                        .to_string();
+                    let risk_level = format!("{:?}", self.tool.risk_level()).to_lowercase();
+
+                    // Check pre-approved (session cache or DB rule)
+                    let pre = broker
+                        .pre_check(&tool_name, &args_summary, &self.surface)
+                        .await;
+
+                    match pre {
+                        Some(crate::security::approval::ApprovalDecision::Deny) => {
+                            return Err(ToolError::ToolCallError(Box::new(std::io::Error::other(
+                                format!("Tool '{tool_name}' denied by saved rule"),
+                            ))));
+                        }
+                        Some(_) => {
+                            // Pre-approved, continue to execution
+                        }
+                        None => {
+                            // Need to prompt user
+                            let approval_id = uuid::Uuid::new_v4().to_string();
+
+                            // Emit approval requested event via tool events
+                            if let Some(ref tx) = self.event_tx {
+                                let _ = tx.send(ToolCallEvent {
+                                    call_id: call_id.clone(),
+                                    tool_name: tool_name.clone(),
+                                    phase: ToolCallPhase::ApprovalRequested {
+                                        approval_id: approval_id.clone(),
+                                        reason: reason.clone(),
+                                        risk_level: risk_level.clone(),
+                                        timeout_secs: self.approval_timeout_secs,
+                                    },
+                                });
+                            }
+
+                            // Also publish to event bus for notifications WS
+                            if let Some(ref bus) = self.event_bus {
+                                let _ =
+                                    bus.publish(crate::event_bus::AppEvent::ApprovalRequested {
+                                        approval_id: approval_id.clone(),
+                                        call_id: call_id.clone(),
+                                        tool_name: tool_name.clone(),
+                                        args_summary: args_summary.clone(),
+                                        risk_level: risk_level.clone(),
+                                        reason: reason.clone(),
+                                        timeout_secs: self.approval_timeout_secs,
+                                    });
+                            }
+
+                            // Wait for decision with timeout
+                            let rx = broker.register(&approval_id);
+                            let timeout =
+                                std::time::Duration::from_secs(self.approval_timeout_secs);
+                            let decision = tokio::select! {
+                                result = rx => {
+                                    result.unwrap_or(crate::security::approval::ApprovalDecision::Deny)
+                                }
+                                _ = tokio::time::sleep(timeout) => {
+                                    crate::security::approval::ApprovalDecision::Deny
+                                }
+                            };
+
+                            // Emit resolution event
+                            if let Some(ref tx) = self.event_tx {
+                                let _ = tx.send(ToolCallEvent {
+                                    call_id: call_id.clone(),
+                                    tool_name: tool_name.clone(),
+                                    phase: ToolCallPhase::ApprovalResolved {
+                                        approval_id: approval_id.clone(),
+                                        decision: decision.as_str().to_string(),
+                                    },
+                                });
+                            }
+
+                            match decision {
+                                crate::security::approval::ApprovalDecision::Approve => {
+                                    broker.cache_session(&tool_name, decision);
+                                }
+                                crate::security::approval::ApprovalDecision::ApproveAlways => {
+                                    broker.cache_session(&tool_name, decision);
+                                    let _ = broker
+                                        .save_rule(
+                                            &tool_name,
+                                            Some(&args_summary),
+                                            decision,
+                                            &self.surface,
+                                        )
+                                        .await;
+                                }
+                                crate::security::approval::ApprovalDecision::Deny => {
+                                    return Err(ToolError::ToolCallError(Box::new(
+                                        std::io::Error::other(format!(
+                                            "Tool '{tool_name}' denied by user"
+                                        )),
+                                    )));
+                                }
+                            }
+                        }
+                    }
+                }
 
             // Emit Started event (cache miss)
             if let Some(ref tx) = self.event_tx {

@@ -60,6 +60,10 @@ impl IntoResponse for ZeniiError {
             ZeniiError::PluginNotFound(_) => (StatusCode::NOT_FOUND, "ZENII_PLUGIN_NOT_FOUND"),
             ZeniiError::Workflow(_) => (StatusCode::INTERNAL_SERVER_ERROR, "ZENII_WORKFLOW_ERROR"),
             ZeniiError::ModelCapability(_) => (StatusCode::BAD_REQUEST, "ZENII_MODEL_CAPABILITY"),
+            ZeniiError::ApprovalDenied(_) => (StatusCode::FORBIDDEN, "ZENII_APPROVAL_DENIED"),
+            ZeniiError::ApprovalTimeout(_) => {
+                (StatusCode::REQUEST_TIMEOUT, "ZENII_APPROVAL_TIMEOUT")
+            }
             ZeniiError::Other(_) => (StatusCode::INTERNAL_SERVER_ERROR, "ZENII_INTERNAL_ERROR"),
         };
 

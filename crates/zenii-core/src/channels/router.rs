@@ -238,7 +238,12 @@ impl ChannelRouter {
         let channel_hint = channel_system_context(&channel_name, &allowed_tool_names);
         let system_context = format!("{preamble}\n\n{channel_hint}");
 
-        // 6. Call lifecycle hook: on_agent_start
+        // 6. Call lifecycle hook: on_agent_start + publish event
+        let _ = state.event_bus.publish(AppEvent::ChannelAgentStarted {
+            channel: channel_name.clone(),
+            session_id: session_id.clone(),
+            sender: sender_name.clone(),
+        });
         if let Some(channel) = state.channel_registry.get_channel(&channel_name) {
             channel.on_agent_start(recipient.as_deref()).await;
         }
@@ -265,6 +270,10 @@ impl ChannelRouter {
             Ok(a) => a,
             Err(e) => {
                 warn!("ChannelRouter: failed to resolve agent for {channel_name}: {e}");
+                let _ = state.event_bus.publish(AppEvent::ChannelAgentCompleted {
+                    channel: channel_name.clone(),
+                    session_id: session_id.clone(),
+                });
                 if let Some(channel) = state.channel_registry.get_channel(&channel_name) {
                     channel.on_agent_complete(recipient.as_deref()).await;
                 }
@@ -315,6 +324,10 @@ impl ChannelRouter {
             Err(e) => {
                 warn!("ChannelRouter: agent chat failed for {channel_name}: {e}");
                 tool_listener.abort();
+                let _ = state.event_bus.publish(AppEvent::ChannelAgentCompleted {
+                    channel: channel_name.clone(),
+                    session_id: session_id.clone(),
+                });
                 if let Some(channel) = state.channel_registry.get_channel(&channel_name) {
                     channel.on_agent_complete(recipient.as_deref()).await;
                 }
@@ -325,7 +338,11 @@ impl ChannelRouter {
         // 12. Abort tool listener (agent done)
         tool_listener.abort();
 
-        // 13. Call lifecycle hook: on_agent_complete
+        // 13. Call lifecycle hook: on_agent_complete + publish event
+        let _ = state.event_bus.publish(AppEvent::ChannelAgentCompleted {
+            channel: channel_name.clone(),
+            session_id: session_id.clone(),
+        });
         if let Some(channel) = state.channel_registry.get_channel(&channel_name) {
             channel.on_agent_complete(recipient.as_deref()).await;
         }

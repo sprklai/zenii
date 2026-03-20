@@ -63,6 +63,24 @@ export interface WsDelegationCompletedMessage {
   total_tokens: number;
 }
 
+export interface WsApprovalRequestMessage {
+  type: "approval_request";
+  approval_id: string;
+  call_id: string;
+  tool_name: string;
+  args_summary: string;
+  risk_level: string;
+  reason: string;
+  timeout_secs: number;
+}
+
+export interface WsApprovalResolvedMessage {
+  type: "approval_resolved";
+  approval_id: string;
+  decision: string;
+  auto: boolean;
+}
+
 export type WsMessage =
   | WsTextMessage
   | WsDoneMessage
@@ -72,7 +90,9 @@ export type WsMessage =
   | WsDelegationStartedMessage
   | WsAgentProgressMessage
   | WsAgentCompletedMessage
-  | WsDelegationCompletedMessage;
+  | WsDelegationCompletedMessage
+  | WsApprovalRequestMessage
+  | WsApprovalResolvedMessage;
 
 export interface ChatStreamCallbacks {
   onToken: (content: string) => void;
@@ -108,6 +128,16 @@ export interface ChatStreamCallbacks {
     totalDurationMs: number,
     totalTokens: number,
   ) => void;
+  onApprovalRequest?: (
+    approvalId: string,
+    callId: string,
+    toolName: string,
+    argsSummary: string,
+    riskLevel: string,
+    reason: string,
+    timeoutSecs: number,
+  ) => void;
+  onApprovalResolved?: (approvalId: string, decision: string) => void;
   onDone: () => void;
   onError: (error: string) => void;
 }
@@ -187,6 +217,20 @@ export function createChatStream(
             msg.total_tokens,
           );
           break;
+        case "approval_request":
+          callbacks.onApprovalRequest?.(
+            msg.approval_id,
+            msg.call_id,
+            msg.tool_name,
+            msg.args_summary,
+            msg.risk_level,
+            msg.reason,
+            msg.timeout_secs,
+          );
+          break;
+        case "approval_resolved":
+          callbacks.onApprovalResolved?.(msg.approval_id, msg.decision);
+          break;
         case "done":
           callbacks.onDone();
           intentionalClose = true;
@@ -222,4 +266,21 @@ export function createChatStream(
   };
 
   return ws;
+}
+
+/** Send an approval response through an active WS connection. */
+export function sendApprovalResponse(
+  ws: WebSocket,
+  approvalId: string,
+  decision: "approve" | "approve_always" | "deny",
+): void {
+  if (ws.readyState === WebSocket.OPEN) {
+    ws.send(
+      JSON.stringify({
+        type: "approval_response",
+        approval_id: approvalId,
+        decision,
+      }),
+    );
+  }
 }

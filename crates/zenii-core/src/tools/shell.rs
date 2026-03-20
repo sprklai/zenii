@@ -45,6 +45,14 @@ impl Tool for ShellTool {
         })
     }
 
+    fn needs_approval(&self, args: &serde_json::Value) -> Option<String> {
+        let command = args.get("command").and_then(|v| v.as_str())?;
+        match self.policy.validate_command(command) {
+            ValidationResult::NeedsApproval => Some(format!("Command needs approval: {command}")),
+            _ => None,
+        }
+    }
+
     async fn execute(&self, args: serde_json::Value) -> Result<ToolResult> {
         let command = args
             .get("command")
@@ -52,12 +60,7 @@ impl Tool for ShellTool {
             .ok_or_else(|| ZeniiError::Tool("missing 'command' argument".into()))?;
 
         match self.policy.validate_command(command) {
-            ValidationResult::Allowed => {}
-            ValidationResult::NeedsApproval => {
-                return Ok(ToolResult::err(format!(
-                    "Command needs approval: {command}"
-                )));
-            }
+            ValidationResult::Allowed | ValidationResult::NeedsApproval => {}
             ValidationResult::Denied(reason) => {
                 return Ok(ToolResult::err(format!("Denied: {reason}")));
             }
@@ -170,5 +173,32 @@ mod tests {
         let schema = tool.parameters_schema();
         assert!(schema.is_object());
         assert!(schema.get("properties").is_some());
+    }
+
+    // TA.9 — needs_approval returns Some for medium-risk commands when autonomy is Supervised
+    #[test]
+    fn needs_approval_supervised_medium_risk() {
+        use crate::tools::traits::Tool;
+
+        let tool = ShellTool::new(policy(AutonomyLevel::Supervised), 30);
+        let result = tool.needs_approval(&serde_json::json!({"command": "cargo build"}));
+        assert!(
+            result.is_some(),
+            "Medium-risk command in Supervised mode should need approval"
+        );
+        assert!(result.unwrap().contains("needs approval"));
+    }
+
+    // TA.10 — needs_approval returns None for simple commands when autonomy is Full
+    #[test]
+    fn needs_approval_full_simple_command() {
+        use crate::tools::traits::Tool;
+
+        let tool = ShellTool::new(policy(AutonomyLevel::Full), 30);
+        let result = tool.needs_approval(&serde_json::json!({"command": "echo hello"}));
+        assert!(
+            result.is_none(),
+            "Low-risk command in Full mode should not need approval"
+        );
     }
 }
