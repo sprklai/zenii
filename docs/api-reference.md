@@ -35,6 +35,8 @@ slug: /api-reference
   - [Channels (Always Available)](#channels-always-available)
   - [Channels (Feature-Gated)](#channels-feature-gated)
   - [Scheduler (Feature-Gated)](#scheduler-feature-gated)
+  - [Agent Delegation](#agent-delegation)
+  - [Workflows (Feature-Gated)](#workflows-feature-gated)
   - [WebSocket](#websocket)
 - [WebSocket Protocol](#websocket-protocol)
 - [Rate Limiting](#rate-limiting)
@@ -1498,6 +1500,165 @@ Get scheduler status.
   "job_count": 3
 }
 ```
+
+---
+
+### Agent Delegation
+
+Agent delegation allows the AI to decompose complex tasks into independent sub-tasks, execute them in parallel via isolated sub-agents, and aggregate results. No feature gate required.
+
+#### GET /agents/active
+
+List active delegation run IDs.
+
+**Response:**
+```json
+["run-uuid-1", "run-uuid-2"]
+```
+
+**Example:**
+```bash
+curl http://localhost:18981/agents/active \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+#### POST /agents/{id}/cancel
+
+Cancel an active delegation run by ID. Aborts all sub-agent JoinHandles.
+
+**Response:**
+```json
+{ "cancelled": true }
+```
+
+**Example:**
+```bash
+curl -X POST http://localhost:18981/agents/run-uuid-1/cancel \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+To trigger delegation, send a chat request with `delegation: true`:
+
+```bash
+curl -X POST http://localhost:18981/chat \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"prompt": "Research Rust async patterns and summarize best practices", "delegation": true}'
+```
+
+The response includes the aggregated response plus per-task results with status, output, usage, and duration.
+
+---
+
+### Workflows (Feature-Gated)
+
+These routes require the `workflows` feature flag to be enabled at compile time.
+
+#### POST /workflows
+
+Create a workflow from a TOML definition.
+
+**Request Body:**
+```json
+{
+  "toml": "id = \"daily-report\"\nname = \"Daily Report\"\n\n[[steps]]\nname = \"fetch\"\ntype = \"tool\"\ntool = \"web_search\"\n[steps.args]\nquery = \"latest tech news\"\n\n[[steps]]\nname = \"summarize\"\ntype = \"llm\"\nprompt = \"Summarize: {{ steps.fetch.output }}\"\ndepends_on = [\"fetch\"]"
+}
+```
+
+**Response (201):**
+```json
+{
+  "id": "daily-report",
+  "name": "Daily Report",
+  "steps": 2
+}
+```
+
+**Example:**
+```bash
+curl -X POST http://localhost:18981/workflows \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"toml": "id = \"test\"\nname = \"Test\"\n\n[[steps]]\nname = \"greet\"\ntype = \"llm\"\nprompt = \"Say hello\""}'
+```
+
+#### GET /workflows
+
+List all registered workflows.
+
+**Response:**
+```json
+[
+  {
+    "id": "daily-report",
+    "name": "Daily Report",
+    "step_count": 2,
+    "schedule": null
+  }
+]
+```
+
+#### GET /workflows/{id}
+
+Get a workflow definition by ID.
+
+**Response:** Full workflow object with steps, schedule, and metadata.
+
+#### DELETE /workflows/{id}
+
+Delete a workflow.
+
+**Response:** `204 No Content`
+
+#### POST /workflows/{id}/run
+
+Execute a workflow. Returns immediately with run details (202 Accepted).
+
+**Response (202):**
+```json
+{
+  "run_id": "run-uuid",
+  "workflow_id": "daily-report",
+  "status": "running",
+  "started_at": "2026-03-20T12:00:00Z"
+}
+```
+
+**Example:**
+```bash
+curl -X POST http://localhost:18981/workflows/daily-report/run \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+#### GET /workflows/{id}/history
+
+Get execution history for a workflow.
+
+**Response:**
+```json
+[
+  {
+    "run_id": "run-uuid",
+    "status": "completed",
+    "started_at": "2026-03-20T12:00:00Z",
+    "completed_at": "2026-03-20T12:00:05Z",
+    "step_results": [
+      {
+        "step_name": "fetch",
+        "success": true,
+        "duration_ms": 1200,
+        "output": "..."
+      }
+    ]
+  }
+]
+```
+
+#### GET /workflows/{id}/runs/{run_id}
+
+Get details for a specific workflow run, including per-step results.
+
+**Response:** Single `WorkflowRun` object with full step results.
 
 ---
 

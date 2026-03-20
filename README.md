@@ -768,7 +768,7 @@ zenii plugin info <name>                  # Show plugin details
 
 Global options: `--host`, `--port`, `--token` (or `ZENII_TOKEN` env var)
 
-## Gateway Routes (79 base + 17 feature-gated = 96 total)
+## Gateway Routes (79 base + 24 feature-gated = 103 total)
 
 | Group | Routes | Description |
 |-------|--------|-------------|
@@ -788,6 +788,8 @@ Global options: `--host`, `--port`, `--token` (or `ZENII_TOKEN` env var)
 | User | `GET/POST/DELETE /user/observations`, `GET/DELETE /user/observations/{key}`, `GET /user/profile` | User learning + privacy |
 | Embeddings | `GET /embeddings/status`, `POST /embeddings/test`, `POST /embeddings/embed`, `POST /embeddings/download`, `POST /embeddings/reindex` | Semantic memory embedding management |
 | Plugins | `GET /plugins`, `POST /plugins/install`, `GET/DELETE /plugins/{name}`, `PUT /plugins/{name}/toggle`, `POST /plugins/{name}/update`, `GET/PUT /plugins/{name}/config` | Plugin management (install, remove, enable/disable, config) |
+| Agent Delegation | `GET /agents/active`, `POST /agents/{id}/cancel` | Multi-agent task delegation |
+| Workflows | `POST /workflows`, `GET /workflows`, `GET/DELETE /workflows/{id}`, `POST /workflows/{id}/run`, `GET /workflows/{id}/history`, `GET /workflows/{id}/runs/{run_id}` (feature-gated: `workflows`) | TOML workflow engine |
 | Channels | `POST /channels/{name}/test` (always); `GET /channels`, `GET /channels/{name}/status`, `POST /channels/{name}/send`, `POST /channels/{name}/connect`, `POST /channels/{name}/disconnect`, `GET /channels/{name}/health`, `POST /channels/{name}/message`, `GET /channels/sessions`, `GET /channels/sessions/{id}/messages` (feature-gated) | Messaging channels |
 | Scheduler | `GET/POST /scheduler/jobs`, `PUT /scheduler/jobs/{id}/toggle`, `DELETE /scheduler/jobs/{id}`, `GET /scheduler/jobs/{id}/history`, `GET /scheduler/status` (feature-gated) | Cron job management |
 | WebSocket | `GET /ws/chat`, `GET /ws/notifications` | Streaming chat + notification push |
@@ -801,7 +803,7 @@ Global options: `--host`, `--port`, `--token` (or `ZENII_TOKEN` env var)
 
 - [Installation & Usage](https://docs.zenii.sprklai.com/installation-and-usage) -- Get up and running
 - [CLI Reference](https://docs.zenii.sprklai.com/cli-reference) -- All commands, options, shell completions, recipes
-- [API Reference](https://docs.zenii.sprklai.com/api-reference) -- All 96 REST/WS routes with request/response schemas
+- [API Reference](https://docs.zenii.sprklai.com/api-reference) -- All 103 REST/WS routes with request/response schemas
 - [Configuration](https://docs.zenii.sprklai.com/configuration) -- All 70+ config.toml fields with types and defaults
 - [Deployment Guide](https://docs.zenii.sprklai.com/deployment) -- Native, Docker, systemd, Raspberry Pi, reverse proxy
 - [Development Guide](https://docs.zenii.sprklai.com/development) -- Prerequisites, building, testing, how-to guides

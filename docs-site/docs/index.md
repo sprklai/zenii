@@ -16,7 +16,7 @@ Install one binary. Now your scripts have **AI memory**. Your cron jobs **reason
 
 ## What is Zenii?
 
-Zenii is a local AI backend that gives every tool on your machine access to AI — through a single binary, a 96-route REST/WebSocket API, and a native desktop app. No cloud account, no SDK, no framework to learn. Just HTTP.
+Zenii is a local AI backend that gives every tool on your machine access to AI — through a single binary, a 103-route REST/WebSocket API, and a native desktop app. No cloud account, no SDK, no framework to learn. Just HTTP.
 
 - **For developers** — `curl` the API from scripts, cron jobs, CI pipelines, or any language
 - **For power users** — desktop app, CLI, and TUI for interactive AI chat with persistent memory
@@ -27,12 +27,14 @@ Zenii is a local AI backend that gives every tool on your machine access to AI �
 
 | Capability | What it means |
 |-----------|--------------|
-| **96 API routes** | Full REST + WebSocket gateway at `localhost:18981` |
+| **103 API routes** | Full REST + WebSocket gateway at `localhost:18981` |
 | **18 AI providers** | OpenAI, Anthropic, Google, Ollama, and more — switch with one config change |
 | **Semantic memory** | SQLite FTS5 + vector search — your AI remembers across sessions and restarts |
 | **16 built-in tools** | Web search, file ops, shell, scheduling, channels, and more |
 | **Plugin system** | Any language, JSON-RPC 2.0 over stdio — a plugin is ~15 lines |
 | **Self-evolution** | AI proposes skill changes, you approve — like a PR from your assistant |
+| **Workflow engine** | Multi-step TOML pipelines with DAG execution, retry policies, and template resolution |
+| **Agent delegation** | Parallel sub-agent execution for complex tasks with dependency-based waves |
 | **Cron scheduler** | Automated recurring AI tasks without external orchestration |
 | **6-layer security** | OS keyring with encrypted file fallback, autonomy levels, FS sandbox, injection detection, rate limits, audit trail |
 | **Cross-platform** | macOS, Linux, Windows, ARM — desktop, CLI, TUI, or headless daemon |
@@ -57,7 +59,7 @@ All interfaces talk to the same backend — your data, memory, and configuration
 - **[Installation & Usage](./installation-and-usage.md)** — Download a binary or build from source
 - **[Configuration](./configuration.md)** — All 70+ config fields with types and defaults
 - **[CLI Reference](./cli-reference.md)** — Commands, options, shell completions, recipes
-- **[API Reference](./api-reference.md)** — All 96 REST & WebSocket routes
+- **[API Reference](./api-reference.md)** — All 103 REST & WebSocket routes
 - **[Architecture](./architecture.md)** — System design, crate dependencies, diagrams
 - **[Deployment](./deployment.md)** — Native, Docker, systemd, Raspberry Pi, reverse proxy
 - **[Development](./development.md)** — Prerequisites, building, testing, contributing
