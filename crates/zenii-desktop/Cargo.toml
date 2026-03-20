@@ -26,9 +26,10 @@ opener = "0.8"
 workspace = true
 
 [features]
-default = ["channels", "scheduler", "api-docs"]
+default = ["channels", "scheduler", "workflows", "api-docs"]
 api-docs = ["zenii-core/api-docs"]
 devtools = ["dep:tauri-plugin-devtools"]
 scheduler = ["zenii-core/scheduler"]
 channels = ["zenii-core/channels"]
+workflows = ["zenii-core/workflows"]
 local-embeddings = ["zenii-core/local-embeddings"]

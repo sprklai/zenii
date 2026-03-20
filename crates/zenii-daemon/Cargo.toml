@@ -25,7 +25,7 @@ clap = { workspace = true }
 workspace = true
 
 [features]
-default = ["keyring", "channels", "channels-telegram", "channels-slack", "channels-discord", "api-docs"]
+default = ["keyring", "channels", "channels-telegram", "channels-slack", "channels-discord", "workflows", "api-docs"]
 api-docs = ["zenii-core/api-docs"]
 keyring = ["zenii-core/keyring"]
 channels = ["zenii-core/channels"]
@@ -34,5 +34,6 @@ channels-slack = ["channels", "zenii-core/channels-slack"]
 channels-discord = ["channels", "zenii-core/channels-discord"]
 local-embeddings = ["zenii-core/local-embeddings"]
 scheduler = ["zenii-core/scheduler"]
+workflows = ["zenii-core/workflows"]
 web-dashboard = ["zenii-core/web-dashboard"]
 vendored-openssl = ["zenii-core/vendored-openssl"]

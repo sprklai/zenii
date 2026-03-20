@@ -10,6 +10,7 @@ pub async fn run(
     client: &ZeniiClient,
     session_id: Option<&str>,
     model: Option<&str>,
+    delegate: bool,
 ) -> Result<(), String> {
     let url = client.ws_url("/ws/chat");
 
@@ -37,6 +38,9 @@ pub async fn run(
     if let Some(m) = model {
         println!("Model: {m}");
     }
+    if delegate {
+        eprintln!("\x1b[36mMode: delegation (multi-agent)\x1b[0m");
+    }
     println!();
 
     let stdin = io::stdin();
@@ -62,6 +66,9 @@ pub async fn run(
         }
         if let Some(m) = model {
             msg["model"] = json!(m);
+        }
+        if delegate {
+            msg["delegation"] = json!(true);
         }
 
         write
@@ -105,6 +112,101 @@ pub async fn run(
                                 .unwrap_or(0);
                             let icon = if ok { "\u{2713}" } else { "\u{2717}" };
                             eprintln!("\x1b[33m  {icon} {name} ({ms}ms)\x1b[0m");
+                        }
+                        "delegation_started" => {
+                            let count = chunk
+                                .get("agent_count")
+                                .and_then(|v| v.as_u64())
+                                .unwrap_or(0);
+                            eprintln!(
+                                "\n\x1b[36m\u{1F500} Delegation started ({count} agents)\x1b[0m"
+                            );
+                            if let Some(agents) = chunk.get("agents").and_then(|v| v.as_array()) {
+                                let last = agents.len().saturating_sub(1);
+                                for (i, agent) in agents.iter().enumerate() {
+                                    let id = agent
+                                        .get("id")
+                                        .and_then(|v| v.as_str())
+                                        .unwrap_or("?");
+                                    let desc = agent
+                                        .get("description")
+                                        .and_then(|v| v.as_str())
+                                        .unwrap_or("");
+                                    let connector = if i == last {
+                                        "\u{2514}\u{2500}\u{2500}"
+                                    } else {
+                                        "\u{251C}\u{2500}\u{2500}"
+                                    };
+                                    eprintln!("\x1b[36m{connector} {id}: {desc}\x1b[0m");
+                                }
+                            }
+                        }
+                        "agent_progress" => {
+                            let agent_id = chunk
+                                .get("agent_id")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("?");
+                            let activity = chunk
+                                .get("current_activity")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("");
+                            let tools = chunk
+                                .get("tool_uses")
+                                .and_then(|v| v.as_u64())
+                                .unwrap_or(0);
+                            let tokens = chunk
+                                .get("tokens_used")
+                                .and_then(|v| v.as_u64())
+                                .unwrap_or(0);
+                            eprintln!(
+                                "\x1b[33m\u{26A1} {agent_id}: {activity} ({tools} tools, {tokens} tokens)\x1b[0m"
+                            );
+                        }
+                        "agent_completed" => {
+                            let agent_id = chunk
+                                .get("agent_id")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("?");
+                            let status = chunk
+                                .get("status")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("unknown");
+                            let dur = chunk
+                                .get("duration_ms")
+                                .and_then(|v| v.as_f64())
+                                .unwrap_or(0.0);
+                            let tools = chunk
+                                .get("tool_uses")
+                                .and_then(|v| v.as_u64())
+                                .unwrap_or(0);
+                            let tokens = chunk
+                                .get("tokens_used")
+                                .and_then(|v| v.as_u64())
+                                .unwrap_or(0);
+                            let dur_s = dur / 1000.0;
+                            if status == "failed" {
+                                eprintln!(
+                                    "\x1b[31m\u{2717} {agent_id}: Failed ({dur_s:.1}s, {tools} tools, {tokens} tokens)\x1b[0m"
+                                );
+                            } else {
+                                eprintln!(
+                                    "\x1b[32m\u{2713} {agent_id}: Completed ({dur_s:.1}s, {tools} tools, {tokens} tokens)\x1b[0m"
+                                );
+                            }
+                        }
+                        "delegation_completed" => {
+                            let dur = chunk
+                                .get("total_duration_ms")
+                                .and_then(|v| v.as_f64())
+                                .unwrap_or(0.0);
+                            let tokens = chunk
+                                .get("total_tokens")
+                                .and_then(|v| v.as_u64())
+                                .unwrap_or(0);
+                            let dur_s = dur / 1000.0;
+                            eprintln!(
+                                "\n\x1b[32m\u{2705} Delegation complete ({dur_s:.1}s, {tokens} tokens)\x1b[0m\n"
+                            );
                         }
                         "done" => break,
                         "error" => {
