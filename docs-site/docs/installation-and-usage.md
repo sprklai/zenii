@@ -441,6 +441,8 @@ provider_model_id = "gpt-4o"
 
 # Logging
 log_level = "info"             # trace, debug, info, warn, error
+# log_dir = ""                # Override log directory (default: {data_dir}/logs/)
+# log_keep_days = 30          # Days to keep log files before auto-cleanup
 
 # CORS (for browser frontends)
 gateway_cors_origins = ["http://localhost:5173"]

@@ -491,6 +491,24 @@ Colon-separated namespacing:
 
 ## Debugging
 
+### Log Files
+
+All binaries write daily-rotated diagnostic logs to `{data_dir}/logs/`:
+
+| Binary | Log File Pattern | Notes |
+|---|---|---|
+| Daemon | `daemon.log.YYYY-MM-DD` | Uses `init_tracing()` from zenii-core |
+| Desktop | `desktop.log.YYYY-MM-DD` | Uses `init_tracing()` from zenii-core |
+| CLI | `cli.log.YYYY-MM-DD` | Lightweight file-only logging (no stderr) |
+| TUI | `tui.log.YYYY-MM-DD` | Lightweight file-only logging (no stderr, since TUI owns the terminal) |
+
+Default log directory by OS:
+- **Linux**: `~/.local/share/zenii/logs/`
+- **macOS**: `~/Library/Application Support/com.sprklai.zenii/logs/`
+- **Windows**: `C:\Users\{user}\AppData\Roaming\sprklai\zenii\logs\`
+
+Override with `log_dir` in `config.toml`. Old log files are cleaned up automatically based on `log_keep_days` (default: 30 days).
+
 ### Log Levels
 
 ```bash

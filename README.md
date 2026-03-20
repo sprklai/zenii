@@ -251,6 +251,7 @@ Your AI gets smarter. You stay in control. No surprises.
 - **Semantic memory** — SQLite FTS5 + vector embeddings, persists across sessions and restarts
 - **Native desktop app** — Tauri 2 + Svelte 5, under 20 MB, not Electron
 - **Compact prompts** — plugin-based prompt strategy with ~65% token reduction
+- **Unified diagnostic logging** — all binaries write daily-rotated logs to OS-appropriate directories with auto-cleanup
 - **Token usage tracking** — date-rotated JSONL logs for cost visibility
 - **Messaging channels** — Telegram, Slack, Discord (feature-gated)
 - **Cron scheduler** — automated recurring AI tasks
@@ -689,11 +690,11 @@ cd web && bun run test                    # Frontend tests
 
 Zenii uses a TOML configuration file. Paths are resolved via `directories::ProjectDirs::from("com", "sprklai", "zenii")`:
 
-| OS | Config File | Database File |
-|---|---|---|
-| **Linux** | `~/.config/zenii/config.toml` | `~/.local/share/zenii/zenii.db` |
-| **macOS** | `~/Library/Application Support/com.sprklai.zenii/config.toml` | `~/Library/Application Support/com.sprklai.zenii/zenii.db` |
-| **Windows** | `%APPDATA%\sprklai\zenii\config\config.toml` | `%APPDATA%\sprklai\zenii\data\zenii.db` |
+| OS | Config File | Database File | Log Directory |
+|---|---|---|---|
+| **Linux** | `~/.config/zenii/config.toml` | `~/.local/share/zenii/zenii.db` | `~/.local/share/zenii/logs/` |
+| **macOS** | `~/Library/Application Support/com.sprklai.zenii/config.toml` | `~/Library/Application Support/com.sprklai.zenii/zenii.db` | `~/Library/Application Support/com.sprklai.zenii/logs/` |
+| **Windows** | `%APPDATA%\sprklai\zenii\config\config.toml` | `%APPDATA%\sprklai\zenii\data\zenii.db` | `%APPDATA%\sprklai\zenii\data\logs\` |
 
 Example `config.toml` (flat structure, all fields optional with defaults):
 
@@ -701,6 +702,8 @@ Example `config.toml` (flat structure, all fields optional with defaults):
 gateway_host = "127.0.0.1"
 gateway_port = 18981
 log_level = "info"
+# log_dir = ""                         # Override log directory (default: {data_dir}/logs/)
+# log_keep_days = 30                   # Days to keep log files before auto-cleanup
 # data_dir = "/custom/data/path"       # Override default data directory
 # db_path = "/custom/path/zenii.db" # Override database file path
 identity_name = "Zenii"

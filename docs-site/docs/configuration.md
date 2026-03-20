@@ -457,10 +457,26 @@ user_location = "New York, US"
 | Field | Type | Default | Description |
 |---|---|---|---|
 | `log_level` | String | `"info"` | Log level for the `tracing` framework (`trace`, `debug`, `info`, `warn`, `error`) |
+| `log_dir` | String | `""` (platform default) | Override log directory. Empty uses `{data_dir}/logs/` |
+| `log_keep_days` | u32 | `30` | Days to retain log files before automatic cleanup |
+| `usage_tracking_enabled` | bool | `true` | Enable date-rotated JSONL usage tracking |
 
 ```toml
 log_level = "info"
+# log_dir = "/custom/logs"       # Override log directory (default: {data_dir}/logs/)
+# log_keep_days = 30             # Days to keep log files
+# usage_tracking_enabled = true  # JSONL usage tracking
 ```
+
+All binaries write daily-rotated diagnostic logs to the OS-appropriate data directory:
+
+| OS | Log Directory |
+|---|---|
+| **Linux** | `~/.local/share/zenii/logs/` |
+| **macOS** | `~/Library/Application Support/com.sprklai.zenii/logs/` |
+| **Windows** | `C:\Users\{user}\AppData\Roaming\sprklai\zenii\logs\` |
+
+Log files per binary: `daemon.log.YYYY-MM-DD`, `desktop.log.YYYY-MM-DD`, `cli.log.YYYY-MM-DD`, `tui.log.YYYY-MM-DD`. Old files are automatically cleaned up based on `log_keep_days`.
 
 ---
 
@@ -504,6 +520,8 @@ ws_max_connections = 32
 
 # Logging
 log_level = "info"
+# log_dir = ""              # Override log directory (default: {data_dir}/logs/)
+# log_keep_days = 30        # Days to keep log files before auto-cleanup
 
 # Database
 # data_dir = "~/.local/share/zenii"  # uses platform default if unset
