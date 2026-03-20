@@ -73,7 +73,12 @@
 
 	function retryMessage(msgIndex: number) {
 		const messages = messagesStore.messages;
-		// Find the preceding user message
+		const msg = messages[msgIndex];
+		if (msg.role === 'user') {
+			handleSubmit({ text: msg.content });
+			return;
+		}
+		// For assistant messages, find the preceding user message
 		for (let i = msgIndex - 1; i >= 0; i--) {
 			if (messages[i].role === 'user') {
 				handleSubmit({ text: messages[i].content });
@@ -161,10 +166,22 @@
 				<div class="space-y-2">
 					{#each messagesStore.messages as msg, idx (msg.id)}
 						<Message from={msg.role === 'user' ? 'user' : 'assistant'}>
-							<MessageContent variant="flat">
-								{#if msg.role === 'user'}
-									<p class="whitespace-pre-wrap">{msg.content}</p>
-								{:else}
+							{#if msg.role === 'user'}
+								<div class="flex w-full flex-col items-end">
+									<MessageContent variant="flat">
+										<p class="whitespace-pre-wrap">{msg.content}</p>
+									</MessageContent>
+									<Actions class="mt-1 opacity-0 transition-opacity group-hover:opacity-100">
+										<Action tooltip="Copy" onclick={() => copyMessage(msg.content)}>
+											<Copy class="size-3.5" />
+										</Action>
+										<Action tooltip="Retry" onclick={() => retryMessage(idx)}>
+											<RefreshCw class="size-3.5" />
+										</Action>
+									</Actions>
+								</div>
+							{:else}
+								<MessageContent variant="flat">
 									{#if msg.tool_calls && msg.tool_calls.length > 0}
 										{#each msg.tool_calls as tc (tc.id)}
 											<Tool>
@@ -190,8 +207,8 @@
 											<RefreshCw class="size-3.5" />
 										</Action>
 									</Actions>
-								{/if}
-							</MessageContent>
+								</MessageContent>
+							{/if}
 						</Message>
 					{/each}
 
