@@ -37,6 +37,10 @@ pub fn build_router(state: Arc<AppState>) -> Router {
             "/sessions/{id}/messages",
             get(handlers::messages::get_messages).post(handlers::messages::send_message),
         )
+        .route(
+            "/sessions/{id}/messages/{message_id}/and-after",
+            delete(handlers::messages::delete_messages_from),
+        )
         // Chat
         .route("/chat", post(handlers::chat::chat))
         // Memory

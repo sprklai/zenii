@@ -29,7 +29,7 @@
 		PromptInputModelSelectValue,
 		type PromptInputMessage
 	} from '$lib/components/ai-elements/prompt-input';
-	import { Copy, RefreshCw } from '@lucide/svelte';
+	import { Copy, Pencil, RefreshCw } from '@lucide/svelte';
 	import AgentTree from '$lib/components/AgentTree.svelte';
 	import { messagesStore } from '$lib/stores/messages.svelte';
 	import { sessionsStore } from '$lib/stores/sessions.svelte';
@@ -43,6 +43,7 @@
 
 	let providersLoaded = $state(false);
 	let activeWs = $state<WebSocket | null>(null);
+	let editText = $state("");
 
 	onMount(async () => {
 		await providersStore.load();
@@ -87,6 +88,14 @@
 				return;
 			}
 		}
+	}
+
+	async function editMessage(msgIndex: number) {
+		const msg = messagesStore.messages[msgIndex];
+		if (!msg || msg.role !== 'user' || !sessionId) return;
+		const content = msg.content;
+		await messagesStore.deleteFrom(sessionId, msg.id);
+		editText = content;
 	}
 
 	async function handleSubmit(message: PromptInputMessage) {
@@ -191,6 +200,9 @@
 										<Action tooltip="Copy" onclick={() => copyMessage(msg.content)}>
 											<Copy class="size-3.5" />
 										</Action>
+										<Action tooltip="Edit" onclick={() => editMessage(idx)}>
+											<Pencil class="size-3.5" />
+										</Action>
 										<Action tooltip="Retry" onclick={() => retryMessage(idx)}>
 											<RefreshCw class="size-3.5" />
 										</Action>
@@ -288,6 +300,7 @@
 		{/if}
 		<PromptInput onSubmit={handleSubmit}>
 			<PromptInputTextarea
+				bind:value={editText}
 				placeholder={hasUsableModel ? 'Send a message...' : 'Configure a provider to start chatting...'}
 			/>
 			<PromptInputToolbar>

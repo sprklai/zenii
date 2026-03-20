@@ -689,6 +689,50 @@ impl SessionManager {
         .await
     }
 
+    /// Delete a message and all messages after it in the same session.
+    /// Returns the number of deleted rows.
+    pub async fn delete_messages_from(
+        &self,
+        session_id: &str,
+        message_id: &str,
+    ) -> Result<u64> {
+        let session_id = session_id.to_string();
+        let message_id = message_id.to_string();
+
+        db::with_db(&self.db, move |conn| {
+            // Find the created_at of the target message (must belong to this session)
+            let created_at: String = conn
+                .query_row(
+                    "SELECT created_at FROM messages WHERE id = ?1 AND session_id = ?2",
+                    rusqlite::params![message_id, session_id],
+                    |row| row.get(0),
+                )
+                .map_err(|e| match e {
+                    rusqlite::Error::QueryReturnedNoRows => {
+                        ZeniiError::NotFound(format!("message not found: {message_id}"))
+                    }
+                    other => ZeniiError::Sqlite(other),
+                })?;
+
+            // Delete tool_calls for messages that will be removed
+            conn.execute(
+                "DELETE FROM tool_calls WHERE message_id IN (
+                    SELECT id FROM messages WHERE session_id = ?1 AND created_at >= ?2
+                )",
+                rusqlite::params![session_id, created_at],
+            )?;
+
+            // Delete the messages
+            let deleted = conn.execute(
+                "DELETE FROM messages WHERE session_id = ?1 AND created_at >= ?2",
+                rusqlite::params![session_id, created_at],
+            )?;
+
+            Ok(deleted as u64)
+        })
+        .await
+    }
+
     pub async fn get_messages(&self, session_id: &str) -> Result<Vec<Message>> {
         let session_id = session_id.to_string();
 
@@ -1290,5 +1334,103 @@ mod tests {
         let (_dir, mgr) = setup().await;
         let deleted = mgr.cleanup_old_sessions(30).await.unwrap();
         assert_eq!(deleted, 0);
+    }
+
+    // EDIT.1 — delete_messages_from removes target and later messages
+    #[tokio::test]
+    async fn delete_messages_from_success() {
+        let (_dir, mgr) = setup().await;
+        let session = mgr.create_session("Chat").await.unwrap();
+        let _m1 = mgr.append_message(&session.id, "user", "First").await.unwrap();
+        let _m2 = mgr.append_message(&session.id, "assistant", "Second").await.unwrap();
+        let m3 = mgr.append_message(&session.id, "user", "Third").await.unwrap();
+        let _m4 = mgr.append_message(&session.id, "assistant", "Fourth").await.unwrap();
+
+        let deleted = mgr.delete_messages_from(&session.id, &m3.id).await.unwrap();
+        assert_eq!(deleted, 2);
+
+        let remaining = mgr.get_messages(&session.id).await.unwrap();
+        assert_eq!(remaining.len(), 2);
+        assert_eq!(remaining[0].content, "First");
+        assert_eq!(remaining[1].content, "Second");
+    }
+
+    // EDIT.2 — delete_messages_from first message empties conversation
+    #[tokio::test]
+    async fn delete_messages_from_first_message() {
+        let (_dir, mgr) = setup().await;
+        let session = mgr.create_session("Chat").await.unwrap();
+        let m1 = mgr.append_message(&session.id, "user", "First").await.unwrap();
+        let _m2 = mgr.append_message(&session.id, "assistant", "Second").await.unwrap();
+
+        let deleted = mgr.delete_messages_from(&session.id, &m1.id).await.unwrap();
+        assert_eq!(deleted, 2);
+
+        let remaining = mgr.get_messages(&session.id).await.unwrap();
+        assert!(remaining.is_empty());
+    }
+
+    // EDIT.3 — delete_messages_from with bad message_id returns NotFound
+    #[tokio::test]
+    async fn delete_messages_from_bad_message_id() {
+        let (_dir, mgr) = setup().await;
+        let session = mgr.create_session("Chat").await.unwrap();
+        mgr.append_message(&session.id, "user", "Hello").await.unwrap();
+
+        let result = mgr.delete_messages_from(&session.id, "nonexistent-msg").await;
+        assert!(matches!(result.unwrap_err(), ZeniiError::NotFound(_)));
+    }
+
+    // EDIT.4 — delete_messages_from with wrong session returns NotFound
+    #[tokio::test]
+    async fn delete_messages_from_wrong_session() {
+        let (_dir, mgr) = setup().await;
+        let session_a = mgr.create_session("A").await.unwrap();
+        let session_b = mgr.create_session("B").await.unwrap();
+        let msg_b = mgr.append_message(&session_b.id, "user", "In B").await.unwrap();
+
+        let result = mgr.delete_messages_from(&session_a.id, &msg_b.id).await;
+        assert!(matches!(result.unwrap_err(), ZeniiError::NotFound(_)));
+    }
+
+    // EDIT.5 — delete_messages_from cascades to tool_calls
+    #[tokio::test]
+    async fn delete_messages_from_cascades_tool_calls() {
+        let (_dir, mgr) = setup().await;
+        let session = mgr.create_session("Chat").await.unwrap();
+        let _m1 = mgr.append_message(&session.id, "user", "Do something").await.unwrap();
+        let m2 = mgr.append_message(&session.id, "assistant", "Using tools").await.unwrap();
+
+        let events = vec![
+            ToolCallEvent {
+                call_id: "tc-edit".into(),
+                tool_name: "Shell".into(),
+                phase: ToolCallPhase::Started {
+                    args: serde_json::json!({"cmd": "ls"}),
+                },
+            },
+            ToolCallEvent {
+                call_id: "tc-edit".into(),
+                tool_name: "Shell".into(),
+                phase: ToolCallPhase::Completed {
+                    output: "ok".into(),
+                    success: true,
+                    duration_ms: 5,
+                },
+            },
+        ];
+        mgr.store_tool_calls(&m2.id, &session.id, &events).await.unwrap();
+
+        // Delete from m2 (the assistant message with tool calls)
+        mgr.delete_messages_from(&session.id, &m2.id).await.unwrap();
+
+        // Tool calls should be gone
+        let records = mgr.get_tool_calls(&m2.id).await.unwrap();
+        assert!(records.is_empty());
+
+        // Only m1 should remain
+        let remaining = mgr.get_messages(&session.id).await.unwrap();
+        assert_eq!(remaining.len(), 1);
+        assert_eq!(remaining[0].content, "Do something");
     }
 }

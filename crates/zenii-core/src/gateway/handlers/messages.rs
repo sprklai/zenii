@@ -90,6 +90,29 @@ pub async fn send_message(
     Ok((StatusCode::CREATED, Json(message)))
 }
 
+#[cfg_attr(feature = "api-docs", utoipa::path(
+    delete, path = "/sessions/{id}/messages/{message_id}/and-after", tag = "Messages",
+    params(
+        ("id" = String, Path, description = "Session ID"),
+        ("message_id" = String, Path, description = "Message ID to delete from"),
+    ),
+    responses(
+        (status = 204, description = "Messages deleted"),
+        (status = 404, description = "Session or message not found", body = Object),
+    )
+))]
+pub async fn delete_messages_from(
+    State(state): State<Arc<AppState>>,
+    Path((session_id, message_id)): Path<(String, String)>,
+) -> Result<impl IntoResponse> {
+    state.session_manager.get_session(&session_id).await?;
+    state
+        .session_manager
+        .delete_messages_from(&session_id, &message_id)
+        .await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -98,7 +121,7 @@ mod tests {
     use axum::Router;
     use axum::body::Body;
     use axum::http::Request;
-    use axum::routing::get;
+    use axum::routing::{delete, get};
     use tempfile::TempDir;
     use tower::ServiceExt;
 
@@ -111,6 +134,10 @@ mod tests {
             .route(
                 "/sessions/{session_id}/messages",
                 get(get_messages).post(send_message),
+            )
+            .route(
+                "/sessions/{session_id}/messages/{message_id}/and-after",
+                delete(delete_messages_from),
             )
             .with_state(state)
     }
@@ -232,5 +259,86 @@ mod tests {
             .unwrap();
         let error: ErrorResponse = serde_json::from_slice(&body).unwrap();
         assert_eq!(error.error_code, "ZENII_NOT_FOUND");
+    }
+
+    // EDIT.H1 — DELETE /sessions/{id}/messages/{mid}/and-after returns 204
+    #[tokio::test]
+    async fn delete_messages_from_returns_204() {
+        let (_dir, state) = test_state().await;
+        let session = state.session_manager.create_session("Chat").await.unwrap();
+        let m1 = state
+            .session_manager
+            .append_message(&session.id, "user", "First")
+            .await
+            .unwrap();
+        let m2 = state
+            .session_manager
+            .append_message(&session.id, "assistant", "Second")
+            .await
+            .unwrap();
+        let _m3 = state
+            .session_manager
+            .append_message(&session.id, "user", "Third")
+            .await
+            .unwrap();
+
+        let app = app(state.clone());
+        let req = Request::builder()
+            .method("DELETE")
+            .uri(&format!(
+                "/sessions/{}/messages/{}/and-after",
+                session.id, m2.id
+            ))
+            .body(Body::empty())
+            .unwrap();
+
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::NO_CONTENT);
+
+        // Verify only m1 remains
+        let remaining = state.session_manager.get_messages(&session.id).await.unwrap();
+        assert_eq!(remaining.len(), 1);
+        assert_eq!(remaining[0].id, m1.id);
+    }
+
+    // EDIT.H2 — DELETE with invalid session returns 404
+    #[tokio::test]
+    async fn delete_messages_from_invalid_session_404() {
+        let (_dir, state) = test_state().await;
+        let app = app(state);
+
+        let req = Request::builder()
+            .method("DELETE")
+            .uri("/sessions/bad-session/messages/bad-msg/and-after")
+            .body(Body::empty())
+            .unwrap();
+
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+    }
+
+    // EDIT.H3 — DELETE with invalid message returns 404
+    #[tokio::test]
+    async fn delete_messages_from_invalid_message_404() {
+        let (_dir, state) = test_state().await;
+        let session = state.session_manager.create_session("Chat").await.unwrap();
+        state
+            .session_manager
+            .append_message(&session.id, "user", "Hello")
+            .await
+            .unwrap();
+
+        let app = app(state);
+        let req = Request::builder()
+            .method("DELETE")
+            .uri(&format!(
+                "/sessions/{}/messages/nonexistent-msg/and-after",
+                session.id
+            ))
+            .body(Body::empty())
+            .unwrap();
+
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::NOT_FOUND);
     }
 }

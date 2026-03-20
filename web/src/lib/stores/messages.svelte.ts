@@ -1,4 +1,4 @@
-import { apiGet, apiPost } from "$lib/api/client";
+import { apiGet, apiPost, apiDelete } from "$lib/api/client";
 import type { ToolUIPartState } from "$lib/components/ai-elements/tool";
 
 export interface Message {
@@ -162,6 +162,16 @@ function createMessagesStore() {
       streaming = false;
       streamContent = "";
       activeToolCalls = [];
+    },
+
+    async deleteFrom(sessionId: string, messageId: string) {
+      await apiDelete(
+        `/sessions/${encodeURIComponent(sessionId)}/messages/${encodeURIComponent(messageId)}/and-after`,
+      );
+      const idx = messages.findIndex((m) => m.id === messageId);
+      if (idx !== -1) {
+        messages = messages.slice(0, idx);
+      }
     },
 
     clear() {
