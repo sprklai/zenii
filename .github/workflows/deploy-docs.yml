@@ -33,7 +33,8 @@ jobs:
           bun run build
 
       - name: Deploy
-        run: npx vercel deploy ./docs-site/build --prod --token=${{ secrets.VERCEL_TOKEN }}
+        run: npx vercel deploy ./build --prod --token=${{ secrets.VERCEL_TOKEN }}
+        working-directory: docs-site
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
