@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.38] - 2026-03-21
+
 ### Added
 - Delegation persistence: agent task details (descriptions, tool counts, tokens, durations, status) are now stored in the database and rendered in chat history
 - New `DelegationSummary` component renders a static agent tree on historical messages
@@ -16,11 +18,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Per-tool permission enforcement: AskOnce/AskAlways tools now trigger the approval gate during agent execution
 - `executable_tools()` method on `PermissionResolver` — includes all non-Denied tools so AskOnce/AskAlways tools reach the approval gate
 - `from_tools_full()` on `RigToolAdapter` — unified constructor wiring permissions, cache, approval, and events
+- Automatic updates via `tauri-plugin-updater` — desktop app checks GitHub releases for new versions
+- `dir:` and `crate:` scope options for `codex-audit` command
 
 ### Fixed
 - Delegation responses now persist to the database, fixing blank screen after delegation completion
 - `MessageWithToolCalls` API response now includes delegation data alongside tool calls
 - Chat: streamed assistant responses no longer flash blank during server reconciliation — streaming UI stays visible until server data is confirmed
+- UI: message action buttons now align properly with user/assistant message bubbles
+- Delegation: sub-agent tool execution restored by skipping approval gate for delegated agents
 
 ## [0.0.37] - 2026-03-20
 
