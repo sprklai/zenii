@@ -133,6 +133,8 @@ pub struct AppConfig {
     pub scheduler_max_history_per_job: usize,
     pub scheduler_agent_turn_timeout_secs: u64,
     pub scheduler_heartbeat_file: Option<String>,
+    /// Maximum consecutive failures before a job is auto-disabled.
+    pub scheduler_max_consecutive_failures: u32,
 
     // Phase 8.11: Autonomous Reasoning
     pub agent_max_continuations: u32,
@@ -208,6 +210,8 @@ pub struct AppConfig {
     pub delegation_per_agent_token_budget: usize,
     pub delegation_per_agent_timeout_secs: u64,
     pub delegation_decomposition_model: Option<String>,
+    /// When true, delegation skips human approval for sub-agent tool calls.
+    pub delegation_skip_approval: bool,
 
     // Tool Approval
     pub approval_timeout_secs: u64,
@@ -347,6 +351,7 @@ impl Default for AppConfig {
             scheduler_max_history_per_job: 100,
             scheduler_agent_turn_timeout_secs: 120,
             scheduler_heartbeat_file: None,
+            scheduler_max_consecutive_failures: 10,
 
             // Autonomous Reasoning
             agent_max_continuations: 1,
@@ -413,6 +418,7 @@ impl Default for AppConfig {
             delegation_per_agent_token_budget: 4000,
             delegation_per_agent_timeout_secs: 120,
             delegation_decomposition_model: None,
+            delegation_skip_approval: true,
 
             // Tool Approval
             approval_timeout_secs: 120,

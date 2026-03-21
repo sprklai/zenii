@@ -75,6 +75,10 @@ pub struct ScheduledJob {
     pub active_hours: Option<ActiveHours>,
     #[serde(default)]
     pub delete_after_run: bool,
+    /// Per-job timeout override in seconds. When `None`, falls back to the
+    /// global `scheduler_agent_turn_timeout_secs` config value.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub timeout_secs: Option<u64>,
 }
 
 fn default_true() -> bool {

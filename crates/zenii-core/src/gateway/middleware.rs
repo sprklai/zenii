@@ -1,8 +1,18 @@
 use axum::extract::{Request, State};
 use axum::middleware::Next;
 use axum::response::Response;
+use percent_encoding::percent_decode_str;
+use subtle::ConstantTimeEq;
 
 use crate::ZeniiError;
+
+/// Constant-time string comparison to prevent timing side-channel attacks on token validation.
+fn constant_time_eq(a: &str, b: &str) -> bool {
+    // Length comparison is inherently variable-time, but we need it
+    // for ct_eq which requires equal-length slices. The length itself
+    // doesn't leak the token value.
+    a.len() == b.len() && a.as_bytes().ct_eq(b.as_bytes()).into()
+}
 
 /// Bearer token authentication middleware.
 ///
@@ -32,7 +42,7 @@ pub async fn auth_middleware(
     if let Some(header_value) = request.headers().get(axum::http::header::AUTHORIZATION) {
         if let Ok(header_str) = header_value.to_str()
             && let Some(bearer_token) = header_str.strip_prefix("Bearer ")
-            && bearer_token == auth_token
+            && constant_time_eq(bearer_token, &auth_token)
         {
             return Ok(next.run(request).await);
         }
@@ -44,8 +54,9 @@ pub async fn auth_middleware(
         && let Some(query) = request.uri().query()
     {
         for pair in query.split('&') {
-            if let Some(value) = pair.strip_prefix("token=") {
-                if value == auth_token {
+            if let Some(raw_value) = pair.strip_prefix("token=") {
+                let value = percent_decode_str(raw_value).decode_utf8_lossy();
+                if constant_time_eq(&value, &auth_token) {
                     return Ok(next.run(request).await);
                 }
                 return Err(ZeniiError::Auth("invalid query token".into()));

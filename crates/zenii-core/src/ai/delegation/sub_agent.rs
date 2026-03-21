@@ -51,6 +51,8 @@ impl SubAgent {
         // Create per-agent broadcast channel for tool events
         let (tool_tx, tool_rx) = broadcast::channel::<ToolCallEvent>(128);
 
+        let skip_approval = state.config.load().delegation_skip_approval;
+
         let agent = crate::ai::resolve_agent_with_tools(
             None,
             state,
@@ -58,7 +60,7 @@ impl SubAgent {
             None,
             Some(tools),
             surface,
-            true, // skip approval — sub-agents execute autonomously
+            skip_approval,
         )
         .await?;
 

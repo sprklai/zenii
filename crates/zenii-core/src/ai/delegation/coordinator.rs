@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use dashmap::DashMap;
-use tracing::{info, warn};
+use tracing::{debug, info, warn};
 
 use crate::ai::agent::TokenUsage;
 use crate::ai::delegation::DelegationConfig;
@@ -100,15 +100,38 @@ impl Coordinator {
         let json_text = extract_json(&response.output);
 
         let mut tasks: Vec<DelegationTask> = serde_json::from_str(json_text).map_err(|e| {
-            ZeniiError::Agent(format!(
-                "failed to parse decomposition response as JSON: {e}\nResponse: {}",
-                &response.output[..response.output.len().min(200)]
-            ))
+            debug!(response = %response.output, "decomposition JSON parse failed");
+            ZeniiError::Agent(format!("failed to parse decomposition response: {e}"))
         })?;
 
         for task in &mut tasks {
             task.token_budget = self.config.per_agent_token_budget;
             task.timeout_secs = self.config.per_agent_timeout_secs;
+        }
+
+        // Validate structural integrity of decomposed tasks
+        {
+            let mut seen_ids = std::collections::HashSet::new();
+            for task in &tasks {
+                if !seen_ids.insert(&task.id) {
+                    return Err(ZeniiError::Validation(format!(
+                        "duplicate task id '{}'",
+                        task.id
+                    )));
+                }
+                if task.depends_on.contains(&task.id) {
+                    return Err(ZeniiError::Validation(format!(
+                        "task '{}' depends on itself",
+                        task.id
+                    )));
+                }
+                if task.description.len() > 2000 {
+                    return Err(ZeniiError::Validation(format!(
+                        "task '{}' description exceeds 2000 chars",
+                        task.id
+                    )));
+                }
+            }
         }
 
         Ok(tasks)
@@ -167,7 +190,6 @@ impl Coordinator {
         // Execute tasks in dependency waves
         let mut completed: HashMap<String, TaskResult> = HashMap::new();
         let mut remaining: Vec<DelegationTask> = tasks;
-        let mut all_handles: Vec<tokio::task::AbortHandle> = Vec::new();
 
         while !remaining.is_empty() {
             let (ready, not_ready): (Vec<_>, Vec<_>) = remaining
@@ -202,20 +224,27 @@ impl Coordinator {
             remaining = not_ready;
 
             let mut join_set = tokio::task::JoinSet::new();
+            let mut wave_task_ids: Vec<String> = Vec::new();
+            let mut wave_handles: Vec<tokio::task::AbortHandle> = Vec::new();
             for task in ready {
                 let task_id = task.id.clone();
+                let task_desc = task.description.clone();
                 let _ = state
                     .event_bus
                     .publish(crate::event_bus::AppEvent::SubAgentSpawned {
                         delegation_id: delegation_id.clone(),
                         agent_id: task_id.clone(),
-                        task: task.description.clone(),
+                        task: task_desc.clone(),
                     });
 
                 match SubAgent::new(task, state, surface, delegation_id.clone()).await {
                     Ok(sub) => {
-                        let abort_handle = join_set.spawn(sub.execute());
-                        all_handles.push(abort_handle);
+                        wave_task_ids.push(task_id.clone());
+                        let abort_handle = join_set.spawn(async move {
+                            let result = sub.execute().await;
+                            (task_id, result)
+                        });
+                        wave_handles.push(abort_handle);
                     }
                     Err(e) => {
                         warn!("Failed to create sub-agent for {}: {e}", task_id);
@@ -230,7 +259,7 @@ impl Coordinator {
                                 error: Some(e.to_string()),
                                 session_id: String::new(),
                                 tool_uses: 0,
-                                description: String::new(),
+                                description: task_desc,
                             },
                         );
                     }
@@ -238,15 +267,17 @@ impl Coordinator {
             }
 
             self.active
-                .insert(delegation_id.clone(), all_handles.clone());
+                .entry(delegation_id.clone())
+                .or_default()
+                .extend(wave_handles.iter().cloned());
 
             while let Some(result) = join_set.join_next().await {
                 match result {
-                    Ok(task_result) => {
+                    Ok((task_id, task_result)) => {
                         let event = if task_result.status == TaskStatus::Completed {
                             crate::event_bus::AppEvent::SubAgentCompleted {
                                 delegation_id: delegation_id.clone(),
-                                agent_id: task_result.task_id.clone(),
+                                agent_id: task_id.clone(),
                                 status: "completed".into(),
                                 duration_ms: task_result.duration_ms,
                                 tool_uses: task_result.tool_uses,
@@ -255,18 +286,39 @@ impl Coordinator {
                         } else {
                             crate::event_bus::AppEvent::SubAgentFailed {
                                 delegation_id: delegation_id.clone(),
-                                agent_id: task_result.task_id.clone(),
+                                agent_id: task_id.clone(),
                                 error: task_result.error.clone().unwrap_or_default(),
                                 tool_uses: task_result.tool_uses,
                                 duration_ms: task_result.duration_ms,
                             }
                         };
                         let _ = state.event_bus.publish(event);
-                        completed.insert(task_result.task_id.clone(), task_result);
+                        completed.insert(task_id, task_result);
                     }
                     Err(e) => {
                         warn!("Sub-agent task panicked: {e}");
                     }
+                }
+            }
+
+            // Insert failed results for any spawned tasks that panicked
+            for wave_id in &wave_task_ids {
+                if !completed.contains_key(wave_id) {
+                    warn!(task_id = %wave_id, "sub-agent task panicked without producing a result");
+                    completed.insert(
+                        wave_id.clone(),
+                        TaskResult {
+                            task_id: wave_id.clone(),
+                            status: TaskStatus::Failed,
+                            output: String::new(),
+                            usage: TokenUsage::default(),
+                            duration_ms: start.elapsed().as_millis() as u64,
+                            error: Some("task panicked".into()),
+                            session_id: String::new(),
+                            tool_uses: 0,
+                            description: String::new(),
+                        },
+                    );
                 }
             }
         }

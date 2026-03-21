@@ -1,4 +1,6 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 
 use petgraph::algo::toposort;
 use petgraph::graph::DiGraph;
@@ -92,17 +94,21 @@ impl WorkflowExecutor {
         event_bus: &dyn crate::event_bus::EventBus,
     ) -> Result<WorkflowRun> {
         let run_id = uuid::Uuid::new_v4().to_string();
-        self.execute_with_id(run_id, workflow, tools, event_bus)
+        self.execute_with_id(run_id, workflow, tools, event_bus, None)
             .await
     }
 
     /// Execute a workflow with a pre-generated run_id (for external tracking).
+    ///
+    /// Pass an optional `cancel` flag; setting it to `true` causes the executor
+    /// to stop before the next step and mark the run as `Cancelled`.
     pub async fn execute_with_id(
         &self,
         run_id: String,
         workflow: &Workflow,
         tools: &crate::tools::ToolRegistry,
         event_bus: &dyn crate::event_bus::EventBus,
+        cancel: Option<Arc<AtomicBool>>,
     ) -> Result<WorkflowRun> {
         // Validate step count
         if workflow.steps.len() > self.max_steps {
@@ -142,6 +148,11 @@ impl WorkflowExecutor {
         let step_map: HashMap<String, &WorkflowStep> =
             workflow.steps.iter().map(|s| (s.name.clone(), s)).collect();
 
+        // TODO(perf): The current executor runs steps serially in topological order.
+        // For workflows with independent branches, steps could be executed in parallel
+        // using a JoinSet, advancing as soon as a step's dependencies are satisfied
+        // (similar to the delegation coordinator's wave-based approach).
+
         // Execute in topological order
         let remaining_steps: Vec<&WorkflowStep> = topo
             .iter()
@@ -151,7 +162,18 @@ impl WorkflowExecutor {
             })
             .collect();
 
+        // Track which fallback steps have been executed to prevent re-execution
+        let mut executed_fallbacks: HashSet<String> = HashSet::new();
+
         for step in remaining_steps {
+            // Check for cancellation before each step
+            if let Some(ref cancel_flag) = cancel
+                && cancel_flag.load(Ordering::Relaxed)
+            {
+                overall_status = WorkflowRunStatus::Cancelled;
+                overall_error = Some("workflow cancelled".into());
+                break;
+            }
             let output = self
                 .execute_step(step, &step_outputs, tools, &step_map)
                 .await;
@@ -201,7 +223,21 @@ impl WorkflowExecutor {
                     FailurePolicy::Fallback {
                         step: fallback_name,
                     } => {
-                        if let Some(fallback_step) = step_map.get(fallback_name) {
+                        if executed_fallbacks.contains(fallback_name) {
+                            // Fallback already executed — reuse existing output
+                            if let Some(existing) = step_outputs.get(fallback_name)
+                                && !existing.success
+                            {
+                                overall_status = WorkflowRunStatus::Failed;
+                                overall_error = Some(format!(
+                                    "step '{}' failed and fallback '{}' already failed previously",
+                                    step.name, fallback_name
+                                ));
+                                break;
+                            }
+                            // Fallback already succeeded previously, continue
+                        } else if let Some(fallback_step) = step_map.get(fallback_name) {
+                            executed_fallbacks.insert(fallback_name.clone());
                             let fb_result = self
                                 .execute_step(fallback_step, &step_outputs, tools, &step_map)
                                 .await;
@@ -252,6 +288,7 @@ impl WorkflowExecutor {
         let status_str = match overall_status {
             WorkflowRunStatus::Completed => "completed",
             WorkflowRunStatus::Failed => "failed",
+            WorkflowRunStatus::Cancelled => "cancelled",
             _ => "failed",
         };
 
@@ -301,6 +338,12 @@ impl WorkflowExecutor {
         })
     }
 
+    // TODO(I7): Implement true parallel step execution for StepType::Parallel { steps }.
+    // When a Parallel step is encountered, look up each sub-step name from step_map,
+    // spawn each via tokio::task::JoinSet, and collect results. Currently blocked by
+    // lifetime constraints: execute_step borrows &self and step_map holds &WorkflowStep
+    // references tied to the workflow. Options: (a) clone steps into owned data before
+    // spawning, (b) use Arc-wrapped step data, or (c) restructure to pass owned steps.
     async fn execute_step(
         &self,
         step: &WorkflowStep,

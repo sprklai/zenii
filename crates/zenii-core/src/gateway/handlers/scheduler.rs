@@ -205,6 +205,7 @@ mod tests {
                     next_run: None,
                     active_hours: None,
                     delete_after_run: false,
+                    timeout_secs: None,
                 })
                 .await
                 .unwrap();
@@ -295,6 +296,7 @@ mod tests {
                     next_run: None,
                     active_hours: None,
                     delete_after_run: false,
+                    timeout_secs: None,
                 })
                 .await
                 .unwrap()
@@ -338,6 +340,7 @@ mod tests {
                     next_run: None,
                     active_hours: None,
                     delete_after_run: false,
+                    timeout_secs: None,
                 })
                 .await
                 .unwrap()
@@ -395,6 +398,7 @@ mod tests {
                     next_run: None,
                     active_hours: None,
                     delete_after_run: false,
+                    timeout_secs: None,
                 })
                 .await
                 .unwrap()

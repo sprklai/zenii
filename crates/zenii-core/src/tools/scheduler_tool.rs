@@ -251,6 +251,7 @@ impl SchedulerTool {
             next_run: None,
             active_hours,
             delete_after_run,
+            timeout_secs: None,
         };
 
         match self.scheduler.add_job(job).await {
@@ -365,6 +366,7 @@ impl SchedulerTool {
             next_run: None,
             active_hours,
             delete_after_run,
+            timeout_secs: None,
         };
 
         match self.scheduler.update_job(job_id, job).await {

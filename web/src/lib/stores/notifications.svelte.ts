@@ -220,11 +220,14 @@ class NotificationStore {
           showNotification(`Workflow "${data.workflow_id}"`, detail);
         }
       } else if (data.type === "session_created") {
-        sessionsStore.prependFromEvent({
-          id: data.session_id,
-          title: data.title,
-          source: data.source,
-        });
+        // Skip internal sessions (e.g. delegation sub-agent sessions)
+        if (data.source !== "delegation") {
+          sessionsStore.prependFromEvent({
+            id: data.session_id,
+            title: data.title,
+            source: data.source,
+          });
+        }
       } else if (data.type === "session_deleted") {
         sessionsStore.removeFromEvent(data.session_id);
       } else if (data.type === "message_added") {

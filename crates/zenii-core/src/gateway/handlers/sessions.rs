@@ -24,6 +24,12 @@ pub struct UpdateSessionRequest {
     pub title: String,
 }
 
+#[derive(Debug, Default, Deserialize)]
+pub struct ListSessionsQuery {
+    /// If true, include internal sessions (e.g. delegation sub-agent sessions). Default: false.
+    pub include_internal: Option<bool>,
+}
+
 #[cfg_attr(feature = "api-docs", utoipa::path(
     post, path = "/sessions", tag = "Sessions",
     request_body = CreateSessionRequest,
@@ -49,8 +55,12 @@ pub async fn create_session(
     get, path = "/sessions", tag = "Sessions",
     responses((status = 200, description = "List of sessions", body = Vec<Object>))
 ))]
-pub async fn list_sessions(State(state): State<Arc<AppState>>) -> Result<impl IntoResponse> {
-    let sessions = state.session_manager.list_sessions().await?;
+pub async fn list_sessions(
+    State(state): State<Arc<AppState>>,
+    axum::extract::Query(query): axum::extract::Query<ListSessionsQuery>,
+) -> Result<impl IntoResponse> {
+    let include_internal = query.include_internal.unwrap_or(false);
+    let sessions = state.session_manager.list_sessions_filtered(include_internal).await?;
     Ok(Json(sessions))
 }
 

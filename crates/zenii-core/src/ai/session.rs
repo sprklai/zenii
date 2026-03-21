@@ -344,14 +344,28 @@ impl SessionManager {
     }
 
     pub async fn list_sessions(&self) -> Result<Vec<SessionSummary>> {
-        db::with_db(&self.db, |conn| {
-            let mut stmt = conn.prepare(
+        self.list_sessions_filtered(true).await
+    }
+
+    /// List sessions, optionally excluding internal sessions (source="delegation").
+    pub async fn list_sessions_filtered(&self, include_internal: bool) -> Result<Vec<SessionSummary>> {
+        db::with_db(&self.db, move |conn| {
+            let sql = if include_internal {
                 "SELECT s.id, s.title, s.created_at, s.updated_at, COUNT(m.id) as message_count, s.source, s.channel_key
                  FROM sessions s
                  LEFT JOIN messages m ON m.session_id = s.id
                  GROUP BY s.id
-                 ORDER BY s.updated_at DESC",
-            )?;
+                 ORDER BY s.updated_at DESC"
+            } else {
+                "SELECT s.id, s.title, s.created_at, s.updated_at, COUNT(m.id) as message_count, s.source, s.channel_key
+                 FROM sessions s
+                 LEFT JOIN messages m ON m.session_id = s.id
+                 WHERE s.source != 'delegation'
+                 GROUP BY s.id
+                 ORDER BY s.updated_at DESC"
+            };
+
+            let mut stmt = conn.prepare(sql)?;
 
             let rows = stmt
                 .query_map([], |row| {

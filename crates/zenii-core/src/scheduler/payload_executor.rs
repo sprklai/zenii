@@ -332,6 +332,7 @@ mod tests {
             next_run: None,
             active_hours: None,
             delete_after_run: false,
+            timeout_secs: None,
         }
     }
 

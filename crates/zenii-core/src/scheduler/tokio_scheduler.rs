@@ -8,7 +8,7 @@ use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use dashmap::DashMap;
 use tokio::sync::watch;
-use tracing::info;
+use tracing::{error, info};
 use uuid::Uuid;
 
 use crate::config::AppConfig;
@@ -47,6 +47,7 @@ pub struct TokioScheduler {
     stuck_threshold_secs: u64,
     max_history_per_job: usize,
     error_backoff_secs: Vec<u64>,
+    max_consecutive_failures: u32,
     running: AtomicBool,
     loop_handle: Arc<tokio::sync::Mutex<Option<tokio::task::JoinHandle<()>>>>,
     #[cfg(feature = "gateway")]
@@ -67,6 +68,7 @@ impl TokioScheduler {
             stuck_threshold_secs: config.scheduler_stuck_threshold_secs,
             max_history_per_job: config.scheduler_max_history_per_job,
             error_backoff_secs: config.scheduler_error_backoff_secs.clone(),
+            max_consecutive_failures: config.scheduler_max_consecutive_failures,
             running: AtomicBool::new(false),
             loop_handle: Arc::new(tokio::sync::Mutex::new(None)),
             #[cfg(feature = "gateway")]
@@ -163,6 +165,7 @@ impl TokioScheduler {
                 next_run,
                 active_hours,
                 delete_after_run: delete_after_run != 0,
+                timeout_secs: None,
             };
             self.jobs.insert(id.clone(), job);
             count += 1;
@@ -406,6 +409,7 @@ impl Scheduler for TokioScheduler {
         let stuck_threshold = self.stuck_threshold_secs;
         let max_history = self.max_history_per_job;
         let error_backoff = self.error_backoff_secs.clone();
+        let max_consecutive_failures = self.max_consecutive_failures;
         #[cfg(feature = "gateway")]
         let app_state_cell = self.app_state.clone();
 
@@ -475,8 +479,10 @@ impl Scheduler for TokioScheduler {
                             tokio::spawn(async move {
                                 let started_at = Utc::now();
 
-                                // Execute with stuck detection timeout
-                                let timeout = Duration::from_secs(stuck_threshold);
+                                // Execute with stuck detection timeout (per-job override or global)
+                                let timeout_secs = job.timeout_secs
+                                    .unwrap_or(stuck_threshold);
+                                let timeout = Duration::from_secs(timeout_secs);
                                 let bus_ref = bus.clone();
                                 let job_ref = job.clone();
                                 #[cfg(feature = "gateway")]
@@ -515,7 +521,7 @@ impl Scheduler for TokioScheduler {
                                     Err(_) => (
                                         JobStatus::Stuck,
                                         Some(format!(
-                                            "Job '{}' stuck after {stuck_threshold}s",
+                                            "Job '{}' stuck after {timeout_secs}s",
                                             job.name
                                         )),
                                     ),
@@ -562,9 +568,29 @@ impl Scheduler for TokioScheduler {
                                                 }
                                             } else {
                                                 entry.error_count += 1;
-                                                // Apply error backoff instead of normal schedule
-                                                let backoff_delay = TokioScheduler::compute_backoff(&error_backoff, entry.error_count);
-                                                entry.next_run = Some(Utc::now() + chrono::Duration::seconds(backoff_delay as i64));
+                                                // Circuit breaker: disable job after too many consecutive failures
+                                                if entry.error_count >= max_consecutive_failures {
+                                                    error!(
+                                                        job_id = %entry.id,
+                                                        job_name = %entry.name,
+                                                        error_count = entry.error_count,
+                                                        "circuit breaker: disabling job after {} consecutive failures",
+                                                        entry.error_count
+                                                    );
+                                                    entry.enabled = false;
+                                                    let _ = bus.publish(AppEvent::SchedulerNotification {
+                                                        job_id: entry.id.clone(),
+                                                        job_name: entry.name.clone(),
+                                                        message: format!(
+                                                            "Job '{}' disabled after {} consecutive failures (circuit breaker)",
+                                                            entry.name, entry.error_count
+                                                        ),
+                                                    });
+                                                } else {
+                                                    // Apply error backoff instead of normal schedule
+                                                    let backoff_delay = TokioScheduler::compute_backoff(&error_backoff, entry.error_count);
+                                                    entry.next_run = Some(Utc::now() + chrono::Duration::seconds(backoff_delay as i64));
+                                                }
                                             }
                                             Some(entry.clone())
                                         } else {
@@ -747,6 +773,7 @@ mod tests {
             next_run: None,
             active_hours: None,
             delete_after_run: false,
+            timeout_secs: None,
         }
     }
 

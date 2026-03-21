@@ -179,41 +179,64 @@ impl Memory for SqliteMemoryStore {
                 merged.insert(entry.key.clone(), entry);
             }
 
+            // Collect vector-only keys (present in vector results but not FTS) and
+            // update scores for keys already in the merged map.
+            let mut vec_results_map: std::collections::HashMap<String, f32> =
+                std::collections::HashMap::new();
             for (key, vec_score) in &vec_results {
                 if let Some(entry) = merged.get_mut(key) {
                     entry.score += vector_weight * vec_score;
                 } else {
-                    // Fetch from DB
-                    let pool2 = self.pool.clone();
-                    let k = key.clone();
-                    if let Ok(Some(mut entry)) =
-                        crate::db::with_db(&pool2, move |conn| {
-                            let mut stmt = conn
-                                .prepare(
-                                    "SELECT id, key, content, category, created_at, updated_at FROM memories WHERE key = ?1",
-                                )
-                                .map_err(ZeniiError::from)?;
-                            let entry = stmt
-                                .query_row(rusqlite::params![k], |row| {
-                                    Ok(MemoryEntry {
-                                        id: row.get(0)?,
-                                        key: row.get(1)?,
-                                        content: row.get(2)?,
-                                        category: MemoryCategory::from(
-                                            row.get::<_, String>(3)?.as_str(),
-                                        ),
-                                        score: 0.0,
-                                        created_at: row.get(4)?,
-                                        updated_at: row.get(5)?,
-                                    })
-                                })
-                                .ok();
-                            Ok(entry)
+                    vec_results_map.insert(key.clone(), *vec_score);
+                }
+            }
+
+            // Batch-fetch all missing keys in a single query instead of N+1
+            let missing_keys: Vec<String> = vec_results_map.keys().cloned().collect();
+            if !missing_keys.is_empty() {
+                let placeholders: String = missing_keys
+                    .iter()
+                    .enumerate()
+                    .map(|(i, _)| format!("?{}", i + 1))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                let sql = format!(
+                    "SELECT id, key, content, category, created_at, updated_at FROM memories WHERE key IN ({})",
+                    placeholders
+                );
+
+                let pool2 = self.pool.clone();
+                let keys = missing_keys;
+                let fetched = crate::db::with_db(&pool2, move |conn| {
+                    let mut stmt = conn.prepare(&sql).map_err(ZeniiError::from)?;
+                    let params: Vec<&dyn rusqlite::types::ToSql> = keys
+                        .iter()
+                        .map(|k| k as &dyn rusqlite::types::ToSql)
+                        .collect();
+                    let rows = stmt
+                        .query_map(params.as_slice(), |row| {
+                            Ok(MemoryEntry {
+                                id: row.get(0)?,
+                                key: row.get(1)?,
+                                content: row.get(2)?,
+                                category: MemoryCategory::from(
+                                    row.get::<_, String>(3)?.as_str(),
+                                ),
+                                score: 0.0,
+                                created_at: row.get(4)?,
+                                updated_at: row.get(5)?,
+                            })
                         })
-                        .await
-                    {
+                        .map_err(ZeniiError::from)?;
+                    let result: Vec<MemoryEntry> = rows.flatten().collect();
+                    Ok(result)
+                })
+                .await?;
+
+                for mut entry in fetched {
+                    if let Some(&vec_score) = vec_results_map.get(&entry.key) {
                         entry.score = vector_weight * vec_score;
-                        merged.insert(key.clone(), entry);
+                        merged.insert(entry.key.clone(), entry);
                     }
                 }
             }

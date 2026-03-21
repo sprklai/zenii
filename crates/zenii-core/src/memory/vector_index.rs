@@ -8,6 +8,12 @@ pub struct VectorIndex {
 }
 
 impl VectorIndex {
+    /// Create a new vector index, initializing the vec0 virtual table.
+    ///
+    /// # Safety Contract
+    /// This function calls `pool.blocking_lock()` internally. It **must** be called
+    /// from within a `tokio::task::spawn_blocking` context to avoid blocking the
+    /// async runtime. Direct calls from async functions will deadlock.
     pub fn new(pool: DbPool, dim: usize) -> Result<Self> {
         // Initialize vec0 virtual table
         {

@@ -251,6 +251,7 @@ impl WorkflowTool {
                 next_run: None,
                 active_hours: None,
                 delete_after_run: false,
+                timeout_secs: None,
             };
             match sched.add_job(job).await {
                 Ok(job_id) => {

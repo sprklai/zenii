@@ -16,6 +16,7 @@ export interface DelegationState {
 
 function createDelegationStore() {
   let delegation = $state<DelegationState | null>(null);
+  let aggregating = $state(false);
 
   return {
     get active() {
@@ -23,6 +24,9 @@ function createDelegationStore() {
     },
     get delegation() {
       return delegation;
+    },
+    get aggregating() {
+      return aggregating;
     },
 
     startDelegation(
@@ -93,11 +97,12 @@ function createDelegationStore() {
     },
 
     completeDelegation() {
-      // No-op: keep tree visible until stream finishes
+      aggregating = true;
     },
 
     clear() {
       delegation = null;
+      aggregating = false;
     },
   };
 }

@@ -144,7 +144,7 @@ pub async fn run_workflow(
 
     let handle = tokio::spawn(async move {
         let _result = executor
-            .execute_with_id(run_id_clone.clone(), &workflow, &tools, event_bus.as_ref())
+            .execute_with_id(run_id_clone.clone(), &workflow, &tools, event_bus.as_ref(), None)
             .await;
         active_runs.remove(&run_id_clone);
     });

@@ -276,6 +276,11 @@
 
 					{#if delegationStore.active && delegationStore.delegation}
 						<AgentTree delegation={delegationStore.delegation} />
+						{#if delegationStore.aggregating && !messagesStore.streamContent}
+							<div class="flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground">
+								<Shimmer content_length={30} duration={1.5}>Synthesizing agent results...</Shimmer>
+							</div>
+						{/if}
 					{/if}
 
 					{#if messagesStore.streaming}
