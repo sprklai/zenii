@@ -79,14 +79,17 @@ impl Coordinator {
         &self,
         prompt: &str,
         agent: &crate::ai::agent::ZeniiAgent,
+        available_tools: &[String],
     ) -> Result<Vec<DelegationTask>> {
+        let tools_list = available_tools.join(", ");
         let decompose_prompt = format!(
             "You are a task decomposition agent. Break the following task into {} or fewer \
              independent sub-tasks that can be executed in parallel by separate AI agents.\n\n\
+             Available tools: [{tools_list}]\n\n\
              Return a JSON array of tasks. Each task object must have:\n\
              - \"id\": a unique string like \"t1\", \"t2\"\n\
              - \"description\": what the sub-agent should accomplish\n\
-             - \"tool_allowlist\": optional array of tool names to restrict, or null for all tools\n\
+             - \"tool_allowlist\": optional array of tool names from the available tools list above, or null for all tools\n\
              - \"depends_on\": array of task IDs this task depends on (empty array for independent tasks)\n\n\
              Task: {}\n\n\
              Return ONLY a valid JSON array, no markdown formatting or explanation.",
@@ -127,17 +130,18 @@ impl Coordinator {
         let decomp_model = self.config.decomposition_model.as_deref();
         let agent = crate::ai::resolve_agent(decomp_model, state, None, None, surface).await?;
 
-        let tasks = self.decompose(prompt, &agent).await?;
-        if tasks.is_empty() {
-            return Err(ZeniiError::Agent("decomposition produced no tasks".into()));
-        }
-
         let tool_names: Vec<String> = state
             .tools
             .to_vec()
             .iter()
             .map(|t| t.name().to_string())
             .collect();
+
+        let tasks = self.decompose(prompt, &agent, &tool_names).await?;
+        if tasks.is_empty() {
+            return Err(ZeniiError::Agent("decomposition produced no tasks".into()));
+        }
+
         self.validate_tasks(&tasks, &tool_names)?;
 
         info!(

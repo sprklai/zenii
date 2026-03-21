@@ -46,6 +46,8 @@ rustls = { version = "0.23", features = ["ring"] }
 # Phase 2: Memory + Tools
 sysinfo = { workspace = true }
 ignore = { workspace = true }
+globset = { workspace = true }
+regex = { workspace = true }
 diffy = { workspace = true }
 lru = { workspace = true }
 sqlite-vec = { workspace = true }

@@ -298,7 +298,17 @@ pub async fn init_services(config: AppConfig) -> Result<Services> {
     )))?;
     tool_registry.register(Arc::new(crate::tools::file_search::FileSearchTool::new(
         config.tool_file_search_max_results,
+        config.tool_file_search_max_depth,
+        config.tool_file_search_follow_symlinks,
     )))?;
+    tool_registry.register(Arc::new(
+        crate::tools::content_search::ContentSearchTool::new(
+            config.tool_content_search_max_results,
+            config.tool_content_search_max_file_size_kb * 1024,
+            config.tool_content_search_context_lines,
+            config.tool_file_search_max_depth,
+        ),
+    ))?;
     tool_registry.register(Arc::new(crate::tools::shell::ShellTool::new(
         security.clone(),
         config.tool_shell_timeout_secs,
@@ -989,7 +999,7 @@ mod tests {
         let dir = tempfile::TempDir::new().unwrap();
         let config = test_config(&dir);
         let services = init_services(config).await.unwrap();
-        let mut expected = 14; // base tools + memory + config + agent_notes
+        let mut expected = 15; // base tools + memory + config + agent_notes + content_search
         #[cfg(feature = "channels")]
         {
             expected += 1; // channel_send

@@ -145,6 +145,10 @@ pub struct BootContext {
     pub shell: Option<String>,
     pub desktop_path: Option<String>,
     pub downloads_path: Option<String>,
+    pub documents_path: Option<String>,
+    pub pictures_path: Option<String>,
+    pub videos_path: Option<String>,
+    pub music_path: Option<String>,
     pub data_dir: Option<String>,
     pub working_dir: Option<String>,
     /// User-configured IANA timezone (e.g., "America/New_York"), if set.
@@ -198,6 +202,22 @@ impl BootContext {
             .as_ref()
             .and_then(|u| u.download_dir())
             .map(|p| p.to_string_lossy().into_owned());
+        let documents_path = user_dirs
+            .as_ref()
+            .and_then(|u| u.document_dir())
+            .map(|p| p.to_string_lossy().into_owned());
+        let pictures_path = user_dirs
+            .as_ref()
+            .and_then(|u| u.picture_dir())
+            .map(|p| p.to_string_lossy().into_owned());
+        let videos_path = user_dirs
+            .as_ref()
+            .and_then(|u| u.video_dir())
+            .map(|p| p.to_string_lossy().into_owned());
+        let music_path = user_dirs
+            .as_ref()
+            .and_then(|u| u.audio_dir())
+            .map(|p| p.to_string_lossy().into_owned());
 
         let data_dir = Some(
             crate::config::default_data_dir()
@@ -222,6 +242,10 @@ impl BootContext {
             shell,
             desktop_path,
             downloads_path,
+            documents_path,
+            pictures_path,
+            videos_path,
+            music_path,
             data_dir,
             working_dir,
             user_timezone,
@@ -450,11 +474,17 @@ impl ContextEngine {
 
         // Paths line (only if we have any)
         let mut path_parts = Vec::new();
-        if let Some(ref desktop) = boot_context.desktop_path {
-            path_parts.push(format!("Desktop: {desktop}"));
-        }
-        if let Some(ref downloads) = boot_context.downloads_path {
-            path_parts.push(format!("Downloads: {downloads}"));
+        for (label, path) in [
+            ("Desktop", &boot_context.desktop_path),
+            ("Downloads", &boot_context.downloads_path),
+            ("Documents", &boot_context.documents_path),
+            ("Pictures", &boot_context.pictures_path),
+            ("Videos", &boot_context.videos_path),
+            ("Music", &boot_context.music_path),
+        ] {
+            if let Some(p) = path {
+                path_parts.push(format!("{label}: {p}"));
+            }
         }
         if !path_parts.is_empty() {
             parts.push(path_parts.join(" | "));

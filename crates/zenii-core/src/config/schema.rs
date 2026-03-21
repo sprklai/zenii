@@ -42,7 +42,14 @@ pub struct AppConfig {
     pub tool_shell_timeout_secs: u64,
     pub tool_file_read_max_lines: usize,
     pub tool_file_search_max_results: usize,
+    pub tool_file_search_max_depth: usize,
+    pub tool_file_search_follow_symlinks: bool,
     pub tool_process_list_limit: usize,
+
+    // Content Search
+    pub tool_content_search_max_results: usize,
+    pub tool_content_search_max_file_size_kb: usize,
+    pub tool_content_search_context_lines: usize,
 
     // Web Search
     pub web_search_timeout_secs: u64,
@@ -247,7 +254,14 @@ impl Default for AppConfig {
             tool_shell_timeout_secs: 30,
             tool_file_read_max_lines: 10000,
             tool_file_search_max_results: 100,
+            tool_file_search_max_depth: 20,
+            tool_file_search_follow_symlinks: false,
             tool_process_list_limit: 200,
+
+            // Content Search
+            tool_content_search_max_results: 50,
+            tool_content_search_max_file_size_kb: 1024,
+            tool_content_search_context_lines: 2,
 
             // Web Search
             web_search_timeout_secs: 30,

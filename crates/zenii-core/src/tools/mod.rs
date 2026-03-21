@@ -1,7 +1,9 @@
 pub mod agent_self_tool;
 pub mod config_tool;
+pub mod content_search;
 pub mod file_ops;
 pub mod file_search;
+pub mod path;
 pub mod learn;
 pub mod memory_tool;
 pub mod patch;
