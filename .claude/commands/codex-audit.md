@@ -71,6 +71,8 @@ Based on the parsed SCOPE:
 - **branch:NAME**: Run `git rev-parse --verify NAME 2>/dev/null`. If fails, print "Branch NAME does not exist." and STOP.
 - **commit:SHA**: Run `git rev-parse --verify SHA 2>/dev/null`. If fails, print "Commit SHA not found." and STOP.
 - **files:p1,p2,...**: Check each file exists. If any missing, print which files are missing and STOP.
+- **dir:PATH**: Check the directory exists. If not, print "Directory PATH does not exist." and STOP. Then collect all source files: `find PATH -type f \( -name '*.rs' -o -name '*.ts' -o -name '*.svelte' -o -name '*.js' \) | grep -v target/ | grep -v node_modules/ | grep -v .svelte-kit/`. If no source files found, print "No source files found in PATH." and STOP. Store the file list for Step 2.
+- **crate:NAME**: Resolve to directory path `crates/NAME/`. If that directory doesn't exist, try `NAME/` directly. If neither exists, print "Crate NAME not found. Available crates:" and list directories under `crates/`. STOP. Otherwise, treat as `dir:` with the resolved path (collect source files as above).
 - **full**: No validation needed.
 
 Print: "Pre-flight passed. Starting audit..."
@@ -165,6 +167,10 @@ Codex CLI supports **parallel agent execution through subagents**. When enabled,
 | `commit:SHA` | No | Diff-scoped, single pass sufficient |
 | `files:` (≤3 files) | No | Too few files to benefit from parallelism |
 | `files:` (>3 files) | **Yes** | One subagent per file for concurrent review |
+| `dir:PATH` (≤10 files) | No | Small directory, single pass sufficient |
+| `dir:PATH` (>10 files) | **Yes** | Group files by subdirectory for concurrent review |
+| `crate:NAME` (≤10 files) | No | Small crate, single pass sufficient |
+| `crate:NAME` (>10 files) | **Yes** | Group files by module directory for concurrent review |
 | `full` | **Yes** | One subagent per workspace crate/directory |
 
 #### Parallel prompt injection
@@ -185,6 +191,13 @@ Each subagent must use the same OUTPUT FORMAT defined above. Merge all findings 
 ```
 PARALLEL EXECUTION: Spawn one subagent per file to review concurrently:
 {list each file as "- Subagent N: path/to/file"}
+Each subagent must use the same OUTPUT FORMAT defined above. Merge all findings into a single report.
+```
+
+**For `dir:PATH` or `crate:NAME` scope (>10 files):**
+```
+PARALLEL EXECUTION: Spawn one subagent per subdirectory to review concurrently:
+{group collected files by their immediate parent directory under PATH, list as "- Subagent N: subdir/ (file1.rs, file2.rs, ...)"}
 Each subagent must use the same OUTPUT FORMAT defined above. Merge all findings into a single report.
 ```
 
@@ -215,6 +228,16 @@ timeout 900 codex exec "Review these files: p1, p2, ... FULL_PROMPT" --sandbox r
 **files:p1,p2,... (>3 files — parallel):**
 ```bash
 timeout 900 codex exec "Review these files: p1, p2, ... FULL_PROMPT" --enable subagents --sandbox read-only --ephemeral 2>&1
+```
+
+**dir:PATH or crate:NAME (≤10 files):**
+```bash
+timeout 900 codex exec "Review these files in {PATH}: {comma-separated file list from Step 0c} FULL_PROMPT" --sandbox read-only --ephemeral 2>&1
+```
+
+**dir:PATH or crate:NAME (>10 files — parallel):**
+```bash
+timeout 900 codex exec "Review all source files under {PATH}: {comma-separated file list from Step 0c} FULL_PROMPT" --enable subagents --sandbox read-only --ephemeral 2>&1
 ```
 
 **full (parallel):**
@@ -514,6 +537,9 @@ These are the highest-signal items — they reveal blind spots in both models.}
 | Codex auth expired | Tell user to run `codex login`, STOP |
 | No uncommitted changes | Print message, STOP |
 | Branch doesn't exist | Error message, STOP |
+| Directory doesn't exist | Print message, STOP |
+| Crate not found | List available crates, STOP |
+| No source files in dir | Print message, STOP |
 | Codex timeout (>15min) | Continue with partial output + warning |
 | Unparseable output | Print raw output, suggest manual review, STOP |
 | Fix breaks compilation | Revert that fix, note in report, continue |
