@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.37] - 2026-03-20
+
+### Fixed
+- CI: added @types/node for paraglide async_hooks type resolution in CI
+
+### Changed
+- CI/CD: reverted ci and release workflow adjustments
+- CI/CD: release pipeline fixes
+
 ## [0.0.36] - 2026-03-20
 
 ### Changed
