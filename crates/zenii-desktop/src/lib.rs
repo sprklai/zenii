@@ -35,9 +35,19 @@ pub fn run() {
         }))
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
         .setup(|app| {
             tray::setup_tray(app)?;
             commands::boot_gateway(app)?;
+
+            // Background update check after app fully initializes
+            let handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+                commands::check_update_background(handle).await;
+            });
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -47,6 +57,7 @@ pub fn run() {
             commands::open_data_dir,
             commands::open_config_file,
             commands::show_notification,
+            commands::check_for_update,
         ])
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { .. } = event {

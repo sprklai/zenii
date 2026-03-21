@@ -27,7 +27,19 @@
       "csp": "default-src 'self'; script-src 'self'; connect-src 'self' http://127.0.0.1:* ws://127.0.0.1:*; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:"
     }
   },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDQxQkIzMkEyMzE1RjUxRkUKUldUK1VWOHhvaks3UWNOZlB2Qm8zeE5nN0FrTHRsQUFQcjUvOTRQQnZaMy82YzhNUFRlandlMEMK",
+      "endpoints": [
+        "https://github.com/sprklai/zenii/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
+    }
+  },
   "bundle": {
+    "createUpdaterArtifacts": true,
     "active": true,
     "targets": "all",
     "icon": [

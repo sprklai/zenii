@@ -201,6 +201,67 @@ pub fn open_config_file() -> Result<String, String> {
     Ok(backup_path.to_string_lossy().into_owned())
 }
 
+// --- Auto-update commands ---
+
+/// Information about an available update.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UpdateInfo {
+    pub version: String,
+    pub body: Option<String>,
+}
+
+/// Check for updates on demand (invoked from frontend settings).
+#[tauri::command]
+pub async fn check_for_update(app: tauri::AppHandle) -> Result<Option<UpdateInfo>, String> {
+    use tauri_plugin_updater::UpdaterExt;
+
+    let update = app
+        .updater_builder()
+        .build()
+        .map_err(|e| e.to_string())?
+        .check()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    match update {
+        Some(u) => Ok(Some(UpdateInfo {
+            version: u.version.clone(),
+            body: u.body.clone(),
+        })),
+        None => Ok(None),
+    }
+}
+
+/// Background update check — emits `update-available` event if an update is found.
+pub async fn check_update_background(handle: tauri::AppHandle) {
+    use tauri_plugin_updater::UpdaterExt;
+
+    let updater = match handle.updater_builder().build() {
+        Ok(u) => u,
+        Err(e) => {
+            tracing::warn!("Failed to build updater: {e}");
+            return;
+        }
+    };
+
+    match updater.check().await {
+        Ok(Some(update)) => {
+            let info = UpdateInfo {
+                version: update.version.clone(),
+                body: update.body.clone(),
+            };
+            info!("Update available: v{}", info.version);
+            let _ = handle.emit("update-available", &info);
+        }
+        Ok(None) => {
+            info!("App is up to date");
+        }
+        Err(e) => {
+            tracing::warn!("Update check failed: {e}");
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -92,3 +92,53 @@ export async function onGatewayFailed(
   const { listen } = await import("@tauri-apps/api/event");
   return listen<string>("gateway-failed", (event) => callback(event.payload));
 }
+
+/** Update info returned by the check_for_update command. */
+export interface UpdateInfo {
+  version: string;
+  body: string | null;
+}
+
+/** Check for available updates. Returns update info or null if up to date. */
+export async function checkForUpdate(): Promise<UpdateInfo | null> {
+  if (!isTauri) return null;
+  const { invoke } = await import("@tauri-apps/api/core");
+  return invoke<UpdateInfo | null>("check_for_update");
+}
+
+/** Listen for the update-available event (emitted by background check). */
+export async function onUpdateAvailable(
+  callback: (info: UpdateInfo) => void,
+): Promise<(() => void) | null> {
+  if (!isTauri) return null;
+  const { listen } = await import("@tauri-apps/api/event");
+  return listen<UpdateInfo>("update-available", (event) => callback(event.payload));
+}
+
+/** Download and install an update, then relaunch the app. */
+export async function installUpdate(
+  onProgress?: (percent: number) => void,
+): Promise<void> {
+  if (!isTauri) return;
+  const { check } = await import("@tauri-apps/plugin-updater");
+  const { relaunch } = await import("@tauri-apps/plugin-process");
+
+  const update = await check();
+  if (!update) return;
+
+  let totalLength = 0;
+  let downloaded = 0;
+
+  await update.downloadAndInstall((event) => {
+    if (event.event === "Started" && event.data.contentLength) {
+      totalLength = event.data.contentLength;
+    } else if (event.event === "Progress") {
+      downloaded += event.data.chunkLength;
+      if (totalLength > 0 && onProgress) {
+        onProgress(Math.round((downloaded / totalLength) * 100));
+      }
+    }
+  });
+
+  await relaunch();
+}

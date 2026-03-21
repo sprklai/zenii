@@ -65,8 +65,15 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           APPIMAGE_EXTRACT_AND_RUN: "1"
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           projectPath: crates/zenii-desktop
+          tagName: app-v__VERSION__
+          releaseName: "Zenii v__VERSION__"
+          releaseBody: "See assets below to download and install."
+          releaseDraft: false
+          prerelease: false
           args: --bundles deb,rpm,appimage -- --profile ci-release
 
       - name: Build standalone CLI and daemon
@@ -124,8 +131,15 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           projectPath: crates/zenii-desktop
+          tagName: app-v__VERSION__
+          releaseName: "Zenii v__VERSION__"
+          releaseBody: "See assets below to download and install."
+          releaseDraft: false
+          prerelease: false
           args: --bundles msi,nsis -- --profile ci-release
 
       - name: Build standalone CLI and daemon
@@ -203,8 +217,15 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: "6BQSGY2B74"
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           projectPath: crates/zenii-desktop
+          tagName: app-v__VERSION__
+          releaseName: "Zenii v__VERSION__"
+          releaseBody: "See assets below to download and install."
+          releaseDraft: false
+          prerelease: false
           args: --target aarch64-apple-darwin --bundles dmg -- --profile ci-release
 
       - name: Build desktop (dmg) - x86_64
@@ -215,8 +236,15 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: "6BQSGY2B74"
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           projectPath: crates/zenii-desktop
+          tagName: app-v__VERSION__
+          releaseName: "Zenii v__VERSION__"
+          releaseBody: "See assets below to download and install."
+          releaseDraft: false
+          prerelease: false
           args: --target x86_64-apple-darwin --bundles dmg -- --profile ci-release
 
       - name: Build standalone CLI, daemon, TUI (arm64)

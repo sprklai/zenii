@@ -10,10 +10,12 @@
 	import Bell from '@lucide/svelte/icons/bell';
 	import Shield from '@lucide/svelte/icons/shield';
 	import Info from '@lucide/svelte/icons/info';
+	import Download from '@lucide/svelte/icons/download';
 	import type { Component } from 'svelte';
 	import { Separator } from '$lib/components/ui/separator';
 	import * as Dialog from '$lib/components/ui/dialog';
-	import { getAppVersion } from '$lib/tauri';
+	import { getAppVersion, checkForUpdate, installUpdate, onUpdateAvailable } from '$lib/tauri';
+	import type { UpdateInfo } from '$lib/tauri';
 	import { onMount } from 'svelte';
 
 	const tabLoaders: Record<string, () => Promise<{ default: Component }>> = {
@@ -57,6 +59,11 @@
 	let activeTab = $state('general');
 	let appVersion = $state<string | null>(null);
 	let aboutOpen = $state(false);
+	let updateOpen = $state(false);
+	let updateAvailable = $state<UpdateInfo | null>(null);
+	let updateChecking = $state(false);
+	let updateProgress = $state<number | null>(null);
+	let updateInstalling = $state(false);
 	let activeComponent = $derived(loadTab(activeTab));
 
 	function getHashTab(): string {
@@ -69,9 +76,41 @@
 		activeTab = id;
 	}
 
+	async function handleCheckUpdate() {
+		updateChecking = true;
+		updateProgress = null;
+		try {
+			const info = await checkForUpdate();
+			updateAvailable = info;
+		} catch (e) {
+			console.error('Update check failed:', e);
+		} finally {
+			updateChecking = false;
+		}
+	}
+
+	async function handleInstallUpdate() {
+		updateInstalling = true;
+		updateProgress = 0;
+		try {
+			await installUpdate((percent) => {
+				updateProgress = percent;
+			});
+		} catch (e) {
+			console.error('Update install failed:', e);
+			updateInstalling = false;
+			updateProgress = null;
+		}
+	}
+
 	onMount(async () => {
 		activeTab = getHashTab();
 		appVersion = await getAppVersion();
+
+		// Listen for background update-available event
+		onUpdateAvailable((info) => {
+			updateAvailable = info;
+		});
 	});
 
 	$effect(() => {
@@ -100,6 +139,17 @@
 		<Separator class="my-2" />
 
 		<button
+			class="relative flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors text-left text-muted-foreground hover:bg-muted hover:text-foreground"
+			onclick={() => { updateOpen = true; handleCheckUpdate(); }}
+		>
+			<Download class="h-4 w-4" />
+			Updates
+			{#if updateAvailable}
+				<span class="absolute top-1.5 left-7 h-2 w-2 rounded-full bg-primary animate-pulse"></span>
+			{/if}
+		</button>
+
+		<button
 			class="flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors text-left text-muted-foreground hover:bg-muted hover:text-foreground"
 			onclick={() => { aboutOpen = true; }}
 		>
@@ -120,6 +170,16 @@
 				{tab.label}
 			</button>
 		{/each}
+		<button
+			class="relative flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium whitespace-nowrap transition-colors text-muted-foreground hover:bg-muted"
+			onclick={() => { updateOpen = true; handleCheckUpdate(); }}
+		>
+			<Download class="h-3.5 w-3.5" />
+			Updates
+			{#if updateAvailable}
+				<span class="absolute top-0.5 right-0.5 h-2 w-2 rounded-full bg-primary animate-pulse"></span>
+			{/if}
+		</button>
 		<button
 			class="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium whitespace-nowrap transition-colors text-muted-foreground hover:bg-muted"
 			onclick={() => { aboutOpen = true; }}
@@ -173,6 +233,64 @@
 				<p class="font-medium text-foreground">Disclaimer</p>
 				<p>Zenii uses large language models (LLMs) to generate responses and can execute system-level actions (shell commands, file operations) on your behalf. LLM outputs may be inaccurate, incomplete, or inappropriate. System actions run with your user permissions. Always review AI-suggested actions before confirming. Use at your own risk.</p>
 			</div>
+		</Dialog.Description>
+	</Dialog.Content>
+</Dialog.Root>
+
+<Dialog.Root bind:open={updateOpen}>
+	<Dialog.Content class="sm:max-w-md">
+		<Dialog.Header>
+			<div class="flex items-center gap-3">
+				<Download class="h-8 w-8 text-primary" />
+				<div>
+					<Dialog.Title class="text-xl">Software Update</Dialog.Title>
+					{#if appVersion}
+						<p class="text-sm text-muted-foreground">Current: v{appVersion}</p>
+					{/if}
+				</div>
+			</div>
+		</Dialog.Header>
+		<Dialog.Description class="space-y-4">
+			{#if updateChecking}
+				<div class="flex items-center gap-3 py-4">
+					<div class="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent"></div>
+					<p class="text-sm">Checking for updates...</p>
+				</div>
+			{:else if updateInstalling}
+				<div class="space-y-3 py-2">
+					<p class="text-sm font-medium">Installing update v{updateAvailable?.version}...</p>
+					<div class="w-full bg-muted rounded-full h-2">
+						<div
+							class="bg-primary h-2 rounded-full transition-all duration-300"
+							style="width: {updateProgress ?? 0}%"
+						></div>
+					</div>
+					<p class="text-xs text-muted-foreground text-center">{updateProgress ?? 0}%</p>
+				</div>
+			{:else if updateAvailable}
+				<div class="space-y-3">
+					<div class="flex items-center gap-2">
+						<span class="h-2 w-2 rounded-full bg-primary"></span>
+						<p class="text-sm font-medium">Version {updateAvailable.version} is available</p>
+					</div>
+					{#if updateAvailable.body}
+						<div class="text-xs text-muted-foreground bg-muted rounded-md p-3 max-h-40 overflow-y-auto">
+							{updateAvailable.body}
+						</div>
+					{/if}
+					<button
+						class="w-full px-4 py-2 rounded-md text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+						onclick={handleInstallUpdate}
+					>
+						Install & Restart
+					</button>
+				</div>
+			{:else}
+				<div class="flex items-center gap-3 py-4">
+					<span class="text-green-500">&#10003;</span>
+					<p class="text-sm">You're up to date!</p>
+				</div>
+			{/if}
 		</Dialog.Description>
 	</Dialog.Content>
 </Dialog.Root>
