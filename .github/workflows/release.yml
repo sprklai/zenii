@@ -229,7 +229,7 @@ jobs:
           releaseBody: "See assets below to download and install."
           releaseDraft: false
           prerelease: false
-          args: --target aarch64-apple-darwin --bundles dmg -- --profile ci-release
+          args: --target aarch64-apple-darwin --bundles app,dmg -- --profile ci-release
 
       - name: Build desktop (dmg) - x86_64
         uses: tauri-apps/tauri-action@v0
@@ -248,7 +248,7 @@ jobs:
           releaseBody: "See assets below to download and install."
           releaseDraft: false
           prerelease: false
-          args: --target x86_64-apple-darwin --bundles dmg -- --profile ci-release
+          args: --target x86_64-apple-darwin --bundles app,dmg -- --profile ci-release
 
       - name: Build standalone CLI, daemon, TUI (arm64)
         run: cargo build --profile ci-release -p zenii-cli -p zenii-daemon -p zenii-tui --features keyring,channels,channels-telegram,channels-slack,channels-discord,scheduler,web-dashboard --target aarch64-apple-darwin
