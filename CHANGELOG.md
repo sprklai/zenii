@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.39] - 2026-03-21
+
+### Fixed
+- Windows desktop app: resolved WebView2 mixed-content blocking that prevented all HTTP API calls and WebSocket connections from `https://tauri.localhost` to `http://127.0.0.1`
+- Added `tauri-plugin-http` and `tauri-plugin-websocket` to route requests through Rust, bypassing browser mixed-content policy
+- Resolved 7 race conditions and concurrency bugs identified in cross-model code audit (tray shutdown, daemon SIGTERM, approval timeout cleanup, WS reconnect timer, WS warning schema, TUI error handling)
+
 ## [0.0.38] - 2026-03-21
 
 ### Added
