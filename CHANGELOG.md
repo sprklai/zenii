@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.43] - 2026-03-21
+
 ### Fixed
 - Use Tauri HTTP/WebSocket plugins on all desktop platforms (macOS, Linux, Windows) — fixes provider loading and chat on macOS/Linux where WKWebView/webkit2gtk CORS blocks `tauri://` to `http://127.0.0.1` requests
 - Add 15s timeout to Tauri HTTP plugin fetch — prevents app hang on macOS when plugin is slow to init
@@ -16,6 +18,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fix orphaned WebSocket on chat navigation — ChatView now cleans up stream on unmount
 - Fix duplicate session on "New Chat" — suppress self-originated `session_created` push events that race with local creation
 - Fix `bumpSession` Svelte 5 reactivity — use array reassignment instead of in-place `splice()` mutation
+- Prevent duplicate session on new chat from WebSocket push race condition
+- Resolve app hang and race conditions on macOS desktop
 
 ## [0.0.42] - 2026-03-21
 
