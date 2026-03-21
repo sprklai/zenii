@@ -340,6 +340,31 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
         )?;
     }
 
+    if version < 13 {
+        conn.execute_batch(
+            "CREATE TABLE IF NOT EXISTS delegation_tasks (
+                id TEXT PRIMARY KEY,
+                message_id TEXT NOT NULL,
+                session_id TEXT NOT NULL,
+                delegation_id TEXT NOT NULL,
+                agent_id TEXT NOT NULL,
+                description TEXT NOT NULL DEFAULT '',
+                status TEXT NOT NULL,
+                tool_uses INTEGER NOT NULL DEFAULT 0,
+                tokens_used INTEGER NOT NULL DEFAULT 0,
+                duration_ms INTEGER NOT NULL DEFAULT 0,
+                error TEXT,
+                total_duration_ms INTEGER NOT NULL DEFAULT 0,
+                total_tokens INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            );
+            CREATE INDEX IF NOT EXISTS idx_delegation_tasks_message
+                ON delegation_tasks(message_id);
+
+            PRAGMA user_version = 13;",
+        )?;
+    }
+
     Ok(())
 }
 
@@ -389,7 +414,7 @@ mod tests {
         let version: u32 = conn
             .pragma_query_value(None, "user_version", |r| r.get(0))
             .unwrap();
-        assert_eq!(version, 12);
+        assert_eq!(version, 13);
     }
 
     #[test]
@@ -573,7 +598,7 @@ mod tests {
         let version: u32 = conn
             .pragma_query_value(None, "user_version", |r| r.get(0))
             .unwrap();
-        assert_eq!(version, 12);
+        assert_eq!(version, 13);
     }
 
     // IN.9 — Migration v9 adds channel_key column and unique index
@@ -679,7 +704,51 @@ mod tests {
         let version: u32 = conn
             .pragma_query_value(None, "user_version", |r| r.get(0))
             .unwrap();
-        assert_eq!(version, 12);
+        assert_eq!(version, 13);
+    }
+
+    // Migration v13 creates delegation_tasks table
+    #[test]
+    fn migration_v13_creates_delegation_tasks() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("test.db");
+        let conn = Connection::open(&path).unwrap();
+        run_migrations(&conn).unwrap();
+
+        let version: u32 = conn
+            .pragma_query_value(None, "user_version", |r| r.get(0))
+            .unwrap();
+        assert_eq!(version, 13);
+
+        // Verify table exists via SELECT
+        let count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM delegation_tasks", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(count, 0);
+
+        // Verify we can insert a row with all columns
+        conn.execute(
+            "INSERT INTO delegation_tasks (id, message_id, session_id, delegation_id, agent_id, description, status, tool_uses, tokens_used, duration_ms, error, total_duration_ms, total_tokens)
+             VALUES ('t1', 'm1', 's1', 'd1', 'a1', 'test task', 'running', 3, 500, 1200, NULL, 1200, 500)",
+            [],
+        )
+        .unwrap();
+
+        let count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM delegation_tasks", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(count, 1);
+
+        // Verify the index exists
+        let indexes: Vec<String> = conn
+            .prepare("SELECT name FROM sqlite_master WHERE type='index' ORDER BY name")
+            .unwrap()
+            .query_map([], |r| r.get(0))
+            .unwrap()
+            .filter_map(|r| r.ok())
+            .collect();
+
+        assert!(indexes.contains(&"idx_delegation_tasks_message".to_string()));
     }
 
     // 5.55 — migration v11 creates workflow_step_results table

@@ -5,8 +5,7 @@
 		ConversationEmptyState,
 		ConversationScrollButton
 	} from '$lib/components/ai-elements/conversation';
-	import { Message, MessageContent } from '$lib/components/ai-elements/message';
-	import { Response } from '$lib/components/ai-elements/response';
+	import { Message, MessageContent, MessageResponse, MessageActions, MessageAction } from '$lib/components/ai-elements/new-message';
 	import { Loader } from '$lib/components/ai-elements/loader';
 	import { Shimmer } from '$lib/components/ai-elements/shimmer';
 	import {
@@ -16,7 +15,6 @@
 		ToolInput,
 		ToolOutput
 	} from '$lib/components/ai-elements/tool';
-	import { Actions, Action } from '$lib/components/ai-elements/action';
 	import {
 		PromptInput,
 		PromptInputTextarea,
@@ -220,24 +218,22 @@
 					{#each messagesStore.messages as msg, idx (msg.id)}
 						<Message from={msg.role === 'user' ? 'user' : 'assistant'}>
 							{#if msg.role === 'user'}
-								<div class="flex w-full flex-col items-end">
-									<MessageContent variant="flat">
-										<p class="whitespace-pre-wrap">{msg.content}</p>
-									</MessageContent>
-									<Actions class="mt-1 opacity-0 transition-opacity group-hover:opacity-100">
-										<Action tooltip="Copy" onclick={() => copyMessage(msg.content)}>
-											<Copy class="size-3.5" />
-										</Action>
-										<Action tooltip="Edit" onclick={() => editMessage(idx)}>
-											<Pencil class="size-3.5" />
-										</Action>
-										<Action tooltip="Retry" onclick={() => retryMessage(idx)}>
-											<RefreshCw class="size-3.5" />
-										</Action>
-									</Actions>
-								</div>
+								<MessageContent>
+									<p class="whitespace-pre-wrap">{msg.content}</p>
+								</MessageContent>
+								<MessageActions class="mt-1 opacity-0 transition-opacity group-hover:opacity-100">
+									<MessageAction tooltip="Copy" onclick={() => copyMessage(msg.content)}>
+										<Copy class="size-3.5" />
+									</MessageAction>
+									<MessageAction tooltip="Edit" onclick={() => editMessage(idx)}>
+										<Pencil class="size-3.5" />
+									</MessageAction>
+									<MessageAction tooltip="Retry" onclick={() => retryMessage(idx)}>
+										<RefreshCw class="size-3.5" />
+									</MessageAction>
+								</MessageActions>
 							{:else}
-								<MessageContent variant="flat">
+								<MessageContent>
 									{#if msg.tool_calls && msg.tool_calls.length > 0}
 										{#each msg.tool_calls as tc (tc.id)}
 											<Tool>
@@ -254,16 +250,16 @@
 											</Tool>
 										{/each}
 									{/if}
-									<Response content={msg.content} />
-									<Actions class="mt-1 opacity-0 transition-opacity group-hover:opacity-100">
-										<Action tooltip="Copy" onclick={() => copyMessage(msg.content)}>
-											<Copy class="size-3.5" />
-										</Action>
-										<Action tooltip="Retry" onclick={() => retryMessage(idx)}>
-											<RefreshCw class="size-3.5" />
-										</Action>
-									</Actions>
+									<MessageResponse content={msg.content} />
 								</MessageContent>
+								<MessageActions class="mt-1 opacity-0 transition-opacity group-hover:opacity-100">
+									<MessageAction tooltip="Copy" onclick={() => copyMessage(msg.content)}>
+										<Copy class="size-3.5" />
+									</MessageAction>
+									<MessageAction tooltip="Retry" onclick={() => retryMessage(idx)}>
+										<RefreshCw class="size-3.5" />
+									</MessageAction>
+								</MessageActions>
 							{/if}
 						</Message>
 					{/each}
@@ -274,7 +270,7 @@
 
 					{#if messagesStore.streaming}
 						<Message from="assistant">
-							<MessageContent variant="flat">
+							<MessageContent>
 								{#each messagesStore.activeToolCalls as tc (tc.callId)}
 									<Tool>
 										<ToolHeader type={tc.toolName} state={tc.state} />
@@ -296,7 +292,7 @@
 									</div>
 								{/each}
 								{#if messagesStore.streamContent}
-									<Response content={messagesStore.streamContent} />
+									<MessageResponse content={messagesStore.streamContent} />
 								{:else}
 									{@const allToolsDone = messagesStore.activeToolCalls.length > 0 &&
 										messagesStore.activeToolCalls.every(tc => tc.state !== 'input-available')}
@@ -310,7 +306,7 @@
 
 					{#if notificationStore.channelAgentActivity && !messagesStore.streaming}
 					<Message from="assistant">
-						<MessageContent variant="flat">
+						<MessageContent>
 							<div class="flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground">
 								<Shimmer content_length={30} duration={1.5}>
 									Processing {notificationStore.channelAgentActivity.channel} message from @{notificationStore.channelAgentActivity.sender}...

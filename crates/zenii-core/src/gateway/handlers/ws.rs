@@ -432,7 +432,13 @@ async fn handle_ws(mut socket: WebSocket, state: Arc<AppState>) {
 
         // Delegation path: decompose into sub-agents with progress tracking
         if request.delegation == Some(true) {
-            handle_delegation(&mut socket, &state, &request.prompt).await;
+            handle_delegation(
+                &mut socket,
+                &state,
+                &request.prompt,
+                request.session_id.as_deref(),
+            )
+            .await;
             continue;
         }
 
@@ -711,7 +717,12 @@ async fn handle_ws(mut socket: WebSocket, state: Arc<AppState>) {
 }
 
 /// Handle a delegation request: decompose into sub-agents, stream progress events.
-async fn handle_delegation(socket: &mut WebSocket, state: &Arc<AppState>, prompt: &str) {
+async fn handle_delegation(
+    socket: &mut WebSocket,
+    state: &Arc<AppState>,
+    prompt: &str,
+    session_id: Option<&str>,
+) {
     let mut event_rx = state.event_bus.subscribe();
 
     // Spawn the delegation in background
@@ -823,9 +834,37 @@ async fn handle_delegation(socket: &mut WebSocket, state: &Arc<AppState>, prompt
             result = &mut result_rx => {
                 match result {
                     Ok(Ok(delegation_result)) => {
+                        let response = delegation_result.aggregated_response;
                         send_outbound(socket, &WsOutbound::Text {
-                            content: delegation_result.aggregated_response,
-                        }).await;
+                            content: response.clone(),
+                        })
+                        .await;
+
+                        // Persist assistant response to session history
+                        if let Some(sid) = session_id {
+                            let mut msg = state
+                                .session_manager
+                                .append_message(sid, "assistant", &response)
+                                .await;
+                            if msg.is_err() {
+                                tokio::time::sleep(std::time::Duration::from_millis(100))
+                                    .await;
+                                msg = state
+                                    .session_manager
+                                    .append_message(sid, "assistant", &response)
+                                    .await;
+                            }
+                            if let Err(e) = &msg {
+                                warn!(
+                                    "WS: FAILED to store delegation response for session={sid}: {e}"
+                                );
+                                send_outbound(socket, &WsOutbound::Warning {
+                                    warning: "message could not be saved to history".into(),
+                                })
+                                .await;
+                            }
+                        }
+
                         send_outbound(socket, &WsOutbound::Done).await;
                     }
                     Ok(Err(e)) => {

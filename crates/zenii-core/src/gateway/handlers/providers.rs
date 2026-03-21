@@ -244,11 +244,19 @@ pub async fn test_connection(
         .build()
         .map_err(|e| crate::ZeniiError::Agent(format!("HTTP client error: {e}")))?;
 
-    let resp = client
-        .get(&url)
-        .header("Authorization", format!("Bearer {api_key}"))
-        .send()
-        .await;
+    let mut request = client.get(&url);
+    match id.as_str() {
+        "anthropic" => {
+            request = request
+                .header("x-api-key", &api_key)
+                .header("anthropic-version", "2023-06-01");
+        }
+        _ => {
+            request = request.header("Authorization", format!("Bearer {api_key}"));
+        }
+    }
+
+    let resp = request.send().await;
 
     let latency_ms = start.elapsed().as_millis() as u64;
 

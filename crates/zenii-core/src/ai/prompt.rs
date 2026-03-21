@@ -295,7 +295,9 @@ impl CompactStrategy {
 
         // Compact reasoning axioms (replaces ~300 token protocol)
         lines.push(
-            "Rules: Enrich tool args with context. Recover on failure (2 retries). \
+            "Rules: Enrich tool args with date, location, and timezone from context above. \
+             For web searches, replace 'today'/'recent'/'latest' with actual dates. \
+             Recover on failure (2 retries). \
              Use shell for path discovery. Act, don't describe. \
              Use multiple tool calls for multi-step tasks. Avoid redundant identical calls."
                 .into(),

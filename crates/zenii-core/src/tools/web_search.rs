@@ -139,9 +139,12 @@ impl Tool for WebSearchTool {
 
     fn description(&self) -> &str {
         "Search the web and return multiple results (title, URL, snippet) in a single call. \
-         IMPORTANT: For location-sensitive queries (weather, local news, events, nearby places), \
-         include the user's location in your query if known from context. \
-         Example: 'weather Toronto today' not 'weather today'. \
+         IMPORTANT: For time-sensitive queries (news, events, releases, 'today', 'recent', 'latest'), \
+         replace relative dates with the actual date from your Date context. \
+         Example: 'AI news March 20 2026' not 'today AI news'. \
+         For location-sensitive queries (weather, local news, events, nearby places), \
+         include the user's location from context. \
+         Example: 'weather Toronto March 20 2026' not 'weather today'. \
          Use ONE comprehensive query instead of multiple narrow ones. \
          Increase num_results if you need more coverage."
     }
@@ -150,7 +153,7 @@ impl Tool for WebSearchTool {
         serde_json::json!({
             "type": "object",
             "properties": {
-                "query": { "type": "string", "description": "Search query. Include user's location for location-sensitive queries. Prefer a single comprehensive query over multiple narrow ones." },
+                "query": { "type": "string", "description": "Search query. Replace relative dates (today, this week, recent, latest) with actual dates from your Date context. Include user's location for location-sensitive queries. Prefer a single comprehensive query over multiple narrow ones." },
                 "num_results": { "type": "integer", "description": "Number of results to return (1-20). Use a higher number for broad topics instead of making multiple searches.", "default": 5 }
             },
             "required": ["query"]
