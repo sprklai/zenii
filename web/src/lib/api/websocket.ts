@@ -164,7 +164,7 @@ export function createChatStream(
     ? `${baseUrl}/ws/chat?token=${encodeURIComponent(token)}`
     : `${baseUrl}/ws/chat`;
 
-  console.log(`[WS] Connecting to ${url}`);
+  console.log(`[WS] Connecting to ${url.replace(/token=[^&]+/, "token=***")}`);
   const ws = new WebSocket(url);
   let intentionalClose = false;
 

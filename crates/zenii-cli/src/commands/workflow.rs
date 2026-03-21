@@ -82,7 +82,8 @@ pub async fn run(client: &ZeniiClient, id: &str) -> Result<(), String> {
         .post(&format!("/workflows/{id}/run"), &json!({}))
         .await?;
     let wf_id = result["workflow_id"].as_str().unwrap_or(id);
-    println!("Workflow started: {wf_id}");
+    let run_id = result["run_id"].as_str().unwrap_or("?");
+    println!("Workflow started: {wf_id} (run_id: {run_id})");
     Ok(())
 }
 
@@ -116,10 +117,10 @@ pub async fn history(client: &ZeniiClient, id: &str) -> Result<(), String> {
     Ok(())
 }
 
-pub async fn cancel(client: &ZeniiClient, id: &str) -> Result<(), String> {
+pub async fn cancel(client: &ZeniiClient, id: &str, run_id: &str) -> Result<(), String> {
     client
-        .post_no_response(&format!("/workflows/{id}/cancel"), &json!({}))
+        .post_no_response(&format!("/workflows/{id}/runs/{run_id}/cancel"), &json!({}))
         .await?;
-    println!("Workflow {id} cancelled.");
+    println!("Workflow {id} run {run_id} cancelled.");
     Ok(())
 }

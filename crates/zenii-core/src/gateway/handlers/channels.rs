@@ -200,25 +200,29 @@ pub async fn connect_channel(
         }
     };
 
+    // Attempt connect before registering — fail fast on bad credentials/network
+    if let Err(e) = channel.connect().await {
+        return Err((
+            StatusCode::BAD_GATEWAY,
+            format!("Channel {name} connect failed: {e}"),
+        ));
+    }
+
     state
         .channel_registry
         .register_or_replace(channel.clone())
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    if let Err(e) = channel.connect().await {
-        tracing::warn!("Channel {name} connect failed: {e}");
-    } else {
-        // Spawn supervised listen task after successful connect
-        #[cfg(feature = "gateway")]
-        if let Some(ref router) = state.channel_router {
-            let tx = router.sender();
-            let ch = channel.clone();
-            let event_bus = state.event_bus.clone();
-            let config = state.config.load_full();
-            tokio::spawn(crate::channels::router::supervise_channel(
-                ch, tx, event_bus, config,
-            ));
-        }
+    // Spawn supervised listen task after successful connect
+    #[cfg(feature = "gateway")]
+    if let Some(ref router) = state.channel_router {
+        let tx = router.sender();
+        let ch = channel.clone();
+        let event_bus = state.event_bus.clone();
+        let config = state.config.load_full();
+        tokio::spawn(crate::channels::router::supervise_channel(
+            ch, tx, event_bus, config,
+        ));
     }
 
     let status = state

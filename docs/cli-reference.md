@@ -883,12 +883,13 @@ zenii workflow history <ID>
 Cancel a running workflow execution.
 
 ```
-zenii workflow cancel <ID>
+zenii workflow cancel <ID> <RUN_ID>
 ```
 
 | Argument | Required | Description |
 |----------|----------|-------------|
-| `<ID>` | Yes | Workflow ID to cancel |
+| `<ID>` | Yes | Workflow ID |
+| `<RUN_ID>` | Yes | Run ID (from `workflow run` output) |
 
 ---
 

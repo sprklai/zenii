@@ -92,12 +92,9 @@ function createWorkflowsStore() {
       if (existing) clearTimeout(existing);
       timeouts.set(
         workflowId,
-        setTimeout(
-          () => {
-            this.setCompleted(workflowId, runId, "timeout");
-          },
-          WORKFLOW_SAFETY_TIMEOUT_MS,
-        ),
+        setTimeout(() => {
+          this.setCompleted(workflowId, runId, "timeout");
+        }, WORKFLOW_SAFETY_TIMEOUT_MS),
       );
     },
 
@@ -163,12 +160,9 @@ function createWorkflowsStore() {
         if (savedTimeout) {
           timeouts.set(
             workflowId,
-            setTimeout(
-              () => {
-                this.setCompleted(workflowId, savedProgress.runId, "timeout");
-              },
-              WORKFLOW_SAFETY_TIMEOUT_MS,
-            ),
+            setTimeout(() => {
+              this.setCompleted(workflowId, savedProgress.runId, "timeout");
+            }, WORKFLOW_SAFETY_TIMEOUT_MS),
           );
         }
         error = e instanceof Error ? e.message : "Failed to cancel workflow";

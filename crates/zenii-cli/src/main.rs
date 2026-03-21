@@ -391,6 +391,8 @@ enum WorkflowAction {
     Cancel {
         /// Workflow ID
         id: String,
+        /// Run ID (from `workflow run` output)
+        run_id: String,
     },
 }
 
@@ -625,7 +627,9 @@ async fn main() {
             WorkflowAction::Run { id } => commands::workflow::run(&client, &id).await,
             WorkflowAction::Delete { id } => commands::workflow::delete(&client, &id).await,
             WorkflowAction::History { id } => commands::workflow::history(&client, &id).await,
-            WorkflowAction::Cancel { id } => commands::workflow::cancel(&client, &id).await,
+            WorkflowAction::Cancel { id, run_id } => {
+                commands::workflow::cancel(&client, &id, &run_id).await
+            }
         },
         Commands::Onboard => commands::onboard::run(&client).await,
         Commands::Completions { shell } => {
@@ -1333,12 +1337,13 @@ mod tests {
 
     #[test]
     fn parse_workflow_cancel() {
-        let cli = parse(&["zenii", "workflow", "cancel", "wf-456"]);
+        let cli = parse(&["zenii", "workflow", "cancel", "wf-456", "run-789"]);
         match cli.command {
             Commands::Workflow {
-                action: WorkflowAction::Cancel { id },
+                action: WorkflowAction::Cancel { id, run_id },
             } => {
                 assert_eq!(id, "wf-456");
+                assert_eq!(run_id, "run-789");
             }
             _ => panic!("expected Workflow Cancel"),
         }
