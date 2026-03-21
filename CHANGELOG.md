@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Delegation persistence: agent task details (descriptions, tool counts, tokens, durations, status) are now stored in the database and rendered in chat history
+- New `DelegationSummary` component renders a static agent tree on historical messages
+- DB migration v13: `delegation_tasks` table for storing per-agent delegation metadata
+- `DelegationRecord` and `DelegationAgentRecord` types in backend API and frontend stores
+- `description` field added to `TaskResult` for delegation agent descriptions
+
+### Fixed
+- Delegation responses now persist to the database, fixing blank screen after delegation completion
+- `MessageWithToolCalls` API response now includes delegation data alongside tool calls
+
 ## [0.0.37] - 2026-03-20
 
 ### Fixed

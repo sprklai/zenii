@@ -1,1 +1,7 @@
-export type MessageRole = "user" | "assistant" | "system" | "function" | "data" | "tool";
+export type MessageRole =
+  | "user"
+  | "assistant"
+  | "system"
+  | "function"
+  | "data"
+  | "tool";

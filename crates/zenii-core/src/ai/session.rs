@@ -698,10 +698,7 @@ impl SessionManager {
     }
 
     /// Retrieve delegation record for a given message.
-    pub async fn get_delegation(
-        &self,
-        message_id: &str,
-    ) -> Result<Option<DelegationRecord>> {
+    pub async fn get_delegation(&self, message_id: &str) -> Result<Option<DelegationRecord>> {
         let db = self.db.clone();
         let message_id = message_id.to_string();
 

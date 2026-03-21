@@ -7,9 +7,9 @@ import MessageResponse from "./MessageResponse.svelte";
 export * from "./message-context.svelte.js";
 
 export {
-	Message,
-	MessageContent,
-	MessageActions,
-	MessageAction,
-	MessageResponse,
+  Message,
+  MessageContent,
+  MessageActions,
+  MessageAction,
+  MessageResponse,
 };
