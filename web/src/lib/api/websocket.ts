@@ -1,4 +1,4 @@
-import { isTauri } from "$lib/tauri";
+import { isTauri, isWindows } from "$lib/tauri";
 import { getBaseUrl, getToken } from "./client";
 
 export interface WsTextMessage {
@@ -398,7 +398,7 @@ export async function createChatStream(
   model?: string,
   delegation?: boolean,
 ): Promise<ChatConnection> {
-  if (isTauri) {
+  if (isTauri && isWindows) {
     return createChatStreamTauri(
       prompt,
       sessionId,

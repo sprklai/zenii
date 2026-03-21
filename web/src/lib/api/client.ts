@@ -1,4 +1,4 @@
-import { isTauri } from "$lib/tauri";
+import { isTauri, isWindows } from "$lib/tauri";
 
 const DEFAULT_BASE_URL = "http://127.0.0.1:18981";
 const TOKEN_KEY = "zenii_token";
@@ -12,7 +12,7 @@ async function resolvedFetch(
   input: string | URL | Request,
   init?: RequestInit,
 ): Promise<Response> {
-  if (isTauri) {
+  if (isTauri && isWindows) {
     const { fetch: tauriFetch } = await import("@tauri-apps/plugin-http");
     return tauriFetch(input, init);
   }
