@@ -1,10 +1,10 @@
 use std::num::NonZeroUsize;
-use std::sync::Mutex;
 
 use async_trait::async_trait;
 use lru::LruCache;
+use tokio::sync::Mutex;
 
-use crate::{Result, ZeniiError};
+use crate::Result;
 
 #[async_trait]
 pub trait EmbeddingProvider: Send + Sync {
@@ -80,22 +80,16 @@ impl<P: EmbeddingProvider> LruEmbeddingCache<P> {
 #[async_trait]
 impl<P: EmbeddingProvider> EmbeddingProvider for LruEmbeddingCache<P> {
     async fn embed(&self, text: &str) -> Result<Vec<f32>> {
-        // Check cache first (short Mutex hold, no await)
+        // Check cache first (short lock hold, no await while held)
         {
-            let mut cache = self
-                .cache
-                .lock()
-                .map_err(|e| ZeniiError::Embedding(e.to_string()))?;
+            let mut cache = self.cache.lock().await;
             if let Some(cached) = cache.get(text) {
                 return Ok(cached.clone());
             }
         }
         let embedding = self.provider.embed(text).await?;
         {
-            let mut cache = self
-                .cache
-                .lock()
-                .map_err(|e| ZeniiError::Embedding(e.to_string()))?;
+            let mut cache = self.cache.lock().await;
             cache.put(text.to_string(), embedding.clone());
         }
         Ok(embedding)

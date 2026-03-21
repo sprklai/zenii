@@ -30,7 +30,7 @@ Zenii is a local AI backend that gives every tool on your machine access to AI �
 | **114 API routes** | Full REST + WebSocket gateway at `localhost:18981` |
 | **6 AI providers** | OpenAI, Anthropic, Google Gemini, OpenRouter, Vercel AI Gateway, Ollama — switch with one config change |
 | **Semantic memory** | SQLite FTS5 + vector search — your AI remembers across sessions and restarts |
-| **14 built-in tools** | Web search, file ops, shell, memory, config, learn, and more |
+| **15 built-in tools** | Web search, file ops, content search, shell, memory, config, learn, and more |
 | **Plugin system** | Any language, JSON-RPC 2.0 over stdio — a plugin is ~15 lines |
 | **Self-evolution** | AI proposes skill changes, you approve — like a PR from your assistant |
 | **Workflow engine** | Multi-step TOML pipelines with DAG execution, retry policies, and template resolution |

@@ -195,7 +195,7 @@ zenii/
 │   │   │   ├── memory/     # Memory trait + SqliteMemoryStore (FTS5 + vectors) + InMemoryStore
 │   │   │   ├── credential/ # CredentialStore trait + KeyringStore + FileCredentialStore + InMemoryCredentialStore
 │   │   │   ├── security/   # SecurityPolicy + AutonomyLevel + rate limiter + audit log
-│   │   │   ├── tools/      # Tool trait + ToolRegistry (DashMap) + 14 built-in tools
+│   │   │   ├── tools/      # Tool trait + ToolRegistry (DashMap) + 15 built-in tools
 │   │   │   ├── ai/         # AI agent (rig-core), providers, session manager, tool adapter, context engine, delegation
 │   │   │   │   └── delegation/ # Coordinator, SubAgent, DelegationTask, dependency-wave execution
 │   │   │   ├── workflows/  # WorkflowRegistry, WorkflowExecutor, StepRuntime, templates (feature-gated)
@@ -958,12 +958,13 @@ All clients communicate via the HTTP+WebSocket gateway at `localhost:18981`. Rou
 | GET | `/channels/sessions` | `channels` | List channel sessions |
 | GET | `/channels/sessions/{id}/messages` | `channels` | List channel session messages |
 
-### Scheduler (6 routes, feature-gated)
+### Scheduler (7 routes, feature-gated)
 
 | Method | Path | Description |
 |---|---|---|
 | POST | `/scheduler/jobs` | Create scheduled job |
 | GET | `/scheduler/jobs` | List all jobs |
+| PUT | `/scheduler/jobs/{id}` | Update job |
 | DELETE | `/scheduler/jobs/{id}` | Delete job |
 | PUT | `/scheduler/jobs/{id}/toggle` | Toggle job enabled/disabled |
 | GET | `/scheduler/jobs/{id}/history` | Get job execution history |
@@ -1276,14 +1277,15 @@ Four new agent-callable tools give the AI agent direct control over system funct
 
 ```mermaid
 graph TD
-    subgraph ToolRegistry["ToolRegistry - 14 tools"]
-        subgraph Base["Built-in Tools - 14"]
+    subgraph ToolRegistry["ToolRegistry - 15 tools"]
+        subgraph Base["Built-in Tools - 15"]
             SysInfo[system_info]
             WebSearch[web_search]
             FileR[file_read]
             FileW[file_write]
             FileL[file_list]
             FileS[file_search]
+            ContentS[content_search]
             Shell[shell]
             Process[process]
             Patch[patch]
