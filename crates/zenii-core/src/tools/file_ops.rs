@@ -393,5 +393,4 @@ mod tests {
         assert!(result.success);
         assert!(result.output.contains("nested.txt"));
     }
-
 }

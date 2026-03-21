@@ -348,7 +348,10 @@ impl SessionManager {
     }
 
     /// List sessions, optionally excluding internal sessions (source="delegation").
-    pub async fn list_sessions_filtered(&self, include_internal: bool) -> Result<Vec<SessionSummary>> {
+    pub async fn list_sessions_filtered(
+        &self,
+        include_internal: bool,
+    ) -> Result<Vec<SessionSummary>> {
         db::with_db(&self.db, move |conn| {
             let sql = if include_internal {
                 "SELECT s.id, s.title, s.created_at, s.updated_at, COUNT(m.id) as message_count, s.source, s.channel_key

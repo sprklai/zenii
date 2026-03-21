@@ -77,9 +77,7 @@ fn expand_env_vars(input: &str) -> String {
                 // $VAR form — collect alphanumeric + underscore
                 let start = i + 1;
                 let mut end = start;
-                while end < len
-                    && (bytes[end].is_ascii_alphanumeric() || bytes[end] == b'_')
-                {
+                while end < len && (bytes[end].is_ascii_alphanumeric() || bytes[end] == b'_') {
                     end += 1;
                 }
                 if end > start {

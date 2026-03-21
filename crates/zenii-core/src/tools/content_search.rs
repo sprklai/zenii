@@ -174,9 +174,7 @@ impl Tool for ContentSearchTool {
                         let start = line_idx.saturating_sub(context_lines);
                         let end = (line_idx + context_lines + 1).min(lines.len());
 
-                        for (ctx_idx, line_content) in
-                            lines[start..end].iter().enumerate()
-                        {
+                        for (ctx_idx, line_content) in lines[start..end].iter().enumerate() {
                             let abs_idx = start + ctx_idx;
                             let prefix = if abs_idx == line_idx { ">" } else { " " };
                             match_block.push_str(&format!(

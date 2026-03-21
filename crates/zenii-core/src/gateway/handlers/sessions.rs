@@ -60,7 +60,10 @@ pub async fn list_sessions(
     axum::extract::Query(query): axum::extract::Query<ListSessionsQuery>,
 ) -> Result<impl IntoResponse> {
     let include_internal = query.include_internal.unwrap_or(false);
-    let sessions = state.session_manager.list_sessions_filtered(include_internal).await?;
+    let sessions = state
+        .session_manager
+        .list_sessions_filtered(include_internal)
+        .await?;
     Ok(Json(sessions))
 }
 
@@ -114,9 +117,9 @@ pub async fn delete_session(
     Path(id): Path<String>,
 ) -> Result<impl IntoResponse> {
     state.session_manager.delete_session(&id).await?;
-    let _ = state.event_bus.publish(AppEvent::SessionDeleted {
-        session_id: id,
-    });
+    let _ = state
+        .event_bus
+        .publish(AppEvent::SessionDeleted { session_id: id });
     Ok(StatusCode::NO_CONTENT)
 }
 

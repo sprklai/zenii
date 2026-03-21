@@ -219,9 +219,7 @@ impl Memory for SqliteMemoryStore {
                                 id: row.get(0)?,
                                 key: row.get(1)?,
                                 content: row.get(2)?,
-                                category: MemoryCategory::from(
-                                    row.get::<_, String>(3)?.as_str(),
-                                ),
+                                category: MemoryCategory::from(row.get::<_, String>(3)?.as_str()),
                                 score: 0.0,
                                 created_at: row.get(4)?,
                                 updated_at: row.get(5)?,

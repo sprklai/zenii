@@ -559,9 +559,7 @@ mod tests {
         };
         let json = serde_json::to_string(&event).unwrap();
         let back: AppEvent = serde_json::from_str(&json).unwrap();
-        assert!(
-            matches!(back, AppEvent::SessionDeleted { session_id } if session_id == "sess-2")
-        );
+        assert!(matches!(back, AppEvent::SessionDeleted { session_id } if session_id == "sess-2"));
     }
 
     #[test]
