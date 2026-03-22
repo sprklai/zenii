@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.44] - 2026-03-21
+
 ### Fixed
 - Add 15s timeout to browser-side fetch — prevents indefinite hangs when daemon is unresponsive in browser mode
 - Fix session creation race condition — block WebSocket push events during in-flight `create()` to prevent duplicate sessions
