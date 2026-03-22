@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Cross-client real-time data sync via EventBus — changes made through CLI, TUI, or any HTTP client now broadcast to all connected desktop/WebSocket clients
+- 9 new AppEvent variants: MemoryChanged, SchedulerJobsChanged, CredentialsChanged, ProvidersChanged, SkillsChanged, IdentityChanged, WorkflowsChanged, PluginsChanged, PermissionsChanged
+- WsOutbound::DataChanged generic event for domain-level change notifications
+- Event publishing in 10 handler files covering 28 mutation endpoints (memory, config, scheduler, credentials, providers, skills, identity, workflows, plugins, permissions)
+- Frontend notification store handles `data_changed` WebSocket events and auto-refreshes affected stores
+
 ## [0.0.44] - 2026-03-21
 
 ### Fixed

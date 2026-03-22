@@ -7,6 +7,7 @@ use axum::response::IntoResponse;
 use serde::Deserialize;
 
 use crate::ZeniiError;
+use crate::event_bus::AppEvent;
 use crate::gateway::state::AppState;
 use crate::memory::traits::MemoryCategory;
 
@@ -55,6 +56,7 @@ pub async fn create_memory(
         .memory
         .store(&body.key, &body.content, category)
         .await?;
+    let _ = state.event_bus.publish(AppEvent::MemoryChanged);
     Ok(StatusCode::CREATED)
 }
 
@@ -112,6 +114,7 @@ pub async fn update_memory(
 ) -> crate::Result<impl IntoResponse> {
     let category = parse_category(body.category.as_deref());
     state.memory.store(&key, &body.content, category).await?;
+    let _ = state.event_bus.publish(AppEvent::MemoryChanged);
     Ok(StatusCode::OK)
 }
 
@@ -130,6 +133,7 @@ pub async fn delete_memory(
 ) -> crate::Result<impl IntoResponse> {
     let removed = state.memory.forget(&key).await?;
     if removed {
+        let _ = state.event_bus.publish(AppEvent::MemoryChanged);
         Ok(StatusCode::NO_CONTENT)
     } else {
         Err(ZeniiError::NotFound(format!("memory key not found: {key}")))

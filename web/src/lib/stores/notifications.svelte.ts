@@ -4,6 +4,10 @@ import { configStore } from "./config.svelte";
 import { sessionsStore } from "./sessions.svelte";
 import { isTauri, showNotification } from "$lib/tauri";
 import { workflowsStore } from "./workflows.svelte";
+import { memoryStore } from "./memory.svelte";
+import { schedulerStore } from "./scheduler.svelte";
+import { providersStore } from "./providers.svelte";
+import { pluginsStore } from "./plugins.svelte";
 import { withTimeout } from "$lib/api/client";
 
 export interface NotificationRouting {
@@ -246,6 +250,29 @@ class NotificationStore {
         sessionsStore.removeFromEvent(data.session_id);
       } else if (data.type === "message_added") {
         sessionsStore.bumpSession(data.session_id);
+      } else if (data.type === "data_changed") {
+        const domain = data.domain as string;
+        switch (domain) {
+          case "memory":
+            memoryStore.loadAll();
+            break;
+          case "config":
+            configStore.load();
+            break;
+          case "scheduler":
+            schedulerStore.load();
+            break;
+          case "credentials":
+          case "providers":
+            providersStore.load();
+            break;
+          case "workflows":
+            workflowsStore.load();
+            break;
+          case "plugins":
+            pluginsStore.load();
+            break;
+        }
       } else if (data.type === "notification") {
         const notification: SchedulerNotification = {
           eventType: data.event_type,

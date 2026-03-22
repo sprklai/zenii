@@ -149,6 +149,8 @@ pub(crate) enum WsOutbound {
         message_id: String,
         role: String,
     },
+    #[serde(rename = "data_changed")]
+    DataChanged { domain: String },
     #[serde(rename = "done")]
     Done,
     #[serde(rename = "warning")]
@@ -338,6 +340,36 @@ async fn handle_notifications(mut socket: WebSocket, state: Arc<AppState>) {
                         {
                             break;
                         }
+                    }
+                    Ok(crate::event_bus::AppEvent::MemoryChanged) => {
+                        send_outbound(&mut socket, &WsOutbound::DataChanged { domain: "memory".into() }).await;
+                    }
+                    Ok(crate::event_bus::AppEvent::ConfigUpdated) => {
+                        send_outbound(&mut socket, &WsOutbound::DataChanged { domain: "config".into() }).await;
+                    }
+                    Ok(crate::event_bus::AppEvent::SchedulerJobsChanged) => {
+                        send_outbound(&mut socket, &WsOutbound::DataChanged { domain: "scheduler".into() }).await;
+                    }
+                    Ok(crate::event_bus::AppEvent::CredentialsChanged) => {
+                        send_outbound(&mut socket, &WsOutbound::DataChanged { domain: "credentials".into() }).await;
+                    }
+                    Ok(crate::event_bus::AppEvent::ProvidersChanged) => {
+                        send_outbound(&mut socket, &WsOutbound::DataChanged { domain: "providers".into() }).await;
+                    }
+                    Ok(crate::event_bus::AppEvent::SkillsChanged) => {
+                        send_outbound(&mut socket, &WsOutbound::DataChanged { domain: "skills".into() }).await;
+                    }
+                    Ok(crate::event_bus::AppEvent::IdentityChanged) => {
+                        send_outbound(&mut socket, &WsOutbound::DataChanged { domain: "identity".into() }).await;
+                    }
+                    Ok(crate::event_bus::AppEvent::WorkflowsChanged) => {
+                        send_outbound(&mut socket, &WsOutbound::DataChanged { domain: "workflows".into() }).await;
+                    }
+                    Ok(crate::event_bus::AppEvent::PluginsChanged) => {
+                        send_outbound(&mut socket, &WsOutbound::DataChanged { domain: "plugins".into() }).await;
+                    }
+                    Ok(crate::event_bus::AppEvent::PermissionsChanged) => {
+                        send_outbound(&mut socket, &WsOutbound::DataChanged { domain: "permissions".into() }).await;
                     }
                     Ok(crate::event_bus::AppEvent::Shutdown) => {
                         break;

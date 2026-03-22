@@ -265,6 +265,9 @@ pub async fn update_config(
     // Swap the runtime config so all readers see the update immediately
     state.config.store(Arc::new(config));
 
+    let _ = state
+        .event_bus
+        .publish(crate::event_bus::AppEvent::ConfigUpdated);
     tracing::info!("Config updated and persisted to {:?}", state.config_path);
 
     Ok((

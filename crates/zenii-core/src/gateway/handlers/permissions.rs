@@ -79,6 +79,9 @@ pub async fn set_permission(
     if let Err(e) = crate::config::save_config(&state.config_path, &config) {
         tracing::warn!("Failed to persist config: {e}");
     }
+    let _ = state
+        .event_bus
+        .publish(crate::event_bus::AppEvent::PermissionsChanged);
 
     Ok(StatusCode::NO_CONTENT)
 }
@@ -103,6 +106,9 @@ pub async fn delete_permission(
     if let Err(e) = crate::config::save_config(&state.config_path, &config) {
         tracing::warn!("Failed to persist config: {e}");
     }
+    let _ = state
+        .event_bus
+        .publish(crate::event_bus::AppEvent::PermissionsChanged);
 
     StatusCode::NO_CONTENT
 }

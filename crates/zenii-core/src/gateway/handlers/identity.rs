@@ -101,6 +101,9 @@ pub async fn update_identity_file(
     Json(body): Json<UpdateIdentityRequest>,
 ) -> Result<Json<serde_json::Value>, ZeniiError> {
     state.soul_loader.update_file(&name, body.content).await?;
+    let _ = state
+        .event_bus
+        .publish(crate::event_bus::AppEvent::IdentityChanged);
     Ok(Json(serde_json::json!({"status": "updated"})))
 }
 

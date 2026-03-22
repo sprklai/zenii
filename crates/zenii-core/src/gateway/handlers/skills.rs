@@ -78,6 +78,9 @@ pub async fn create_skill(
     Json(body): Json<CreateSkillRequest>,
 ) -> Result<Json<Skill>, ZeniiError> {
     let skill = state.skill_registry.create(body.id, body.content).await?;
+    let _ = state
+        .event_bus
+        .publish(crate::event_bus::AppEvent::SkillsChanged);
     Ok(Json(skill))
 }
 
@@ -96,6 +99,9 @@ pub async fn update_skill(
     Json(body): Json<UpdateSkillRequest>,
 ) -> Result<Json<Skill>, ZeniiError> {
     let skill = state.skill_registry.update(&id, body.content).await?;
+    let _ = state
+        .event_bus
+        .publish(crate::event_bus::AppEvent::SkillsChanged);
     Ok(Json(skill))
 }
 
@@ -113,6 +119,9 @@ pub async fn delete_skill(
     Path(id): Path<String>,
 ) -> Result<Json<serde_json::Value>, ZeniiError> {
     state.skill_registry.delete(&id).await?;
+    let _ = state
+        .event_bus
+        .publish(crate::event_bus::AppEvent::SkillsChanged);
     Ok(Json(serde_json::json!({"status": "deleted"})))
 }
 

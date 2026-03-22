@@ -199,7 +199,7 @@ zenii/
 │   │   │   ├── ai/         # AI agent (rig-core), providers, session manager, tool adapter, context engine, delegation
 │   │   │   │   └── delegation/ # Coordinator, SubAgent, DelegationTask, dependency-wave execution
 │   │   │   ├── workflows/  # WorkflowRegistry, WorkflowExecutor, StepRuntime, templates (feature-gated)
-│   │   │   ├── gateway/    # axum HTTP+WS gateway (86 core + 28 feature-gated = 114 routes, auth middleware, error mapping, ZENII_VALIDATION)
+│   │   │   ├── gateway/    # axum HTTP+WS gateway (63 core + 21 feature-gated = 84 routes, auth middleware, error mapping, ZENII_VALIDATION)
 │   │   │   ├── identity/   # SoulLoader + PromptComposer + defaults (SOUL/IDENTITY/USER.md)
 │   │   │   ├── skills/     # SkillRegistry + bundled/user skills (markdown + YAML frontmatter)
 │   │   │   ├── user/       # UserLearner + SQLite observations + privacy controls
@@ -498,7 +498,7 @@ graph TB
     end
 
     subgraph ChGateway["Gateway"]
-        Routes["6 feature-gated routes<br>+ 1 always-available test route"]
+        Routes["9 feature-gated routes<br>+ 1 always-available test route"]
     end
 
     subgraph ChFrontend["Frontend"]

@@ -97,28 +97,32 @@ pub async fn install_plugin(
     State(state): State<Arc<AppState>>,
     Json(req): Json<InstallRequest>,
 ) -> Result<(StatusCode, Json<InstallResponse>), ZeniiError> {
-    if req.local && req.all {
+    let response = if req.local && req.all {
         let installed = state
             .plugin_installer
             .install_all_from_local(std::path::Path::new(&req.source))
             .await?;
-        Ok((StatusCode::CREATED, Json(InstallResponse::Batch(installed))))
+        (StatusCode::CREATED, Json(InstallResponse::Batch(installed)))
     } else if req.local {
         let installed = state
             .plugin_installer
             .install_from_local(std::path::Path::new(&req.source))
             .await?;
-        Ok((
+        (
             StatusCode::CREATED,
             Json(InstallResponse::Single(Box::new(installed))),
-        ))
+        )
     } else {
         let installed = state.plugin_installer.install_from_git(&req.source).await?;
-        Ok((
+        (
             StatusCode::CREATED,
             Json(InstallResponse::Single(Box::new(installed))),
-        ))
-    }
+        )
+    };
+    let _ = state
+        .event_bus
+        .publish(crate::event_bus::AppEvent::PluginsChanged);
+    Ok(response)
 }
 
 /// DELETE /plugins/{name} — Uninstall a plugin.
@@ -135,6 +139,9 @@ pub async fn remove_plugin(
     Path(name): Path<String>,
 ) -> Result<StatusCode, ZeniiError> {
     state.plugin_installer.remove(&name).await?;
+    let _ = state
+        .event_bus
+        .publish(crate::event_bus::AppEvent::PluginsChanged);
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -166,6 +173,9 @@ pub async fn toggle_plugin(
         .plugin_registry
         .get(&name)
         .ok_or_else(|| ZeniiError::Plugin("plugin disappeared after toggle".into()))?;
+    let _ = state
+        .event_bus
+        .publish(crate::event_bus::AppEvent::PluginsChanged);
     Ok(Json(updated))
 }
 
@@ -183,6 +193,9 @@ pub async fn update_plugin(
     Path(name): Path<String>,
 ) -> Result<Json<InstalledPlugin>, ZeniiError> {
     let installed = state.plugin_installer.update(&name).await?;
+    let _ = state
+        .event_bus
+        .publish(crate::event_bus::AppEvent::PluginsChanged);
     Ok(Json(installed))
 }
 
@@ -241,6 +254,9 @@ pub async fn update_plugin_config(
         .map_err(|e| ZeniiError::Plugin(format!("serialize config failed: {e}")))?;
     std::fs::write(&config_path, toml_str)
         .map_err(|e| ZeniiError::Plugin(format!("write config failed: {e}")))?;
+    let _ = state
+        .event_bus
+        .publish(crate::event_bus::AppEvent::PluginsChanged);
 
     Ok(Json(config))
 }

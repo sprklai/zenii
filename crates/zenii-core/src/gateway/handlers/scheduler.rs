@@ -70,6 +70,9 @@ pub async fn create_job(
         .as_ref()
         .ok_or_else(|| ZeniiError::Scheduler("scheduler not initialized".into()))?;
     let id = scheduler.add_job(req.job).await?;
+    let _ = state
+        .event_bus
+        .publish(crate::event_bus::AppEvent::SchedulerJobsChanged);
     Ok((StatusCode::CREATED, Json(CreateJobResponse { id })))
 }
 
@@ -88,6 +91,9 @@ pub async fn toggle_job(
         .as_ref()
         .ok_or_else(|| ZeniiError::Scheduler("scheduler not initialized".into()))?;
     let enabled = scheduler.toggle_job(&id).await?;
+    let _ = state
+        .event_bus
+        .publish(crate::event_bus::AppEvent::SchedulerJobsChanged);
     Ok(Json(ToggleResponse { id, enabled }))
 }
 
@@ -111,6 +117,9 @@ pub async fn update_job(
         .as_ref()
         .ok_or_else(|| ZeniiError::Scheduler("scheduler not initialized".into()))?;
     scheduler.update_job(&id, req.job).await?;
+    let _ = state
+        .event_bus
+        .publish(crate::event_bus::AppEvent::SchedulerJobsChanged);
     Ok(Json(serde_json::json!({ "id": id, "updated": true })))
 }
 
@@ -129,6 +138,9 @@ pub async fn delete_job(
         .as_ref()
         .ok_or_else(|| ZeniiError::Scheduler("scheduler not initialized".into()))?;
     scheduler.remove_job(&id).await?;
+    let _ = state
+        .event_bus
+        .publish(crate::event_bus::AppEvent::SchedulerJobsChanged);
     Ok(StatusCode::NO_CONTENT)
 }
 

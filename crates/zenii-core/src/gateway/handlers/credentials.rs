@@ -31,6 +31,9 @@ pub async fn set_credential(
     Json(req): Json<SetCredentialRequest>,
 ) -> crate::Result<impl IntoResponse> {
     state.credentials.set(&req.key, &req.value).await?;
+    let _ = state
+        .event_bus
+        .publish(crate::event_bus::AppEvent::CredentialsChanged);
     Ok(Json(serde_json::json!({ "ok": true })))
 }
 
@@ -57,6 +60,9 @@ pub async fn delete_credential(
     Path(key): Path<String>,
 ) -> crate::Result<impl IntoResponse> {
     let deleted = state.credentials.delete(&key).await?;
+    let _ = state
+        .event_bus
+        .publish(crate::event_bus::AppEvent::CredentialsChanged);
     Ok(Json(serde_json::json!({ "deleted": deleted })))
 }
 

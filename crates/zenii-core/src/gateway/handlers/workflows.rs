@@ -26,6 +26,9 @@ pub async fn create_workflow(
 
     let workflow: Workflow = toml::from_str(&req.toml_content)?;
     registry.save(workflow.clone())?;
+    let _ = state
+        .event_bus
+        .publish(crate::event_bus::AppEvent::WorkflowsChanged);
 
     Ok((StatusCode::CREATED, Json(workflow)))
 }
@@ -84,6 +87,9 @@ pub async fn update_workflow(
     workflow.updated_at = chrono::Utc::now().to_rfc3339();
 
     registry.save(workflow.clone())?;
+    let _ = state
+        .event_bus
+        .publish(crate::event_bus::AppEvent::WorkflowsChanged);
     Ok(Json(workflow))
 }
 
@@ -111,6 +117,9 @@ pub async fn delete_workflow(
         .ok_or_else(|| ZeniiError::Workflow("workflow feature not initialized".into()))?;
 
     registry.delete(&id)?;
+    let _ = state
+        .event_bus
+        .publish(crate::event_bus::AppEvent::WorkflowsChanged);
     Ok(StatusCode::NO_CONTENT)
 }
 

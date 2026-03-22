@@ -136,6 +136,15 @@ pub enum AppEvent {
         message_id: String,
         role: String,
     },
+    MemoryChanged,
+    SchedulerJobsChanged,
+    CredentialsChanged,
+    ProvidersChanged,
+    SkillsChanged,
+    IdentityChanged,
+    WorkflowsChanged,
+    PluginsChanged,
+    PermissionsChanged,
     Shutdown,
 }
 

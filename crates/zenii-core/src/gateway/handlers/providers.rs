@@ -112,6 +112,9 @@ pub async fn set_default_model(
         .provider_registry
         .set_default_model(&req.provider_id, &req.model_id)
         .await?;
+    let _ = state
+        .event_bus
+        .publish(crate::event_bus::AppEvent::ProvidersChanged);
     Ok(Json(serde_json::json!({ "ok": true })))
 }
 
@@ -155,6 +158,9 @@ pub async fn create_user_provider(
             &models,
         )
         .await?;
+    let _ = state
+        .event_bus
+        .publish(crate::event_bus::AppEvent::ProvidersChanged);
 
     Ok(Json(serde_json::json!({ "ok": true })))
 }
@@ -175,6 +181,9 @@ pub async fn update_provider(
         .provider_registry
         .update_provider(&id, &req.base_url)
         .await?;
+    let _ = state
+        .event_bus
+        .publish(crate::event_bus::AppEvent::ProvidersChanged);
     Ok(Json(serde_json::json!({ "ok": true })))
 }
 
@@ -189,6 +198,9 @@ pub async fn delete_user_provider(
     Path(id): Path<String>,
 ) -> crate::Result<impl IntoResponse> {
     state.provider_registry.delete_user_provider(&id).await?;
+    let _ = state
+        .event_bus
+        .publish(crate::event_bus::AppEvent::ProvidersChanged);
     Ok(Json(serde_json::json!({ "ok": true })))
 }
 
@@ -213,6 +225,9 @@ pub async fn add_model(
             req.supports_tools,
         )
         .await?;
+    let _ = state
+        .event_bus
+        .publish(crate::event_bus::AppEvent::ProvidersChanged);
     Ok(Json(serde_json::json!({ "ok": true })))
 }
 
@@ -301,6 +316,9 @@ pub async fn delete_model(
         .provider_registry
         .delete_custom_model(&composite_id)
         .await?;
+    let _ = state
+        .event_bus
+        .publish(crate::event_bus::AppEvent::ProvidersChanged);
     Ok(Json(serde_json::json!({ "ok": true })))
 }
 
