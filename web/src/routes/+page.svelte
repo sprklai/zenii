@@ -2,12 +2,24 @@
 	import { Button } from '$lib/components/ui/button';
 	import * as Card from '$lib/components/ui/card';
 	import { sessionsStore } from '$lib/stores/sessions.svelte';
+	import { toast } from 'svelte-sonner';
 	import { goto } from '$app/navigation';
 	import MessageSquarePlus from '@lucide/svelte/icons/message-square-plus';
 
+	let creating = $state(false);
+
 	async function handleNewChat() {
-		const session = await sessionsStore.create('New Chat');
-		goto(`/chat/${session.id}`);
+		if (creating) return;
+		creating = true;
+		try {
+			const session = await sessionsStore.create('New Chat');
+			goto(`/chat/${session.id}`);
+		} catch (e) {
+			toast.error('Failed to create chat session');
+			console.error('handleNewChat failed:', e);
+		} finally {
+			creating = false;
+		}
 	}
 </script>
 
@@ -18,7 +30,7 @@
 	</div>
 
 	<div class="flex justify-center">
-		<Button size="lg" onclick={handleNewChat} class="gap-2">
+		<Button size="lg" onclick={handleNewChat} disabled={creating} class="gap-2">
 			<MessageSquarePlus class="h-5 w-5" />
 			New Chat
 		</Button>

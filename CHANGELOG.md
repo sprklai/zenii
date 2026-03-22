@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Add 15s timeout to browser-side fetch — prevents indefinite hangs when daemon is unresponsive in browser mode
+- Fix session creation race condition — block WebSocket push events during in-flight `create()` to prevent duplicate sessions
+- Add concurrent load guard (`loadVersion`) to sessions and providers stores — prevents stale data from overwriting newer state
+- Add error handling with toast feedback to all async click handlers (new chat, delete, rename, memory CRUD)
+- Add click-debounce guard to "New Chat" buttons — prevents creating multiple sessions on rapid clicks
+- Wrap ChatView `onMount` in try-finally — ensures prompt input renders even if provider load fails
+- Catch unhandled promise rejection on fire-and-forget `sessionsStore.get()` in chat route
+- Add 10s connection timeout to browser WebSocket — prevents indefinite connection attempts
+
 ## [0.0.43] - 2026-03-21
 
 ### Fixed

@@ -49,9 +49,14 @@
 	let delegationEnabled = $state(false);
 
 	onMount(async () => {
-		await providersStore.load();
-		await providersStore.loadDefault();
-		providersLoaded = true;
+		try {
+			await providersStore.load();
+			await providersStore.loadDefault();
+		} catch (e) {
+			console.error('Failed to load providers:', e);
+		} finally {
+			providersLoaded = true;
+		}
 	});
 
 	onDestroy(() => {

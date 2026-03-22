@@ -12,6 +12,7 @@
 	import Trash2 from '@lucide/svelte/icons/trash-2';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import { memoryStore } from '$lib/stores/memory.svelte';
+	import { toast } from 'svelte-sonner';
 	import { onMount } from 'svelte';
 
 	let query = $state('');
@@ -37,17 +38,27 @@
 
 	async function handleAdd() {
 		if (!newKey.trim() || !newContent.trim()) return;
-		await memoryStore.create(newKey.trim(), newContent.trim(), newCategory);
-		newKey = '';
-		newContent = '';
-		newCategory = 'Core';
-		addOpen = false;
+		try {
+			await memoryStore.create(newKey.trim(), newContent.trim(), newCategory);
+			newKey = '';
+			newContent = '';
+			newCategory = 'Core';
+			addOpen = false;
+		} catch (e) {
+			toast.error('Failed to add memory');
+			console.error('handleAdd failed:', e);
+		}
 	}
 
 	async function handleEdit() {
 		if (!editEntry || !editEntry.content.trim()) return;
-		await memoryStore.update(editEntry.key, editEntry.content, editEntry.category);
-		editEntry = null;
+		try {
+			await memoryStore.update(editEntry.key, editEntry.content, editEntry.category);
+			editEntry = null;
+		} catch (e) {
+			toast.error('Failed to update memory');
+			console.error('handleEdit failed:', e);
+		}
 	}
 
 	function handleDelete(key: string) {
@@ -57,7 +68,12 @@
 
 	async function confirmDelete() {
 		if (!deleteTarget) return;
-		await memoryStore.remove(deleteTarget);
+		try {
+			await memoryStore.remove(deleteTarget);
+		} catch (e) {
+			toast.error('Failed to delete memory');
+			console.error('confirmDelete failed:', e);
+		}
 	}
 </script>
 

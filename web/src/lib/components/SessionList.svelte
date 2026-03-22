@@ -9,6 +9,7 @@
 	import Pencil from '@lucide/svelte/icons/pencil';
 	import { sessionsStore } from '$lib/stores/sessions.svelte';
 	import { messagesStore } from '$lib/stores/messages.svelte';
+	import { toast } from 'svelte-sonner';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 
@@ -17,6 +18,7 @@
 	let confirmOpen = $state(false);
 	let deleteTarget = $state<string | null>(null);
 	let editInputRef = $state<HTMLInputElement | null>(null);
+	let creating = $state(false);
 
 	$effect(() => {
 		if (editInputRef) {
@@ -32,8 +34,17 @@
 	}
 
 	async function handleNew() {
-		const session = await sessionsStore.create('New Chat');
-		goto(`/chat/${session.id}`);
+		if (creating) return;
+		creating = true;
+		try {
+			const session = await sessionsStore.create('New Chat');
+			goto(`/chat/${session.id}`);
+		} catch (e) {
+			toast.error('Failed to create chat session');
+			console.error('handleNew failed:', e);
+		} finally {
+			creating = false;
+		}
 	}
 
 	function handleDelete(e: Event, id: string) {
@@ -45,9 +56,14 @@
 	async function confirmDelete() {
 		if (!deleteTarget) return;
 		const id = deleteTarget;
-		await sessionsStore.remove(id);
-		if (page.params.id === id) {
-			goto('/');
+		try {
+			await sessionsStore.remove(id);
+			if (page.params.id === id) {
+				goto('/');
+			}
+		} catch (e) {
+			toast.error('Failed to delete chat session');
+			console.error('confirmDelete failed:', e);
 		}
 	}
 
@@ -59,7 +75,12 @@
 
 	async function saveEdit() {
 		if (editingId && editTitle.trim()) {
-			await sessionsStore.update(editingId, editTitle.trim());
+			try {
+				await sessionsStore.update(editingId, editTitle.trim());
+			} catch (e) {
+				toast.error('Failed to rename chat session');
+				console.error('saveEdit failed:', e);
+			}
 		}
 		editingId = null;
 	}
@@ -85,7 +106,7 @@
 			<Button variant="ghost" size="icon" class="h-5 w-5" onclick={handleRefresh} disabled={sessionsStore.loading}>
 				<RefreshCw class="h-3.5 w-3.5 {sessionsStore.loading ? 'animate-spin' : ''}" />
 			</Button>
-			<Button variant="ghost" size="icon" class="h-5 w-5" onclick={handleNew}>
+			<Button variant="ghost" size="icon" class="h-5 w-5" onclick={handleNew} disabled={creating}>
 				<MessageSquarePlus class="h-3.5 w-3.5" />
 			</Button>
 		</div>

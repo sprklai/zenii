@@ -89,19 +89,28 @@ class NotificationStore {
   private openSocketBrowser(wsUrl: string) {
     this.ws = new WebSocket(wsUrl);
 
+    const connectTimeout = setTimeout(() => {
+      if (!this.connected && this.ws) {
+        this.ws.close();
+      }
+    }, 10000);
+
     this.ws.onopen = () => {
+      clearTimeout(connectTimeout);
       this.connected = true;
       this.reconnectAttempt = 0;
       this.disconnectedPermanently = false;
     };
 
     this.ws.onclose = () => {
+      clearTimeout(connectTimeout);
       this.connected = false;
       this.ws = null;
       this.scheduleReconnect();
     };
 
     this.ws.onerror = () => {
+      clearTimeout(connectTimeout);
       this.connected = false;
     };
 

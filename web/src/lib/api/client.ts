@@ -39,7 +39,7 @@ async function resolvedFetch(
     const { fetch: tauriFetch } = await import("@tauri-apps/plugin-http");
     return withTimeout(tauriFetch(input, init), 15000, String(input));
   }
-  return fetch(input, init);
+  return withTimeout(fetch(input, init), 15000, String(input));
 }
 
 export function getToken(): string | null {
@@ -202,7 +202,11 @@ export async function apiGetText(path: string): Promise<string> {
   }
   const response = await resolvedFetch(url, { headers });
   if (!response.ok) {
-    throw new MesoApiError(response.status, "ZENII_UNKNOWN", response.statusText);
+    throw new MesoApiError(
+      response.status,
+      "ZENII_UNKNOWN",
+      response.statusText,
+    );
   }
   return response.text();
 }

@@ -36,6 +36,7 @@ const SELECTED_MODEL_KEY = "zenii:selectedModel";
 function createProvidersStore() {
   let providers = $state<ProviderWithKeyStatus[]>([]);
   let loading = $state(false);
+  let loadVersion = 0;
   let selectedModel = $state(
     typeof localStorage !== "undefined"
       ? (localStorage.getItem(SELECTED_MODEL_KEY) ?? "")
@@ -82,21 +83,27 @@ function createProvidersStore() {
     },
 
     async load() {
+      const version = ++loadVersion;
       loading = true;
       try {
-        providers = await apiGet<ProviderWithKeyStatus[]>(
+        const result = await apiGet<ProviderWithKeyStatus[]>(
           "/providers/with-key-status",
         );
+        if (version !== loadVersion) return;
+        providers = result;
         const models = this.configuredModels;
         // Only clear selection if it references a model that no longer exists
         if (selectedModel && !models.some((m) => m.value === selectedModel)) {
           this.selectedModel = "";
         }
       } catch (e) {
+        if (version !== loadVersion) return;
         console.error("[ProvidersStore] Failed to load providers:", e);
         providers = [];
       } finally {
-        loading = false;
+        if (version === loadVersion) {
+          loading = false;
+        }
       }
     },
 

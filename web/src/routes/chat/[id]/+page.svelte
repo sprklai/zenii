@@ -21,7 +21,9 @@
 				messagesStore.clear();
 				messagesStore.load(sessionId);
 			}
-			sessionsStore.get(sessionId);
+			sessionsStore.get(sessionId).catch((e) => {
+			console.error('Failed to load session:', e);
+		});
 		}
 	});
 </script>

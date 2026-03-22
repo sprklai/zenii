@@ -22,6 +22,10 @@ function createSessionsStore() {
   let error = $state<string | null>(null);
   /** IDs of sessions being created locally — used to suppress duplicate push events. */
   const pendingLocalIds = new Set<string>();
+  /** Number of create() calls currently in-flight — blocks WS push events during the request. */
+  let creatingCount = 0;
+  /** Monotonic counter to discard stale concurrent load() results. */
+  let loadVersion = 0;
 
   return {
     get sessions() {
@@ -38,15 +42,19 @@ function createSessionsStore() {
     },
 
     async load() {
+      const version = ++loadVersion;
       loading = true;
       error = null;
       const maxAttempts = 3;
       for (let attempt = 0; attempt < maxAttempts; attempt++) {
         try {
-          sessions = await apiGet<SessionSummary[]>("/sessions");
+          const result = await apiGet<SessionSummary[]>("/sessions");
+          if (version !== loadVersion) return;
+          sessions = result;
           error = null;
           break;
         } catch (e) {
+          if (version !== loadVersion) return;
           if (attempt < maxAttempts - 1) {
             // Exponential backoff: 1s, 2s, 4s
             await new Promise((r) =>
@@ -59,7 +67,9 @@ function createSessionsStore() {
           }
         }
       }
-      loading = false;
+      if (version === loadVersion) {
+        loading = false;
+      }
     },
 
     async get(id: string) {
@@ -71,20 +81,25 @@ function createSessionsStore() {
     },
 
     async create(title: string) {
-      const session = await apiPost<Session>("/sessions", { title });
-      pendingLocalIds.add(session.id);
-      sessions = [
-        {
-          id: session.id,
-          title: session.title,
-          created_at: session.created_at,
-        },
-        ...sessions,
-      ];
-      active = session;
-      // Allow push event dedup window to pass, then clear
-      setTimeout(() => pendingLocalIds.delete(session.id), 2000);
-      return session;
+      creatingCount++;
+      try {
+        const session = await apiPost<Session>("/sessions", { title });
+        pendingLocalIds.add(session.id);
+        sessions = [
+          {
+            id: session.id,
+            title: session.title,
+            created_at: session.created_at,
+          },
+          ...sessions,
+        ];
+        active = session;
+        // Allow push event dedup window to pass, then clear
+        setTimeout(() => pendingLocalIds.delete(session.id), 2000);
+        return session;
+      } finally {
+        creatingCount--;
+      }
     },
 
     async update(id: string, title: string) {
@@ -124,6 +139,7 @@ function createSessionsStore() {
 
     /** Prepend a session from a push notification (guards against duplicates). */
     prependFromEvent(data: { id: string; title: string; source?: string }) {
+      if (creatingCount > 0) return; // creation in-flight, HTTP response will handle it
       if (pendingLocalIds.has(data.id)) return;
       if (sessions.some((s) => s.id === data.id)) return;
       sessions = [
