@@ -187,7 +187,7 @@ sudo mv zenii-daemon zenii /usr/local/bin/
 **Pre-built binary:**
 
 ```bash
-# Apple Silicon (M1/M2/M3/M4)
+# Apple Silicon (M1/M2/M3/M4/M5)
 curl -LO https://github.com/sprklai/zenii/releases/latest/download/zenii-aarch64-apple-darwin.tar.gz
 tar xzf zenii-aarch64-apple-darwin.tar.gz
 sudo mv zenii-daemon zenii zenii-tui /usr/local/bin/
