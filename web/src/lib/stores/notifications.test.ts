@@ -1,5 +1,24 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
+// Stub localStorage for stores that read it at init (e.g. providers.svelte.ts)
+const _store: Record<string, string> = {};
+Object.defineProperty(globalThis, "localStorage", {
+  value: {
+    getItem: (key: string) => _store[key] ?? null,
+    setItem: (key: string, value: string) => {
+      _store[key] = value;
+    },
+    removeItem: (key: string) => {
+      delete _store[key];
+    },
+    clear: () => {
+      for (const key in _store) delete _store[key];
+    },
+  },
+  writable: true,
+  configurable: true,
+});
+
 // Mock svelte-sonner
 vi.mock("svelte-sonner", () => ({
   toast: {

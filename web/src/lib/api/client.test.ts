@@ -82,7 +82,7 @@ describe("API client", () => {
     const mockFetch = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
-      json: () => Promise.resolve({ data: "test" }),
+      text: () => Promise.resolve(JSON.stringify({ data: "test" })),
     });
     vi.stubGlobal("fetch", mockFetch);
 
@@ -96,7 +96,7 @@ describe("API client", () => {
     const mockFetch = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
-      json: () => Promise.resolve({ data: "test" }),
+      text: () => Promise.resolve(JSON.stringify({ data: "test" })),
     });
     vi.stubGlobal("fetch", mockFetch);
 
@@ -148,7 +148,7 @@ describe("API client", () => {
     const mockFetch = vi.fn().mockResolvedValue({
       ok: true,
       status: 204,
-      json: () => Promise.reject(new Error("no body")),
+      text: () => Promise.resolve(""),
     });
     vi.stubGlobal("fetch", mockFetch);
 
@@ -160,7 +160,7 @@ describe("API client", () => {
     const mockFetch = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
-      json: () => Promise.resolve({ id: "1" }),
+      text: () => Promise.resolve(JSON.stringify({ id: "1" })),
     });
     vi.stubGlobal("fetch", mockFetch);
 
@@ -176,7 +176,7 @@ describe("API client", () => {
     const mockFetch = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
-      json: () => Promise.resolve({ updated: true }),
+      text: () => Promise.resolve(JSON.stringify({ updated: true })),
     });
     vi.stubGlobal("fetch", mockFetch);
 
@@ -191,7 +191,7 @@ describe("API client", () => {
     const mockFetch = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
-      json: () => Promise.resolve({ status: "ok" }),
+      text: () => Promise.resolve(JSON.stringify({ status: "ok" })),
     });
     vi.stubGlobal("fetch", mockFetch);
 
