@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.46] - 2026-03-22
+
 ### Fixed
 - Memory recall with empty query now returns all entries ordered by recency instead of FTS5 error
 - MemoryCategory JSON serialization uses plain strings (`"core"`) instead of tagged enums (`{"Custom":"core"}`)
