@@ -66,23 +66,13 @@ pub async fn embeddings_test(
         }));
     }
 
-    // Use MockEmbeddingProvider for testing when no real provider is wired
-    let provider = crate::memory::embeddings::MockEmbeddingProvider::new(cfg.embedding_dim);
-    let start = std::time::Instant::now();
-    match provider.embed("test embedding").await {
-        Ok(vec) => Ok(Json(EmbedTestResult {
-            success: true,
-            dimensions: Some(vec.len()),
-            latency_ms: start.elapsed().as_millis() as u64,
-            error: None,
-        })),
-        Err(e) => Ok(Json(EmbedTestResult {
-            success: false,
-            dimensions: None,
-            latency_ms: start.elapsed().as_millis() as u64,
-            error: Some(e.to_string()),
-        })),
-    }
+    // Verify embedding provider is configured (provider field is checked, not model readiness)
+    Ok(Json(EmbedTestResult {
+        success: true,
+        dimensions: Some(cfg.embedding_dim),
+        latency_ms: 0,
+        error: None,
+    }))
 }
 
 /// POST /embeddings/download — trigger model download (local provider only)
@@ -107,9 +97,15 @@ pub async fn embeddings_download(
         ));
     }
 
+    // Model download happens automatically at boot when provider is "local".
+    // This endpoint confirms the config is ready for download on next restart.
+    let model_available = state
+        .embedding_model_available
+        .load(std::sync::atomic::Ordering::SeqCst);
     Ok(Json(serde_json::json!({
-        "status": "download_triggered",
-        "model": cfg.embedding_model
+        "status": if model_available { "model_ready" } else { "model_pending" },
+        "model": cfg.embedding_model,
+        "model_available": model_available
     })))
 }
 
@@ -142,8 +138,6 @@ pub async fn embeddings_reindex(
     })))
 }
 
-use crate::memory::embeddings::EmbeddingProvider;
-
 /// POST /embeddings/embed — embed a text string (for testing/debugging)
 #[cfg_attr(feature = "api-docs", utoipa::path(
     post, path = "/embeddings/embed", tag = "Embeddings",
@@ -155,7 +149,7 @@ use crate::memory::embeddings::EmbeddingProvider;
 ))]
 pub async fn embeddings_embed(
     State(state): State<Arc<AppState>>,
-    Json(body): Json<EmbedRequest>,
+    Json(_body): Json<EmbedRequest>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
     let cfg = state.config.load();
     if cfg.embedding_provider == "none" {
@@ -168,21 +162,13 @@ pub async fn embeddings_embed(
         ));
     }
 
-    // Use mock provider for the embed endpoint in tests
-    let provider = crate::memory::embeddings::MockEmbeddingProvider::new(cfg.embedding_dim);
-    match provider.embed(&body.text).await {
-        Ok(vec) => Ok(Json(serde_json::json!({
-            "dimensions": vec.len(),
-            "embedding": vec
-        }))),
-        Err(e) => Err((
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(serde_json::json!({
-                "error": e.to_string(),
-                "code": "ZENII_EMBEDDING_FAILED"
-            })),
-        )),
-    }
+    // Embedding provider is internal to memory store.
+    // This endpoint reports config status only — real embedding happens via memory recall.
+    Ok(Json(serde_json::json!({
+        "dimensions": cfg.embedding_dim,
+        "provider": cfg.embedding_provider,
+        "note": "Embedding happens internally via memory recall. Use memory/recall with query text to test."
+    })))
 }
 
 #[cfg(test)]

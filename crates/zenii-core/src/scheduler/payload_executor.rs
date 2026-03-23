@@ -279,7 +279,7 @@ async fn execute_workflow(
         };
 
         match executor
-            .execute(&workflow, &state.tools, state.event_bus.as_ref())
+            .execute(&workflow, &state.tools, state.event_bus.as_ref(), app_state)
             .await
         {
             Ok(run) => {

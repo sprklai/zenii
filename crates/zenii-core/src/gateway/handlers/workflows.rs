@@ -145,6 +145,7 @@ pub async fn run_workflow(
     let tools = state.tools.clone();
     let event_bus = state.event_bus.clone();
     let active_runs = state.active_workflow_runs.clone();
+    let state_for_llm = state.clone();
 
     // B.1: Generate run_id before spawning so we can key by it
     let run_id = uuid::Uuid::new_v4().to_string();
@@ -159,6 +160,7 @@ pub async fn run_workflow(
                 &tools,
                 event_bus.as_ref(),
                 None,
+                Some(&state_for_llm),
             )
             .await;
         active_runs.remove(&run_id_clone);

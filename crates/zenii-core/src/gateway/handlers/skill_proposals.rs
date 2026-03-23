@@ -129,7 +129,11 @@ pub async fn approve_proposal(
         "delete" => {
             state.skill_registry.delete(&proposal.skill_name).await?;
         }
-        _ => {}
+        other => {
+            return Err(ZeniiError::Validation(format!(
+                "unknown proposal action: '{other}'"
+            )));
+        }
     }
 
     // Mark as approved

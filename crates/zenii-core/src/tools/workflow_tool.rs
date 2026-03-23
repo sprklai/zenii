@@ -398,7 +398,7 @@ impl WorkflowTool {
 
         match self
             .executor
-            .execute(&workflow, &self.tools, self.event_bus.as_ref())
+            .execute(&workflow, &self.tools, self.event_bus.as_ref(), None)
             .await
         {
             Ok(run) => {

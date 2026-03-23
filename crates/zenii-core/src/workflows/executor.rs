@@ -92,9 +92,10 @@ impl WorkflowExecutor {
         workflow: &Workflow,
         tools: &crate::tools::ToolRegistry,
         event_bus: &dyn crate::event_bus::EventBus,
+        app_state: Option<&Arc<crate::gateway::state::AppState>>,
     ) -> Result<WorkflowRun> {
         let run_id = uuid::Uuid::new_v4().to_string();
-        self.execute_with_id(run_id, workflow, tools, event_bus, None)
+        self.execute_with_id(run_id, workflow, tools, event_bus, None, app_state)
             .await
     }
 
@@ -109,6 +110,7 @@ impl WorkflowExecutor {
         tools: &crate::tools::ToolRegistry,
         event_bus: &dyn crate::event_bus::EventBus,
         cancel: Option<Arc<AtomicBool>>,
+        app_state: Option<&Arc<crate::gateway::state::AppState>>,
     ) -> Result<WorkflowRun> {
         // Validate step count
         if workflow.steps.len() > self.max_steps {
@@ -175,7 +177,7 @@ impl WorkflowExecutor {
                 break;
             }
             let output = self
-                .execute_step(step, &step_outputs, tools, &step_map)
+                .execute_step(step, &step_outputs, tools, &step_map, app_state)
                 .await;
 
             let output = match output {
@@ -239,7 +241,13 @@ impl WorkflowExecutor {
                         } else if let Some(fallback_step) = step_map.get(fallback_name) {
                             executed_fallbacks.insert(fallback_name.clone());
                             let fb_result = self
-                                .execute_step(fallback_step, &step_outputs, tools, &step_map)
+                                .execute_step(
+                                    fallback_step,
+                                    &step_outputs,
+                                    tools,
+                                    &step_map,
+                                    app_state,
+                                )
                                 .await;
                             let fb_output = match fb_result {
                                 Ok(out) => out,
@@ -350,6 +358,7 @@ impl WorkflowExecutor {
         step_outputs: &HashMap<String, StepOutput>,
         tools: &crate::tools::ToolRegistry,
         _step_map: &HashMap<String, &WorkflowStep>,
+        app_state: Option<&Arc<crate::gateway::state::AppState>>,
     ) -> Result<StepOutput> {
         let timeout = step.timeout_secs.unwrap_or(self.step_timeout_secs);
         let max_retries = step
@@ -373,7 +382,7 @@ impl WorkflowExecutor {
             let start = std::time::Instant::now();
             let result = tokio::time::timeout(
                 std::time::Duration::from_secs(timeout),
-                super::runtime::dispatch_step(&step.step_type, step_outputs, tools),
+                super::runtime::dispatch_step(&step.step_type, step_outputs, tools, app_state),
             )
             .await;
             let elapsed_ms = start.elapsed().as_millis() as u64;
@@ -652,7 +661,7 @@ mod tests {
             args: serde_json::json!({"action": "os"}),
         };
         let wf = simple_workflow(vec![step]);
-        let run = executor.execute(&wf, &tools, &bus).await.unwrap();
+        let run = executor.execute(&wf, &tools, &bus, None).await.unwrap();
         assert_eq!(run.status, WorkflowRunStatus::Completed);
         assert_eq!(run.step_results.len(), 1);
         assert!(run.step_results[0].success);
@@ -672,7 +681,7 @@ mod tests {
         let bus = crate::event_bus::TokioBroadcastBus::new(16);
 
         let wf = simple_workflow(vec![delay_step("wait", 0)]); // 0 seconds for fast test
-        let run = executor.execute(&wf, &tools, &bus).await.unwrap();
+        let run = executor.execute(&wf, &tools, &bus, None).await.unwrap();
         assert_eq!(run.status, WorkflowRunStatus::Completed);
     }
 
@@ -709,7 +718,7 @@ mod tests {
 
         // Use a tool that doesn't exist -> will fail
         let wf = simple_workflow(vec![tool_step("bad", "nonexistent_tool")]);
-        let run = executor.execute(&wf, &tools, &bus).await.unwrap();
+        let run = executor.execute(&wf, &tools, &bus, None).await.unwrap();
         assert_eq!(run.status, WorkflowRunStatus::Failed);
     }
 
@@ -737,7 +746,7 @@ mod tests {
             args: serde_json::json!({"action": "os"}),
         };
         let wf = simple_workflow(vec![bad, good]);
-        let run = executor.execute(&wf, &tools, &bus).await.unwrap();
+        let run = executor.execute(&wf, &tools, &bus, None).await.unwrap();
         // Should complete because first step uses Continue policy
         assert_eq!(run.status, WorkflowRunStatus::Completed);
     }
@@ -780,7 +789,7 @@ mod tests {
 
         // Delay step that exceeds timeout
         let wf = simple_workflow(vec![delay_step("slow", 10)]);
-        let run = executor.execute(&wf, &tools, &bus).await.unwrap();
+        let run = executor.execute(&wf, &tools, &bus, None).await.unwrap();
         assert_eq!(run.status, WorkflowRunStatus::Failed);
     }
 
@@ -799,7 +808,7 @@ mod tests {
         let bus = crate::event_bus::TokioBroadcastBus::new(16);
 
         let wf = simple_workflow(vec![delay_step("s1", 0), delay_step("s2", 0)]);
-        let result = executor.execute(&wf, &tools, &bus).await;
+        let result = executor.execute(&wf, &tools, &bus, None).await;
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("max"));
     }
@@ -826,7 +835,7 @@ mod tests {
             args: serde_json::json!({"action": "os"}),
         };
         let wf = simple_workflow(vec![step]);
-        let run = executor.execute(&wf, &tools, &bus).await.unwrap();
+        let run = executor.execute(&wf, &tools, &bus, None).await.unwrap();
 
         // Verify persisted
         let history = executor.get_history("test").await.unwrap();

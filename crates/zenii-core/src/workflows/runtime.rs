@@ -1,15 +1,21 @@
 use std::collections::HashMap;
+use std::sync::Arc;
 
+use crate::gateway::state::AppState;
 use crate::{Result, ZeniiError};
 
 use super::definition::{StepOutput, StepType};
 use super::templates;
 
 /// Dispatch a single workflow step and return its output string.
+///
+/// When `app_state` is provided, LLM steps resolve an agent and call the AI.
+/// Without it, LLM steps return a placeholder (useful for tests).
 pub async fn dispatch_step(
     step_type: &StepType,
     step_outputs: &HashMap<String, StepOutput>,
     tools: &crate::tools::ToolRegistry,
+    app_state: Option<&Arc<AppState>>,
 ) -> Result<String> {
     match step_type {
         StepType::Tool { tool, args } => {
@@ -58,11 +64,23 @@ pub async fn dispatch_step(
                 )))
             }
         }
-        StepType::Llm { prompt, model: _ } => {
-            // Resolve template in prompt
+        StepType::Llm { prompt, model } => {
             let resolved_prompt = templates::resolve(prompt, step_outputs)?;
-            // LLM execution requires an agent — return the resolved prompt for now
-            // Full LLM step execution would use resolve_agent() similar to chat
+
+            #[cfg(feature = "ai")]
+            {
+                if let Some(state) = app_state {
+                    let requested_model = model.as_deref();
+                    let agent =
+                        crate::ai::resolve_agent(requested_model, state, None, None, "workflow")
+                            .await?;
+                    let resp = agent.chat(&resolved_prompt, vec![]).await?;
+                    return Ok(resp.output);
+                }
+            }
+
+            // Fallback when AI feature is off or no AppState provided (tests)
+            let _ = model;
             Ok(format!("[LLM step — prompt: {}]", resolved_prompt))
         }
         StepType::Condition {
@@ -109,7 +127,7 @@ mod tests {
             tool: "system_info".into(),
             args: serde_json::json!({"action": "os"}),
         };
-        let result = dispatch_step(&step, &outputs, &tools).await.unwrap();
+        let result = dispatch_step(&step, &outputs, &tools, None).await.unwrap();
         assert!(!result.is_empty());
     }
 
@@ -120,7 +138,7 @@ mod tests {
         let outputs = HashMap::new();
 
         let step = StepType::Delay { seconds: 0 };
-        let result = dispatch_step(&step, &outputs, &tools).await.unwrap();
+        let result = dispatch_step(&step, &outputs, &tools, None).await.unwrap();
         assert!(result.contains("delayed"));
     }
 
@@ -135,7 +153,7 @@ mod tests {
             if_true: "yes_branch".into(),
             if_false: Some("no_branch".into()),
         };
-        let result = dispatch_step(&step, &outputs, &tools).await.unwrap();
+        let result = dispatch_step(&step, &outputs, &tools, None).await.unwrap();
         assert_eq!(result, "yes_branch");
     }
 
@@ -149,7 +167,7 @@ mod tests {
             tool: "nonexistent_tool".into(),
             args: serde_json::json!({}),
         };
-        let result = dispatch_step(&step, &outputs, &tools).await;
+        let result = dispatch_step(&step, &outputs, &tools, None).await;
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("not found"));
     }
