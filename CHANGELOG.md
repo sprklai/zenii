@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-03-22
+
+### Added
+- Dashboard homepage with live stats cards for Chat, Channels, Memory, Schedule, and Workflows
+- Workflow steps now execute real LLM agent calls instead of mock responses
+
+### Changed
+- Rebranded from "AI assistant" to "Your private AI backend" across all surfaces (Cargo.toml, tauri.conf.json, desktop entry, settings page)
+- README: fixed test/tool/route counts, restructured CLI commands section, reformatted gateway routes table
+- README: added links to `docs/api-reference.md` and `docs/cli-reference.md`
+
+### Fixed
+- Frontend test mocks updated to match `response.text()` refactor in API client
+- Embedding endpoint cleanup for consistency
+
 ## [0.0.46] - 2026-03-22
 
 ### Fixed
