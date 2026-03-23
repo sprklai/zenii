@@ -95,7 +95,7 @@ petgraph = "0.7"
 minijinja = "2.9"
 
 # Phase 8.11: Local Embeddings (optional)
-fastembed = "4"
+fastembed = "5"
 
 # API Documentation (optional)
 utoipa = { version = "5", features = ["axum_extras", "chrono"] }
