@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-03-24
+
+### Fixed
+- Cross-client synchronization: CLI/TUI activity now propagates to desktop in real-time
+- WS chat and delegation handlers now publish `MessageAdded` events for other connected clients
+- Homepage dashboard auto-refreshes when sessions, messages, or channel activity occurs
+- Active chat view live-reloads messages when updated from another client
+
+### Added
+- `ChannelSendTool` persists outgoing messages to channel sessions and publishes events for inbox visibility
+
+### Changed
+- Updated error codes and agent error sub-classification documentation
+
 ## [0.1.2] - 2026-03-23
 
 ### Added
