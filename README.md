@@ -72,6 +72,10 @@
   </a>
 </p>
 
+<p align="center">
+  <img src="assets/zenii-master.gif" alt="Zenii Demo" width="720" />
+</p>
+
 ---
 
 > *"ChatGPT is a tab you open. Zenii is a capability your machine gains."*
