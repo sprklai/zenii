@@ -325,6 +325,25 @@ impl ChannelRouter {
             Err(e) => {
                 warn!("ChannelRouter: agent chat failed for {channel_name}: {e}");
                 tool_listener.abort();
+
+                // Send a user-friendly error reply through the channel
+                let hint = crate::error::enrich_error(&e);
+                let error_msg = if let Some(h) = hint {
+                    format!(
+                        "Sorry, I encountered an error: {}\n\nHint: {}",
+                        h.summary, h.action
+                    )
+                } else {
+                    "Sorry, I encountered an internal error. Please try again.".into()
+                };
+                let reply = ChannelMessage::new(&channel_name, &error_msg)
+                    .with_metadata(reply_metadata.clone());
+                if let Err(send_err) = state.channel_registry.send(&channel_name, reply).await {
+                    warn!(
+                        "ChannelRouter: failed to send error reply via {channel_name}: {send_err}"
+                    );
+                }
+
                 let _ = state.event_bus.publish(AppEvent::ChannelAgentCompleted {
                     channel: channel_name.clone(),
                     session_id: session_id.clone(),

@@ -220,6 +220,7 @@ impl Coordinator {
                             session_id: String::new(),
                             tool_uses: 0,
                             description: task.description.clone(),
+                            hint: None,
                         },
                     );
                 }
@@ -265,6 +266,7 @@ impl Coordinator {
                                 session_id: String::new(),
                                 tool_uses: 0,
                                 description: task_desc,
+                                hint: None,
                             },
                         );
                     }
@@ -322,6 +324,7 @@ impl Coordinator {
                             session_id: String::new(),
                             tool_uses: 0,
                             description: String::new(),
+                            hint: None,
                         },
                     );
                 }

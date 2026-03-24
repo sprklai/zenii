@@ -197,7 +197,7 @@
 						sessionsStore.generateTitle(capturedSessionId, capturedModel);
 					}
 				},
-				onError(error) {
+				onError(error, hint) {
 					activeWs = null;
 					approvalsStore.clear();
 					const fallbackDelegation = delegationStore.delegation
@@ -208,7 +208,7 @@
 						error.toLowerCase().includes('no provider')
 							? '__NO_PROVIDER__'
 							: error;
-					messagesStore.setError(friendlyError);
+					messagesStore.setError(friendlyError, hint);
 					// P0.2: Only finish if this stream still owns the session
 					if (messagesStore.activeStreamSessionId === capturedSessionId) {
 						messagesStore.finishStream(capturedSessionId, fallbackDelegation).then(() => {
@@ -378,6 +378,11 @@
 								to set up a provider and model.
 							{:else}
 								{messagesStore.error}
+								{#if messagesStore.errorHint}
+									<p class="mt-1 text-xs opacity-70">
+										Hint: {messagesStore.errorHint}
+									</p>
+								{/if}
 							{/if}
 						</div>
 					{/if}

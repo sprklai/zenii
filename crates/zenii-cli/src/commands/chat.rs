@@ -274,7 +274,10 @@ pub async fn run(
                         "done" => break,
                         "error" => {
                             if let Some(err) = chunk.get("error").and_then(|v| v.as_str()) {
-                                eprintln!("Error: {err}");
+                                eprintln!("\x1b[31mError: {err}\x1b[0m");
+                                if let Some(hint) = chunk.get("hint").and_then(|v| v.as_str()) {
+                                    eprintln!("\x1b[33m  Hint: {hint}\x1b[0m");
+                                }
                             }
                             break;
                         }

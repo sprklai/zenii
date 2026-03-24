@@ -29,6 +29,26 @@ impl ZeniiClient {
         self.token.as_ref().map(|t| format!("Bearer {t}"))
     }
 
+    fn format_error(status: reqwest::StatusCode, body: &str) -> String {
+        if let Ok(err_json) = serde_json::from_str::<serde_json::Value>(body) {
+            let msg = err_json
+                .get("message")
+                .and_then(|v| v.as_str())
+                .unwrap_or(body);
+            let code = err_json
+                .get("error_code")
+                .and_then(|v| v.as_str())
+                .unwrap_or("UNKNOWN");
+            let hint = err_json.get("hint").and_then(|v| v.as_str());
+            let mut err_msg = format!("[{code}] {msg}");
+            if let Some(h) = hint {
+                err_msg.push_str(&format!("\n  Hint: {h}"));
+            }
+            return err_msg;
+        }
+        format!("HTTP {status}: {body}")
+    }
+
     pub async fn get<T: DeserializeOwned>(&self, path: &str) -> Result<T, String> {
         let mut req = self.http.get(format!("{}{path}", self.base_url));
         if let Some(ref val) = self.auth_header_value() {
@@ -38,7 +58,7 @@ impl ZeniiClient {
         if !resp.status().is_success() {
             let status = resp.status();
             let body = resp.text().await.unwrap_or_default();
-            return Err(format!("HTTP {status}: {body}"));
+            return Err(Self::format_error(status, &body));
         }
         resp.json().await.map_err(|e| e.to_string())
     }
@@ -59,7 +79,7 @@ impl ZeniiClient {
         if !resp.status().is_success() {
             let status = resp.status();
             let body = resp.text().await.unwrap_or_default();
-            return Err(format!("HTTP {status}: {body}"));
+            return Err(Self::format_error(status, &body));
         }
         resp.json().await.map_err(|e| e.to_string())
     }
@@ -76,7 +96,7 @@ impl ZeniiClient {
         if !resp.status().is_success() {
             let status = resp.status();
             let body = resp.text().await.unwrap_or_default();
-            return Err(format!("HTTP {status}: {body}"));
+            return Err(Self::format_error(status, &body));
         }
         Ok(())
     }
@@ -94,7 +114,7 @@ impl ZeniiClient {
         if !resp.status().is_success() {
             let status = resp.status();
             let body = resp.text().await.unwrap_or_default();
-            return Err(format!("HTTP {status}: {body}"));
+            return Err(Self::format_error(status, &body));
         }
         resp.json().await.map_err(|e| e.to_string())
     }
@@ -108,7 +128,7 @@ impl ZeniiClient {
         if !resp.status().is_success() {
             let status = resp.status();
             let body = resp.text().await.unwrap_or_default();
-            return Err(format!("HTTP {status}: {body}"));
+            return Err(Self::format_error(status, &body));
         }
         resp.text().await.map_err(|e| e.to_string())
     }
@@ -122,7 +142,7 @@ impl ZeniiClient {
         if !resp.status().is_success() {
             let status = resp.status();
             let body = resp.text().await.unwrap_or_default();
-            return Err(format!("HTTP {status}: {body}"));
+            return Err(Self::format_error(status, &body));
         }
         Ok(())
     }

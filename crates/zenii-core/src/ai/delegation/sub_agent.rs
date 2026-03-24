@@ -160,29 +160,24 @@ impl SubAgent {
                     session_id: self.session_id,
                     tool_uses: final_tool_uses,
                     description: self.task.description.clone(),
+                    hint: None,
                 }
             }
             Ok(Err(e)) => {
                 let err_str = e.to_string();
-                let error_msg = if err_str.contains("MaxTurnError")
-                    || err_str.contains("max turn limit")
-                {
-                    format!(
-                        "{err_str}. Increase `agent_max_turns` in config.toml (current limit may be too low for tool-heavy tasks)"
-                    )
-                } else {
-                    err_str
-                };
+                let hint = crate::error::enrich_error(&crate::ZeniiError::Agent(err_str.clone()))
+                    .map(|h| h.action);
                 TaskResult {
                     task_id: self.task.id,
                     status: TaskStatus::Failed,
                     output: String::new(),
                     usage: TokenUsage::default(),
                     duration_ms: start.elapsed().as_millis() as u64,
-                    error: Some(error_msg),
+                    error: Some(err_str),
                     session_id: self.session_id,
                     tool_uses: final_tool_uses,
                     description: self.task.description.clone(),
+                    hint,
                 }
             }
             Err(_) => TaskResult {
@@ -195,6 +190,7 @@ impl SubAgent {
                 session_id: self.session_id,
                 tool_uses: final_tool_uses,
                 description: self.task.description.clone(),
+                hint: None,
             },
         }
     }

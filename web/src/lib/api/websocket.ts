@@ -13,6 +13,8 @@ export interface WsDoneMessage {
 export interface WsErrorMessage {
   type: "error";
   error: string;
+  error_code?: string;
+  hint?: string;
 }
 
 export interface WsToolCallMessage {
@@ -56,6 +58,7 @@ export interface WsAgentCompletedMessage {
   tool_uses: number;
   tokens_used: number;
   error?: string;
+  hint?: string;
 }
 
 export interface WsDelegationCompletedMessage {
@@ -149,7 +152,7 @@ export interface ChatStreamCallbacks {
   onApprovalResolved?: (approvalId: string, decision: string) => void;
   onWarning?: (message: string) => void;
   onDone: () => void;
-  onError: (error: string) => void;
+  onError: (error: string, hint?: string) => void;
 }
 
 /** Minimal interface for an active chat connection (browser WS or Tauri WS). */
@@ -231,7 +234,7 @@ function dispatchMessage(
       callbacks.onDone();
       return true;
     case "error":
-      callbacks.onError(msg.error);
+      callbacks.onError(msg.error, msg.hint);
       return true;
     default:
       console.warn(
@@ -291,7 +294,7 @@ function createChatStreamBrowser(
         ws.close();
       }
     } catch {
-      callbacks.onError("Failed to parse WebSocket message");
+      callbacks.onError("Failed to parse WebSocket message", undefined);
       intentionalClose = true;
       ws.close();
     }
@@ -300,7 +303,7 @@ function createChatStreamBrowser(
   ws.onerror = (e) => {
     console.error(`[WS] Error:`, e);
     if (!intentionalClose) {
-      callbacks.onError("WebSocket connection error");
+      callbacks.onError("WebSocket connection error", undefined);
     }
   };
 
@@ -309,7 +312,10 @@ function createChatStreamBrowser(
       `[WS] Closed: code=${event.code} reason=${event.reason} clean=${event.wasClean}`,
     );
     if (!intentionalClose && !event.wasClean && event.code !== 1000) {
-      callbacks.onError(`Connection closed unexpectedly (code: ${event.code})`);
+      callbacks.onError(
+        `Connection closed unexpectedly (code: ${event.code})`,
+        undefined,
+      );
     }
   };
 
@@ -359,7 +365,7 @@ async function createChatStreamTauri(
           ws.disconnect();
         }
       } catch {
-        callbacks.onError("Failed to parse WebSocket message");
+        callbacks.onError("Failed to parse WebSocket message", undefined);
         intentionalClose = true;
         open = false;
         ws.disconnect();
@@ -367,7 +373,7 @@ async function createChatStreamTauri(
     } else if (msg.type === "Close") {
       open = false;
       if (!intentionalClose) {
-        callbacks.onError("Connection closed unexpectedly");
+        callbacks.onError("Connection closed unexpectedly", undefined);
       }
     }
   });

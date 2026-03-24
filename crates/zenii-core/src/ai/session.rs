@@ -1650,6 +1650,7 @@ mod tests {
                     session_id: session.id.clone(),
                     tool_uses: 3,
                     description: "Research topic A".into(),
+                    hint: None,
                 },
                 crate::ai::delegation::task::TaskResult {
                     task_id: "agent-2".into(),
@@ -1666,6 +1667,7 @@ mod tests {
                     session_id: session.id.clone(),
                     tool_uses: 5,
                     description: "Research topic B".into(),
+                    hint: None,
                 },
             ],
             aggregated_response: "combined".into(),
@@ -1733,6 +1735,7 @@ mod tests {
                     session_id: session.id.clone(),
                     tool_uses: 1,
                     description: "Successful task".into(),
+                    hint: None,
                 },
                 crate::ai::delegation::task::TaskResult {
                     task_id: "agent-fail".into(),
@@ -1744,6 +1747,7 @@ mod tests {
                     session_id: session.id.clone(),
                     tool_uses: 0,
                     description: "Failed task".into(),
+                    hint: None,
                 },
             ],
             aggregated_response: "partial".into(),

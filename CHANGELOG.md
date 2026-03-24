@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Centralized error enrichment system (`ErrorHint` + `enrich_error()`) with actionable hints for 15+ error patterns
+- Sub-classified agent error codes: `ZENII_AGENT_AUTH`, `ZENII_AGENT_RATE_LIMIT`, `ZENII_AGENT_MAX_TURNS`, `ZENII_AGENT_CONTEXT_LENGTH`, `ZENII_AGENT_MODEL_NOT_FOUND`, `ZENII_AGENT_TIMEOUT`, `ZENII_AGENT_CONNECTION`, `ZENII_AGENT_NOT_CONFIGURED`
+- `hint` field in HTTP error responses and WebSocket error messages (backward-compatible)
+- CLI now displays colored error hints below error messages
+- Frontend displays actionable hints below errors in chat view
+- Channel error replies: agent failures now send a user-friendly message instead of silently dropping
+
+### Changed
+- `agent_max_turns` default increased from 4 to 8, clamp ceiling raised from 16 to 32
+- Renamed P4_ prefixed error codes: `ZENII_P4_IDENTITY` → `ZENII_IDENTITY_ERROR`, `ZENII_P4_SKILL` → `ZENII_SKILL_ERROR`, etc.
+- Agent error codes are now sub-classified by failure type instead of all mapping to `ZENII_AGENT_ERROR`
+
 ## [0.1.1] - 2026-03-23
 
 ### Fixed

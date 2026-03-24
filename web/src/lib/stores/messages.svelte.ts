@@ -56,6 +56,7 @@ function createMessagesStore() {
   let streaming = $state(false);
   let streamContent = $state("");
   let error = $state("");
+  let errorHint = $state("");
   let activeToolCalls = $state<ActiveToolCall[]>([]);
   let activeStreamSessionId = $state<string | null>(null);
   let loadVersion = 0;
@@ -76,6 +77,9 @@ function createMessagesStore() {
     get error() {
       return error;
     },
+    get errorHint() {
+      return errorHint;
+    },
     get activeToolCalls() {
       return activeToolCalls;
     },
@@ -87,6 +91,7 @@ function createMessagesStore() {
       const version = ++loadVersion;
       loading = true;
       error = "";
+      errorHint = "";
       try {
         const result = await apiGet<Message[]>(
           `/sessions/${encodeURIComponent(sessionId)}/messages`,
@@ -118,12 +123,14 @@ function createMessagesStore() {
       streaming = true;
       streamContent = "";
       error = "";
+      errorHint = "";
       activeToolCalls = [];
       activeStreamSessionId = sessionId;
     },
 
-    setError(msg: string) {
+    setError(msg: string, hint?: string) {
       error = msg;
+      errorHint = hint ?? "";
     },
 
     appendToken(token: string) {
@@ -254,6 +261,7 @@ function createMessagesStore() {
       streaming = false;
       streamContent = "";
       error = "";
+      errorHint = "";
       activeToolCalls = [];
       activeStreamSessionId = null;
     },

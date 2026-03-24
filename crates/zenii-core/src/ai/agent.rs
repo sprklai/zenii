@@ -100,20 +100,12 @@ impl std::fmt::Debug for ZeniiAgent {
     }
 }
 
-/// Enrich rig-core errors with actionable hints for known failure modes.
+/// Convert rig-core prompt errors into ZeniiError::Agent.
+/// Hint enrichment is handled centrally by `crate::error::enrich_error()`.
 fn enrich_agent_error(
     context: &'static str,
 ) -> impl Fn(rig::completion::request::PromptError) -> ZeniiError {
-    move |e| {
-        let msg = e.to_string();
-        if msg.contains("MaxTurns") || msg.contains("max turn") {
-            ZeniiError::Agent(format!(
-                "{context} failed: {msg}. Increase `agent_max_turns` in config.toml for tool-heavy tasks"
-            ))
-        } else {
-            ZeniiError::Agent(format!("{context} failed: {msg}"))
-        }
-    }
+    move |e| ZeniiError::Agent(format!("{context} failed: {e}"))
 }
 
 impl ZeniiAgent {

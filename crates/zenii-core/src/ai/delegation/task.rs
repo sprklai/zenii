@@ -48,6 +48,9 @@ pub struct TaskResult {
     pub tool_uses: u32,
     #[serde(default)]
     pub description: String,
+    /// Actionable hint computed from `enrich_error()` when the task fails.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hint: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -130,6 +133,7 @@ mod tests {
             session_id: "s1".into(),
             tool_uses: 0,
             description: "test task".into(),
+            hint: None,
         };
         let json = serde_json::to_string(&result).unwrap();
         let back: TaskResult = serde_json::from_str(&json).unwrap();
@@ -155,6 +159,7 @@ mod tests {
             session_id: "s1".into(),
             tool_uses: 3,
             description: "test task".into(),
+            hint: None,
         };
         let r2 = TaskResult {
             task_id: "t2".into(),
@@ -171,6 +176,7 @@ mod tests {
             session_id: "s2".into(),
             tool_uses: 5,
             description: "test task".into(),
+            hint: None,
         };
         let total = r1.usage.clone() + r2.usage.clone();
         let result = DelegationResult {

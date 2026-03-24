@@ -105,6 +105,7 @@ export interface ApiError {
   error_code: string;
   message: string;
   details?: string;
+  hint?: string;
 }
 
 export class MesoApiError extends Error {
@@ -112,6 +113,7 @@ export class MesoApiError extends Error {
     public status: number,
     public errorCode: string,
     public details?: string,
+    public hint?: string,
   ) {
     super(`${errorCode}: ${details ?? "Unknown error"}`);
     this.name = "MesoApiError";
@@ -149,17 +151,19 @@ export async function api<T>(
   if (!response.ok) {
     let errorCode = "ZENII_UNKNOWN";
     let details = response.statusText;
+    let hint: string | undefined;
     try {
       const body: ApiError = await response.json();
       errorCode = body.error_code;
       details = body.message;
+      hint = body.hint;
     } catch {
       // response wasn't JSON
     }
     console.warn(
       `[API] ${options.method ?? "GET"} ${url} -> ${response.status} ${errorCode}: ${details}`,
     );
-    throw new MesoApiError(response.status, errorCode, details);
+    throw new MesoApiError(response.status, errorCode, details, hint);
   }
 
   // Handle responses with no body — read text first, only parse if non-empty.

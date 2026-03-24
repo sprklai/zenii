@@ -89,6 +89,8 @@ pub(crate) enum WsOutbound {
         tokens_used: u64,
         #[serde(skip_serializing_if = "Option::is_none")]
         error: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        hint: Option<String>,
     },
     #[serde(rename = "delegation_completed")]
     DelegationDone {
@@ -156,7 +158,13 @@ pub(crate) enum WsOutbound {
     #[serde(rename = "warning")]
     Warning { warning: String },
     #[serde(rename = "error")]
-    Error { error: String },
+    Error {
+        error: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        error_code: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        hint: Option<String>,
+    },
 }
 
 /// Agent info for WS delegation messages.
@@ -164,6 +172,35 @@ pub(crate) enum WsOutbound {
 pub(crate) struct DelegationAgentWs {
     pub id: String,
     pub description: String,
+}
+
+/// Create a plain WsOutbound::Error without enrichment (for non-ZeniiError strings).
+fn ws_error(error: String) -> WsOutbound {
+    WsOutbound::Error {
+        error,
+        error_code: None,
+        hint: None,
+    }
+}
+
+/// Create a WsOutbound::Error enriched from a ZeniiError with error_code and hint.
+fn ws_error_from_zenii(err: &crate::ZeniiError) -> WsOutbound {
+    let error_code = Some(crate::gateway::errors::error_code_for(err).to_string());
+    let hint = crate::error::enrich_error(err).map(|h| h.action);
+    let error = match err {
+        crate::ZeniiError::Sqlite(_)
+        | crate::ZeniiError::Database(_)
+        | crate::ZeniiError::Io(_) => {
+            tracing::error!("WS internal error: {err}");
+            "Internal server error".into()
+        }
+        _ => err.to_string(),
+    };
+    WsOutbound::Error {
+        error,
+        error_code,
+        hint,
+    }
 }
 
 #[cfg_attr(feature = "api-docs", utoipa::path(
@@ -423,13 +460,7 @@ async fn handle_ws(mut socket: WebSocket, state: Arc<AppState>) {
         let request: WsRequest = match serde_json::from_str(&text) {
             Ok(r) => r,
             Err(e) => {
-                send_outbound(
-                    &mut socket,
-                    &WsOutbound::Error {
-                        error: format!("invalid JSON: {e}"),
-                    },
-                )
-                .await;
+                send_outbound(&mut socket, &ws_error(format!("invalid JSON: {e}"))).await;
                 continue;
             }
         };
@@ -442,13 +473,7 @@ async fn handle_ws(mut socket: WebSocket, state: Arc<AppState>) {
         {
             Ok(ctx) => ctx,
             Err(e) => {
-                send_outbound(
-                    &mut socket,
-                    &WsOutbound::Error {
-                        error: format!("context build failed: {e}"),
-                    },
-                )
-                .await;
+                send_outbound(&mut socket, &ws_error_from_zenii(&e)).await;
                 continue;
             }
         };
@@ -482,13 +507,7 @@ async fn handle_ws(mut socket: WebSocket, state: Arc<AppState>) {
         let merged_preamble = match state.prompt_strategy.assemble(&assembly_request).await {
             Ok(p) => p,
             Err(e) => {
-                send_outbound(
-                    &mut socket,
-                    &WsOutbound::Error {
-                        error: format!("prompt assembly failed: {e}"),
-                    },
-                )
-                .await;
+                send_outbound(&mut socket, &ws_error_from_zenii(&e)).await;
                 continue;
             }
         };
@@ -526,13 +545,7 @@ async fn handle_ws(mut socket: WebSocket, state: Arc<AppState>) {
         {
             Ok(a) => a,
             Err(e) => {
-                send_outbound(
-                    &mut socket,
-                    &WsOutbound::Error {
-                        error: e.to_string(),
-                    },
-                )
-                .await;
+                send_outbound(&mut socket, &ws_error_from_zenii(&e)).await;
                 continue;
             }
         };
@@ -773,10 +786,10 @@ async fn handle_ws(mut socket: WebSocket, state: Arc<AppState>) {
                             send_outbound(&mut socket, &WsOutbound::Done).await;
                         }
                         Ok(Err(e)) => {
-                            send_outbound(&mut socket, &WsOutbound::Error { error: e.to_string() }).await;
+                            send_outbound(&mut socket, &ws_error_from_zenii(&e)).await;
                         }
                         Err(_) => {
-                            send_outbound(&mut socket, &WsOutbound::Error { error: "agent task cancelled".into() }).await;
+                            send_outbound(&mut socket, &ws_error("agent task cancelled".into())).await;
                         }
                     }
                     break;
@@ -868,12 +881,15 @@ async fn handle_delegation(
                             tool_uses,
                             tokens_used,
                             error: None,
+                            hint: None,
                         }).await;
                     }
                     // A.3: Forward error detail and real duration_ms from SubAgentFailed
                     Ok(crate::event_bus::AppEvent::SubAgentFailed { delegation_id, agent_id, error, tool_uses, duration_ms })
                         if my_delegation_id.as_deref() == Some(delegation_id.as_str()) =>
                     {
+                        let hint = crate::error::enrich_error(&crate::ZeniiError::Agent(error.clone()))
+                            .map(|h| h.action);
                         send_outbound(socket, &WsOutbound::AgentCompleted {
                             delegation_id,
                             agent_id,
@@ -882,6 +898,7 @@ async fn handle_delegation(
                             tool_uses,
                             tokens_used: 0,
                             error: Some(error.clone()),
+                            hint,
                         }).await;
                         debug!("Sub-agent failed: {error}");
                     }
@@ -970,14 +987,10 @@ async fn handle_delegation(
                         send_outbound(socket, &WsOutbound::Done).await;
                     }
                     Ok(Err(e)) => {
-                        send_outbound(socket, &WsOutbound::Error {
-                            error: e.to_string(),
-                        }).await;
+                        send_outbound(socket, &ws_error_from_zenii(&e)).await;
                     }
                     Err(_) => {
-                        send_outbound(socket, &WsOutbound::Error {
-                            error: "delegation task cancelled".into(),
-                        }).await;
+                        send_outbound(socket, &ws_error("delegation task cancelled".into())).await;
                     }
                 }
                 break;
@@ -1216,15 +1229,34 @@ mod tests {
         assert_eq!(json["duration_ms"], 0);
     }
 
-    // TV.15 — WsOutbound::Error serializes with error field
+    // TV.15 — WsOutbound::Error serializes with error field and optional error_code/hint
     #[test]
     fn ws_outbound_error_serializes() {
-        let msg = WsOutbound::Error {
-            error: "oops".into(),
-        };
+        // Plain error without enrichment — error_code and hint omitted from JSON
+        let msg = ws_error("oops".into());
         let json = serde_json::to_value(&msg).unwrap();
         assert_eq!(json["type"], "error");
         assert_eq!(json["error"], "oops");
+        assert!(
+            json.get("error_code").is_none(),
+            "error_code should be omitted when None"
+        );
+        assert!(
+            json.get("hint").is_none(),
+            "hint should be omitted when None"
+        );
+
+        // Enriched error with error_code and hint present
+        let msg = WsOutbound::Error {
+            error: "credential error: no API key found".into(),
+            error_code: Some("ZENII_CREDENTIAL_ERROR".into()),
+            hint: Some("Set your API key in Settings > Providers".into()),
+        };
+        let json = serde_json::to_value(&msg).unwrap();
+        assert_eq!(json["type"], "error");
+        assert_eq!(json["error"], "credential error: no API key found");
+        assert_eq!(json["error_code"], "ZENII_CREDENTIAL_ERROR");
+        assert_eq!(json["hint"], "Set your API key in Settings > Providers");
     }
 
     // AUDIT-C4 — WsOutbound::Warning serializes with warning field
@@ -1424,7 +1456,7 @@ mod tests {
         assert_eq!(json["auto"], false);
     }
 
-    // 4.2.3 — WS no API key returns credential error
+    // 4.2.3 — WS no API key returns credential error with error_code and hint
     #[tokio::test]
     async fn ws_no_agent_returns_error() {
         let (_dir, state) = test_state().await;
@@ -1449,6 +1481,12 @@ mod tests {
                 .as_str()
                 .unwrap()
                 .contains("no API key found")
+        );
+        // ws_error_from_zenii should include error_code and hint for credential errors
+        assert_eq!(parsed["error_code"], "ZENII_CREDENTIAL_ERROR");
+        assert!(
+            parsed["hint"].as_str().is_some(),
+            "credential error should include a hint"
         );
     }
 }
