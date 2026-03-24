@@ -13,6 +13,7 @@ IDENTITY_TYPES="$ROOT_DIR/crates/zenii-core/src/identity/types.rs"
 IDENTITY_MD="$ROOT_DIR/crates/zenii-core/src/identity/defaults/IDENTITY.md"
 CHANGELOG="$ROOT_DIR/CHANGELOG.md"
 OPENAPI_RS="$ROOT_DIR/crates/zenii-core/src/gateway/openapi.rs"
+WEBSITE_DATA="$ROOT_DIR/website-data.json"
 
 usage() {
     echo "Usage: $0 <patch|minor|major|set VERSION>"
@@ -71,6 +72,9 @@ update_files() {
 
     # 7. OpenAPI spec version
     sed -i "s/version = \"${old}\"/version = \"${new}\"/" "$OPENAPI_RS"
+
+    # 8. website-data.json
+    sed -i "s/\"version\": \"${old}\"/\"version\": \"${new}\"/" "$WEBSITE_DATA"
 }
 
 update_changelog_bump() {
@@ -117,6 +121,7 @@ verify() {
     check_file "$IDENTITY_MD"      "^version: \"${version}\"" "IDENTITY.md"
     check_file "$CHANGELOG"        "## \[${version}\]" "CHANGELOG.md"
     check_file "$OPENAPI_RS"       "version = \"${version}\"" "openapi.rs"
+    check_file "$WEBSITE_DATA"     "\"version\": \"${version}\"" "website-data.json"
 
     if [ "$errors" -gt 0 ]; then
         echo ""
@@ -125,7 +130,7 @@ verify() {
     fi
 
     echo ""
-    echo "All 8 files verified."
+    echo "All 9 files verified."
 }
 
 # --- Main ---
