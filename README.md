@@ -53,11 +53,6 @@
   <img src="https://img.shields.io/badge/ARM64-CLI-6C757D?style=flat-square&logo=arm&logoColor=white" alt="ARM64 CLI" />
 </p>
 
-<!-- Row 4: Quality & i18n -->
-<p align="center">
-  <img src="https://img.shields.io/badge/tests-1545%20Rust%20%2B%20TS-success?style=flat-square" alt="1545 Rust + TS Tests" />
-  <img src="https://img.shields.io/badge/i18n-EN-blue?style=flat-square" alt="English" />
-</p>
 
 <!-- Row 5: Community -->
 <p align="center">
@@ -79,19 +74,6 @@
 ---
 
 > *"ChatGPT is a tab you open. Zenii is a capability your machine gains."*
->
-> If Zenii looks useful, consider giving it a [star on GitHub](https://github.com/sprklai/zenii) — it helps others discover the project.
-
-<!-- DEMO GIF HERE — 30-second terminal recording showing:
-  1. curl health check
-  2. Create session
-  3. Send chat message with tool call
-  4. Response streams back
-  See go2market/Mar17_Launch/04_demo_scripts.md for exact script
-<p align="center">
-  <img src="docs/assets/demo.gif" alt="Zenii terminal demo" width="720" />
-</p>
--->
 
 > *"Every tool you use is smart in isolation. Zenii makes them smart together."*
 
@@ -136,7 +118,7 @@ Or use the desktop app, CLI, or TUI — they all talk to the same backend.
 | AI tools are cloud-only | 100% local, zero telemetry, encrypted credential storage |
 | "Works on my machine" for AI | Same binary on macOS, Linux, Windows — desktop, CLI, or daemon |
 | Plugin systems require learning a framework | JSON-RPC over stdio — write plugins in Python, Go, JS, or anything |
-| AI doesn't learn your patterns | Self-evolving skills with human-in-the-loop approval |
+| AI doesn't learn your patterns | Experimental self-evolving skills with human-in-the-loop approval |
 | AI can't run tasks while you sleep | Built-in cron scheduler for autonomous recurring tasks |
 
 ## One Address. Everything Connects.
@@ -211,24 +193,10 @@ curl -X POST localhost:18981/chat \
 
 ---
 
-## How It Compares
+## How It Fits
 
-| | **Zenii** | OpenClaw | NemoClaw | ZeroClaw | PicoClaw | Open Interpreter | Khoj | Gemini CLI |
-|---|---|---|---|---|---|---|---|---|
-| **Category** | **AI backend** | Chat agent | Enterprise security wrapper | Minimal daemon | Edge AI assistant | Code REPL | Document brain | Terminal AI |
-| **Stars** | New | 210k+ | New (NVIDIA-backed) | 20k+ | 24.8k | 62.6k | 32.8k | 97.8k |
-| **Language** | **Rust** | TypeScript | TypeScript + Python | Rust | Go | Python | Python/TS | TypeScript |
-| **Binary** | **<20 MB (w/ GUI)** | ~100 MB+ | Docker container (~500 MB+) | ~3.4 MB | <10 MB RAM | N/A (Python) | N/A (Docker) | N/A (npm) |
-| **Desktop GUI** | **Native (Tauri 2)** | -- | -- | -- | Web console | -- | Browser | -- |
-| **API Routes** | **114 REST+WS** | Chat endpoint | Inherits OpenClaw | Daemon endpoint | Webhook gateway | -- | -- | -- |
-| **Plugins** | **Any language** | JS only | Inherits OpenClaw (JS) | Rust only | Tool-based | -- | -- | -- |
-| **Memory** | **FTS5 + vectors** | File-based | Inherits OpenClaw (file) | Basic | Workspace logs | -- | Doc search | -- |
-| **Self-Evolution** | **Human-approved** | Autonomous | Inherits OpenClaw (sandboxed) | -- | Agent-generated | -- | -- | -- |
-| **Scheduling** | **Cron + one-shot** | Cron | Inherits OpenClaw | -- | Built-in | -- | Automations | -- |
-| **Offline** | **Ollama** | Ollama | NVIDIA Nemotron primary | Ollama | DuckDuckGo | LiteLLM | Optional | No |
-| **License** | **MIT** | Open source | Apache 2.0 | Open source | MIT | AGPL-3.0 | AGPL-3.0 | Apache 2.0 |
-
-**No other project has ALL of these simultaneously**: native desktop GUI, 114-route REST/WS API where any language, any tool, any channel connects to the same shared intelligence, plugins in any language, semantic vector memory, self-evolution with human approval, under 20 MB binary, cross-system coherence where memory stored from any interface is instantly available everywhere, and MIT licensed. NemoClaw brings the strongest kernel-level sandboxing (Landlock + seccomp + netns) but requires Linux + Docker (~500 MB+) — Zenii delivers built-in 6-layer security natively on macOS, Windows, and Linux in under 20 MB.
+Zenii is a local AI infrastructure layer — not a chatbot, not a framework, not an API wrapper.
+It gives your machine a shared AI backend that any tool can call via HTTP.
 
 ---
 
@@ -242,6 +210,9 @@ Most AI tools are static — they do exactly what they did on day one. OpenClaw 
 4. **Zenii learns** — approved changes become permanent skills
 
 Your AI gets smarter. You stay in control. No surprises.
+
+> **Note:** Self-evolution is experimental. Pattern detection quality depends on your LLM provider
+> and how you use Zenii. It works best with capable models (GPT-4, Claude) and consistent usage patterns.
 
 ---
 
@@ -810,6 +781,8 @@ Full route reference with request/response schemas: **[docs/api-reference.md](do
 ---
 
 ## Contributing
+
+If Zenii looks useful, consider giving it a [star on GitHub](https://github.com/sprklai/zenii) — it helps others discover the project.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines. Quick summary:
 
