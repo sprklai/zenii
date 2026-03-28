@@ -9,8 +9,8 @@ const LOCALE_KEY = "zenii_locale";
 
 export type Locale = (typeof locales)[number];
 
-/** Load native labels for all locales from their JSON message files at build time */
-const localeModules = import.meta.glob("/messages/*.json", {
+/** Load native labels from message JSON files via Vite glob import */
+const localeModules = import.meta.glob("../../../messages/*.json", {
   eager: true,
   import: "default",
 }) as Record<string, Record<string, string>>;
@@ -18,9 +18,11 @@ const localeModules = import.meta.glob("/messages/*.json", {
 function getNativeLabels(): Record<string, string> {
   const labels: Record<string, string> = {};
   for (const loc of locales) {
-    const key = `/messages/${loc}.json`;
-    const mod = localeModules[key];
-    labels[loc] = mod?._meta_label ?? loc;
+    // Find the module whose path ends with /{locale}.json
+    const entry = Object.entries(localeModules).find(([path]) =>
+      path.endsWith(`/${loc}.json`),
+    );
+    labels[loc] = entry?.[1]?._meta_label ?? loc;
   }
   return labels;
 }

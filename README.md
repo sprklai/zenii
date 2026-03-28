@@ -54,6 +54,7 @@
   <img src="https://img.shields.io/badge/macOS-000000?style=flat-square&logo=apple&logoColor=white" alt="macOS" />
   <img src="https://img.shields.io/badge/Linux-FCC624?style=flat-square&logo=linux&logoColor=black" alt="Linux" />
   <img src="https://img.shields.io/badge/ARM64-CLI-6C757D?style=flat-square&logo=arm&logoColor=white" alt="ARM64 CLI" />
+  <img src="https://img.shields.io/badge/i18n-8%20languages-2196F3?style=flat-square&logo=translate&logoColor=white" alt="i18n 8 languages" />
 </p>
 
 
