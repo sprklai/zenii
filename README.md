@@ -54,9 +54,21 @@
   <img src="https://img.shields.io/badge/macOS-000000?style=flat-square&logo=apple&logoColor=white" alt="macOS" />
   <img src="https://img.shields.io/badge/Linux-FCC624?style=flat-square&logo=linux&logoColor=black" alt="Linux" />
   <img src="https://img.shields.io/badge/ARM64-CLI-6C757D?style=flat-square&logo=arm&logoColor=white" alt="ARM64 CLI" />
-  <img src="https://img.shields.io/badge/i18n-8%20languages-2196F3?style=flat-square&logo=translate&logoColor=white" alt="i18n 8 languages" />
+  <!-- <img src="https://img.shields.io/badge/i18n-8%20languages-2196F3?style=flat-square&logo=translate&logoColor=white" alt="i18n 8 languages" /> -->
 </p>
 
+<!-- Row 4: Languages -->
+<p align="center">
+  <img src="https://img.shields.io/badge/🌐-languages-555?style=flat-square" alt="Languages" />
+  <img src="https://img.shields.io/badge/English-en-4B5563?style=flat-square" alt="English" />
+  <img src="https://img.shields.io/badge/中文-zh--CN-E53935?style=flat-square" alt="Chinese" />
+  <img src="https://img.shields.io/badge/Español-es-F9A825?style=flat-square" alt="Spanish" />
+  <img src="https://img.shields.io/badge/日本語-ja-EC407A?style=flat-square" alt="Japanese" />
+  <img src="https://img.shields.io/badge/%E0%A4%B9%E0%A4%BF%E0%A4%A8%E0%A5%8D%E0%A4%A6%E0%A5%80-hi-FF7043?style=flat-square" alt="Hindi" />
+  <img src="https://img.shields.io/badge/Português-pt--BR-43A047?style=flat-square" alt="Portuguese" />
+  <img src="https://img.shields.io/badge/한국어-ko-7E57C2?style=flat-square" alt="Korean" />
+  <img src="https://img.shields.io/badge/Français-fr-1E88E5?style=flat-square" alt="French" />
+</p>
 
 <!-- Row 5: Community -->
 <p align="center">

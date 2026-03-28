@@ -1,5 +1,6 @@
 import { getContext, setContext } from "svelte";
 import { watch } from "runed";
+import * as m from "$lib/paraglide/messages";
 
 export type ToolUIPartType = string;
 export type ToolUIPartState =
@@ -54,12 +55,12 @@ export class ToolClass {
   }
 
   get statusBadge() {
-    let labels = {
-      "input-streaming": "Pending",
-      "input-available": "Running",
-      "output-available": "Completed",
-      "output-error": "Error",
-    } as const;
+    const labels: Record<ToolUIPartState, string> = {
+      "input-streaming": m.tool_status_pending(),
+      "input-available": m.tool_status_running(),
+      "output-available": m.tool_status_completed(),
+      "output-error": m.tool_status_error(),
+    };
 
     return {
       label: labels[this.state],

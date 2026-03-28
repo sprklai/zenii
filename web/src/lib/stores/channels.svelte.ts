@@ -1,4 +1,5 @@
 import { apiGet, apiPost, apiDelete, apiPut } from "$lib/api/client";
+import * as m from "$lib/paraglide/messages";
 
 export interface ChannelDef {
   id: string;
@@ -22,69 +23,71 @@ export interface ChannelConfig {
   discord_allowed_channel_ids: number[];
 }
 
-const BUILTIN_CHANNELS: ChannelDef[] = [
-  {
-    id: "telegram",
-    name: "Telegram",
-    description: "Telegram Bot",
-    credentials: [
-      {
-        key: "token",
-        label: "Bot Token",
-        placeholder: "Bot token from @BotFather",
-      },
-      {
-        key: "allowed_chat_ids",
-        label: "Allowed Chat IDs",
-        placeholder: "Comma-separated chat IDs (empty = all)",
-      },
-    ],
-  },
-  {
-    id: "slack",
-    name: "Slack",
-    description: "Slack Bot (Socket Mode)",
-    credentials: [
-      {
-        key: "bot_token",
-        label: "Bot Token",
-        placeholder: "xoxb-... Bot User OAuth Token",
-      },
-      {
-        key: "app_token",
-        label: "App Token",
-        placeholder: "xapp-... App-Level Token for Socket Mode",
-      },
-      {
-        key: "allowed_channel_ids",
-        label: "Allowed Channel IDs",
-        placeholder: "Comma-separated channel IDs (empty = all)",
-      },
-    ],
-  },
-  {
-    id: "discord",
-    name: "Discord",
-    description: "Discord Bot",
-    credentials: [
-      {
-        key: "token",
-        label: "Bot Token",
-        placeholder: "Bot token from Developer Portal",
-      },
-      {
-        key: "allowed_guild_ids",
-        label: "Allowed Server IDs",
-        placeholder: "Comma-separated guild IDs (empty = all)",
-      },
-      {
-        key: "allowed_channel_ids",
-        label: "Allowed Channel IDs",
-        placeholder: "Comma-separated channel IDs (empty = all)",
-      },
-    ],
-  },
-];
+function getBuiltinChannels(): ChannelDef[] {
+  return [
+    {
+      id: "telegram",
+      name: m.channel_telegram_name(),
+      description: m.channel_telegram_description(),
+      credentials: [
+        {
+          key: "token",
+          label: m.channel_telegram_token_label(),
+          placeholder: m.channel_telegram_token_placeholder(),
+        },
+        {
+          key: "allowed_chat_ids",
+          label: m.channel_telegram_chat_ids_label(),
+          placeholder: m.channel_telegram_chat_ids_placeholder(),
+        },
+      ],
+    },
+    {
+      id: "slack",
+      name: m.channel_slack_name(),
+      description: m.channel_slack_description(),
+      credentials: [
+        {
+          key: "bot_token",
+          label: m.channel_slack_bot_token_label(),
+          placeholder: m.channel_slack_bot_token_placeholder(),
+        },
+        {
+          key: "app_token",
+          label: m.channel_slack_app_token_label(),
+          placeholder: m.channel_slack_app_token_placeholder(),
+        },
+        {
+          key: "allowed_channel_ids",
+          label: m.channel_slack_channel_ids_label(),
+          placeholder: m.channel_slack_channel_ids_placeholder(),
+        },
+      ],
+    },
+    {
+      id: "discord",
+      name: m.channel_discord_name(),
+      description: m.channel_discord_description(),
+      credentials: [
+        {
+          key: "token",
+          label: m.channel_discord_token_label(),
+          placeholder: m.channel_discord_token_placeholder(),
+        },
+        {
+          key: "allowed_guild_ids",
+          label: m.channel_discord_guild_ids_label(),
+          placeholder: m.channel_discord_guild_ids_placeholder(),
+        },
+        {
+          key: "allowed_channel_ids",
+          label: m.channel_discord_channel_ids_label(),
+          placeholder: m.channel_discord_channel_ids_placeholder(),
+        },
+      ],
+    },
+  ];
+}
 
 function credKey(channelId: string, field: string): string {
   return `channel:${channelId}:${field}`;
@@ -168,7 +171,7 @@ function createChannelsStore() {
         }
 
         // Build channel list with per-channel credential status
-        channels = BUILTIN_CHANNELS.map((def) => {
+        channels = getBuiltinChannels().map((def) => {
           const configuredKeys = new Set<string>();
           for (const cred of def.credentials) {
             const k = credKey(def.id, cred.key);

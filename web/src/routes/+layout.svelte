@@ -19,6 +19,7 @@
 	import WifiOff from '@lucide/svelte/icons/wifi-off';
 	import { inboxStore } from '$lib/stores/inbox.svelte';
 	import '$lib/stores/theme.svelte';
+	import { localeStore } from '$lib/stores/locale.svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { sessionsStore } from '$lib/stores/sessions.svelte';
@@ -59,13 +60,17 @@
 		notificationStore.disconnect();
 	});
 
-	const navItems = [
-		{ href: '/', icon: Home, label: m.nav_home() },
-		{ href: '/channels', icon: MessageSquare, label: m.nav_channels() },
-		{ href: '/memory', icon: Database, label: m.nav_memory() },
-		{ href: '/schedule', icon: Calendar, label: m.nav_schedule() },
-		{ href: '/workflows', icon: Workflow, label: m.nav_workflows() }
-	];
+	const navItems = $derived.by(() => {
+		// Read localeStore.locale to create a reactive dependency on locale changes
+		void localeStore.locale;
+		return [
+			{ href: '/', icon: Home, label: m.nav_home() },
+			{ href: '/channels', icon: MessageSquare, label: m.nav_channels() },
+			{ href: '/memory', icon: Database, label: m.nav_memory() },
+			{ href: '/schedule', icon: Calendar, label: m.nav_schedule() },
+			{ href: '/workflows', icon: Workflow, label: m.nav_workflows() }
+		];
+	});
 
 	function handleApiDocs() {
 		const baseUrl = getBaseUrl();
@@ -88,6 +93,7 @@
 			</Sidebar.Header>
 
 			<Sidebar.Content>
+				{#key localeStore.locale}
 				<Sidebar.Group>
 					<Sidebar.GroupContent>
 						<Sidebar.Menu>
@@ -114,9 +120,11 @@
 				<Separator />
 
 				<SessionList />
+				{/key}
 			</Sidebar.Content>
 
 			<Sidebar.Footer class="sticky bottom-0 z-10 bg-sidebar-accent/50 border-t border-sidebar-border">
+				{#key localeStore.locale}
 				<Sidebar.Menu>
 					<Sidebar.MenuItem>
 						<Sidebar.MenuButton onclick={() => openInBrowser('https://github.com/sprklai/zenii')}>
@@ -146,11 +154,13 @@
 						</Sidebar.MenuButton>
 					</Sidebar.MenuItem>
 				</Sidebar.Menu>
+				{/key}
 			</Sidebar.Footer>
 		</Sidebar.Root>
 
 		<main class="flex-1 overflow-hidden">
 			{#if notificationStore.disconnectedPermanently}
+				{#key localeStore.locale}
 				<div class="flex items-center gap-2 border-b border-destructive/30 bg-destructive/10 px-4 py-2 text-sm text-destructive">
 					<WifiOff class="h-4 w-4 shrink-0" />
 					<span>{m.nav_notifications_disconnected()}</span>
@@ -163,11 +173,14 @@
 						{m.nav_reconnect_button()}
 					</Button>
 				</div>
+				{/key}
 			{/if}
 			<div class="flex h-full items-start">
 				<Sidebar.Trigger class="m-2 shrink-0" />
 				<div class="flex-1 h-full overflow-auto p-2 sm:p-4 md:p-6">
-					{@render children()}
+					{#key localeStore.locale}
+						{@render children()}
+					{/key}
 				</div>
 			</div>
 		</main>

@@ -1,3 +1,4 @@
+import * as m from "$lib/paraglide/messages";
 import {
   apiGet,
   apiGetText,
@@ -131,7 +132,7 @@ function createWorkflowsStore() {
       const savedTimeout = timeouts.get(workflowId);
 
       if (!savedProgress) {
-        error = "No active run to cancel";
+        error = m.workflows_cancel_no_active_run();
         return;
       }
 

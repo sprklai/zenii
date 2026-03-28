@@ -2,6 +2,7 @@
 	import { CollapsibleTrigger } from "$lib/components/ui/collapsible/index.js";
 	import { Badge } from "$lib/components/ui/badge/index.js";
 	import { cn } from "$lib/utils";
+	import * as m from "$lib/paraglide/messages";
 	import {
 		CheckCircleIcon,
 		ChevronDownIcon,
@@ -28,12 +29,12 @@
 	let { type, state, class: className = "", ...restProps }: ToolHeaderProps = $props();
 
 	let getStatusBadge = $derived.by(() => {
-		let labels = {
-			"input-streaming": "Pending",
-			"input-available": "Running",
-			"output-available": "Completed",
-			"output-error": "Error",
-		} as const;
+		let labels: Record<ToolUIPartState, string> = {
+			"input-streaming": m.tool_status_pending(),
+			"input-available": m.tool_status_running(),
+			"output-available": m.tool_status_completed(),
+			"output-error": m.tool_status_error(),
+		};
 
 		let icons = {
 			"input-streaming": CircleIcon,

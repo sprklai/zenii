@@ -7,6 +7,9 @@ export default defineConfig({
   server: {
     port: 18971,
     strictPort: true,
+    fs: {
+      allow: [".", "./messages"],
+    },
   },
   plugins: [
     tailwindcss(),

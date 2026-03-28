@@ -2,13 +2,14 @@
 	import { getAttachmentsContext } from "./attachments-context.svelte.js";
 	import PromptInputActionMenuItem from "./PromptInputActionMenuItem.svelte";
 	import ImageIcon from "./ImageIcon.svelte";
+	import * as m from "$lib/paraglide/messages";
 
 	interface Props {
 		label?: string;
 		class?: string;
 	}
 
-	let { label = "Add photos or files", class: className, ...props }: Props = $props();
+	let { label = m.prompt_input_add_attachments(), class: className, ...props }: Props = $props();
 
 	let attachments = getAttachmentsContext();
 

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { cn } from "$lib/utils";
+	import * as m from "$lib/paraglide/messages";
 	import * as Code from "$lib/components/ai-elements/code/index.js";
 	import type { Snippet } from "svelte";
 	import type { SupportedLanguage } from "../code/shiki";
@@ -59,7 +60,7 @@
 {#if shouldRender}
 	<div {id} class={cn("space-y-2 p-4", className)} {...restProps}>
 		<h4 class="text-muted-foreground text-xs font-medium tracking-wide uppercase">
-			{errorText ? "Error" : "Result"}
+			{errorText ? m.tool_output_error_heading() : m.tool_output_result_heading()}
 		</h4>
 		<div
 			class={cn(
