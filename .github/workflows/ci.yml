@@ -117,7 +117,7 @@ jobs:
         working-directory: web
         run: |
           bun install
-          bunx @inlang/paraglide-js compile --project ./project.inlang
+          bunx @inlang/paraglide-js compile --project ./project.inlang --outdir ./src/lib/paraglide
           bun run check
 
   check-embedded:
