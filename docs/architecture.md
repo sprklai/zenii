@@ -245,7 +245,7 @@ zenii/
     │   │   │   ├── SessionList.svelte
     │   │   │   └── ThemeToggle.svelte
     │   │   ├── stores/      # 7 Svelte 5 rune stores ($state, includes channels)
-    │   │   ├── paraglide/   # i18n (paraglide-js, EN only, 24 keys)
+    │   │   ├── paraglide/   # i18n (paraglide-js, 8 locales, 577 keys)
     │   │   └── utils.ts     # shadcn utility helpers
     │   └── routes/          # 9 SPA routes
     │       ├── +page.svelte           # Home
@@ -1110,6 +1110,15 @@ The frontend detects the Tauri environment via `window.__TAURI__` and provides t
 - `openDataDir()` -- invoke `open_data_dir` IPC command
 
 All wrappers are no-ops when running in a browser (non-Tauri) context, so the same frontend works for both desktop and web.
+
+### Frontend i18n
+
+- paraglide-js v2 for compile-time, type-safe translations
+- 8 locales auto-detected from `project.inlang/settings.json` (EN, ZH, ES, JA, HI, PT, KO, FR)
+- Locale store (`locale.svelte.ts`) mirrors theme store pattern
+- `messages/{locale}.json` flat-key files with `_meta_label` for native names
+- 577 message keys across 40+ components
+- Language switcher in Settings > General
 
 ## Scheduler Notification Flow (Stage 8.6.1)
 

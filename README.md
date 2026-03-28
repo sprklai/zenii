@@ -228,6 +228,7 @@ Your AI gets smarter. You stay in control. No surprises.
 - **18 built-in tools** (15 base + 3 feature-gated) — websearch, sysinfo, shell, file ops, content search, memory, config, learn, skill proposal, agent self, patch, process + channel_send, scheduler, workflow
 - **Semantic memory** — SQLite FTS5 + vector embeddings, persists across sessions and restarts
 - **Native desktop app** — Tauri 2 + Svelte 5, under 20 MB, not Electron
+- **Multilingual UI** — 8 languages (EN, ZH, ES, JA, HI, PT, KO, FR) with browser auto-detection
 - **Compact prompts** — plugin-based prompt strategy with ~65% token reduction
 - **Unified diagnostic logging** — all binaries write daily-rotated logs to OS-appropriate directories with auto-cleanup
 - **Token usage tracking** — date-rotated JSONL logs for cost visibility
@@ -286,7 +287,7 @@ Your AI gets smarter. You stay in control. No surprises.
 | Plugins | JSON-RPC 2.0 external processes |
 | Channels | Telegram (teloxide), Slack, Discord (serenity) -- feature-gated |
 | Content | serde_yaml (YAML frontmatter parsing) |
-| i18n | paraglide-js (compile-time, tree-shakeable) |
+| i18n | paraglide-js -- 8 languages (EN, ZH, ES, JA, HI, PT, KO, FR) |
 | Mobile | Tauri 2 (iOS + Android) -- future release |
 | TUI | ratatui |
 

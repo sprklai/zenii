@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Multilingual UI: 8 languages (English, Chinese, Spanish, Japanese, Hindi, Portuguese, Korean, French)
+- Language switcher in Settings > General with auto-detection from browser language
+- 577 i18n message keys across 40+ components via paraglide-js
+- Locale auto-detection from paraglide runtime (no hardcoded locale list)
+
 ## [0.1.4] - 2026-03-24
 
 ### Fixed
