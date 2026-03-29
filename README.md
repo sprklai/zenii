@@ -7,7 +7,7 @@
 <h1 align="center">20 megabytes. AI everywhere.</h1>
 <h3 align="center"><em>Every tool on your machine shares one AI brain.</em></h3>
 
-<p align="center"><code>20 MB desktop · 114 API routes · 18 tools · 30+ models · 1,500+ tests · One shared brain</code></p>
+<p align="center"><code>20 MB desktop · 114 API routes · 18 tools · 6+ model providers · 1,500+ tests · One shared brain</code></p>
 
 <p align="center">
   Install <strong>one binary</strong>. Now your scripts have <strong>AI memory</strong>. Your cron jobs <strong>reason</strong>. Your Telegram bot <strong>thinks</strong>.<br>
