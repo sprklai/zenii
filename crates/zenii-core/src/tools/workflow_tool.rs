@@ -221,6 +221,7 @@ impl WorkflowTool {
             description,
             schedule: schedule.clone(),
             steps,
+            layout: None,
             created_at: now.clone(),
             updated_at: now,
         };

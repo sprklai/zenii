@@ -1,4 +1,13 @@
+use std::collections::HashMap;
+
 use serde::{Deserialize, Serialize};
+
+/// Canvas position for a workflow node in the visual builder.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NodePosition {
+    pub x: f32,
+    pub y: f32,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Workflow {
@@ -8,6 +17,10 @@ pub struct Workflow {
     #[serde(default)]
     pub schedule: Option<String>,
     pub steps: Vec<WorkflowStep>,
+    /// Visual builder layout positions (step_name → position). Optional,
+    /// never used for execution logic — only consumed by the frontend.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub layout: Option<HashMap<String, NodePosition>>,
     #[serde(default = "now_rfc3339")]
     pub created_at: String,
     #[serde(default = "now_rfc3339")]
@@ -160,6 +173,7 @@ mod tests {
                     timeout_secs: None,
                 },
             ],
+            layout: None,
             created_at: "2026-01-01T00:00:00Z".into(),
             updated_at: "2026-01-01T00:00:00Z".into(),
         };
@@ -359,6 +373,84 @@ mod tests {
         assert_eq!(back.status, WorkflowRunStatus::Completed);
         assert_eq!(back.step_results.len(), 1);
         assert!(back.completed_at.is_some());
+    }
+
+    // 5.11b — Layout roundtrip (JSON)
+    #[test]
+    fn layout_json_roundtrip() {
+        let mut layout: HashMap<String, NodePosition> = HashMap::new();
+        layout.insert("step_a".into(), NodePosition { x: 100.0, y: 200.0 });
+        layout.insert("step_b".into(), NodePosition { x: 400.0, y: 200.0 });
+
+        let json = serde_json::to_string(&layout).unwrap();
+        let back: HashMap<String, NodePosition> = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.len(), 2);
+        assert!((back["step_a"].x - 100.0).abs() < f32::EPSILON);
+        assert!((back["step_b"].y - 200.0).abs() < f32::EPSILON);
+    }
+
+    // 5.11c — Layout roundtrip (TOML)
+    #[test]
+    fn workflow_with_layout_toml_roundtrip() {
+        let toml_str = r#"
+            id = "layout-test"
+            name = "Layout Test"
+            description = "Tests layout preservation"
+
+            [[steps]]
+            name = "gather"
+            type = "tool"
+            tool = "system_info"
+            [steps.args]
+            action = "all"
+
+            [[steps]]
+            name = "summarize"
+            type = "llm"
+            prompt = "Summarize: {{steps.gather.output}}"
+            depends_on = ["gather"]
+
+            [layout]
+            gather = { x = 100.0, y = 200.0 }
+            summarize = { x = 400.0, y = 200.0 }
+        "#;
+
+        let wf: Workflow = toml::from_str(toml_str).unwrap();
+        assert!(wf.layout.is_some());
+        let layout = wf.layout.as_ref().unwrap();
+        assert_eq!(layout.len(), 2);
+        assert!((layout["gather"].x - 100.0).abs() < f32::EPSILON);
+        assert!((layout["summarize"].x - 400.0).abs() < f32::EPSILON);
+
+        // Re-serialize and verify layout survives
+        let reserialized = toml::to_string_pretty(&wf).unwrap();
+        let back: Workflow = toml::from_str(&reserialized).unwrap();
+        assert!(back.layout.is_some());
+        let back_layout = back.layout.unwrap();
+        assert_eq!(back_layout.len(), 2);
+        assert!((back_layout["gather"].x - 100.0).abs() < f32::EPSILON);
+    }
+
+    // 5.11d — Workflow without layout is backward-compatible
+    #[test]
+    fn workflow_without_layout_compat() {
+        let toml_str = r#"
+            id = "no-layout"
+            name = "No Layout"
+            description = "Older workflow without layout"
+
+            [[steps]]
+            name = "s1"
+            type = "delay"
+            seconds = 5
+        "#;
+
+        let wf: Workflow = toml::from_str(toml_str).unwrap();
+        assert!(wf.layout.is_none());
+
+        // Serializing back should not emit a layout section
+        let reserialized = toml::to_string_pretty(&wf).unwrap();
+        assert!(!reserialized.contains("[layout]"));
     }
 
     // 5.12

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { goto } from '$app/navigation';
 	import * as Card from '$lib/components/ui/card';
 	import { Button } from '$lib/components/ui/button';
 	import WorkflowIcon from '@lucide/svelte/icons/workflow';
@@ -16,7 +17,11 @@
 	import XCircle from '@lucide/svelte/icons/x-circle';
 	import ChevronDown from '@lucide/svelte/icons/chevron-down';
 	import ChevronUp from '@lucide/svelte/icons/chevron-up';
+	import LayoutGrid from '@lucide/svelte/icons/layout-grid';
+	import Download from '@lucide/svelte/icons/download';
+	import Upload from '@lucide/svelte/icons/upload';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
+	import { exportWorkflowToml, readWorkflowFile, validateWorkflowToml } from '$lib/components/workflow-builder/import-export';
 	import {
 		workflowsStore,
 		type Workflow,
@@ -24,6 +29,7 @@
 		type StepOutput
 	} from '$lib/stores/workflows.svelte';
 	import * as m from '$lib/paraglide/messages';
+	import { t } from '$lib/components/workflow-builder/i18n-utils';
 
 	let showForm = $state(false);
 	let showHistory = $state<string | null>(null);
@@ -101,6 +107,39 @@
 		await workflowsStore.remove(deleteTarget);
 	}
 
+	function handleOpenBuilder(workflow: Workflow) {
+		goto(`/workflows/${workflow.id}`);
+	}
+
+	async function handleExport(wf: Workflow) {
+		try {
+			const raw = await workflowsStore.getRawToml(wf.id);
+			exportWorkflowToml(raw, wf.name);
+		} catch {
+			// Could show a toast here
+		}
+	}
+
+	let importInput: HTMLInputElement | undefined = $state();
+
+	async function handleImportFile(e: Event) {
+		const input = e.target as HTMLInputElement;
+		const file = input.files?.[0];
+		if (!file) return;
+		try {
+			const content = await readWorkflowFile(file);
+			const validation = validateWorkflowToml(content);
+			if (!validation.valid) {
+				formError = validation.error ? t(validation.error) : t('wb_import_error_parse');
+				return;
+			}
+			await workflowsStore.create(content);
+		} catch (err) {
+			formError = err instanceof Error ? err.message : t('wb_import_error_parse');
+		}
+		input.value = '';
+	}
+
 	async function handleShowHistory(id: string) {
 		if (showHistory === id) {
 			showHistory = null;
@@ -138,13 +177,28 @@
 <div class="max-w-3xl mx-auto space-y-4">
 	<div class="flex items-center justify-between">
 		<h1 class="text-2xl font-bold">{m.workflows_page_title()}</h1>
-		<Button size="sm" onclick={() => { showForm = !showForm; if (showForm) resetForm(); }}>
-			{#if showForm}
-				<X class="h-4 w-4 mr-1" /> {m.workflows_cancel_button()}
-			{:else}
-				<Plus class="h-4 w-4 mr-1" /> {m.workflows_new_button()}
-			{/if}
-		</Button>
+		<div class="flex items-center gap-2">
+			<input
+				bind:this={importInput}
+				type="file"
+				accept=".toml"
+				class="hidden"
+				onchange={handleImportFile}
+			/>
+			<Button variant="outline" size="sm" onclick={() => importInput?.click()}>
+				<Upload class="h-4 w-4 mr-1" /> {t('wb_import_button')}
+			</Button>
+			<Button variant="outline" size="sm" onclick={() => goto('/workflows/new')}>
+				<LayoutGrid class="h-4 w-4 mr-1" /> {t('wb_open_builder')}
+			</Button>
+			<Button size="sm" onclick={() => { showForm = !showForm; if (showForm) resetForm(); }}>
+				{#if showForm}
+					<X class="h-4 w-4 mr-1" /> {m.workflows_cancel_button()}
+				{:else}
+					<Plus class="h-4 w-4 mr-1" /> {m.workflows_new_button()}
+				{/if}
+			</Button>
+		</div>
 	</div>
 
 	<!-- Create Workflow Form -->
@@ -210,6 +264,22 @@
 								</div>
 							</div>
 							<div class="flex items-center gap-1">
+								<Button
+									variant="ghost"
+									size="icon"
+									onclick={() => handleOpenBuilder(workflow)}
+									title={t('wb_open_builder')}
+								>
+									<LayoutGrid class="h-4 w-4" />
+								</Button>
+								<Button
+									variant="ghost"
+									size="icon"
+									onclick={() => handleExport(workflow)}
+									title={t('wb_export_button')}
+								>
+									<Download class="h-4 w-4" />
+								</Button>
 								<Button
 									variant="ghost"
 									size="icon"

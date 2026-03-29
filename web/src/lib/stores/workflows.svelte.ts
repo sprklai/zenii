@@ -12,8 +12,22 @@ export interface WorkflowStep {
   type: string;
   depends_on: string[];
   tool?: string;
+  args?: Record<string, unknown>;
   prompt?: string;
+  model?: string;
   seconds?: number;
+  expression?: string;
+  if_true?: string;
+  if_false?: string;
+  steps?: string[];
+  timeout_secs?: number;
+  retry?: number;
+  failure_policy?: string;
+}
+
+export interface NodePosition {
+  x: number;
+  y: number;
 }
 
 export interface Workflow {
@@ -22,6 +36,7 @@ export interface Workflow {
   description: string;
   schedule: string | null;
   steps: WorkflowStep[];
+  layout?: Record<string, NodePosition>;
   created_at: string;
   updated_at: string;
 }

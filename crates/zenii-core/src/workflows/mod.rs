@@ -4,8 +4,8 @@ pub mod runtime;
 pub mod templates;
 
 pub use definition::{
-    FailurePolicy, RetryConfig, StepOutput, StepType, Workflow, WorkflowRun, WorkflowRunStatus,
-    WorkflowStep,
+    FailurePolicy, NodePosition, RetryConfig, StepOutput, StepType, Workflow, WorkflowRun,
+    WorkflowRunStatus, WorkflowStep,
 };
 
 use std::path::PathBuf;
@@ -102,6 +102,7 @@ mod tests {
                 failure_policy: FailurePolicy::Stop,
                 timeout_secs: None,
             }],
+            layout: None,
             created_at: "2026-01-01T00:00:00Z".into(),
             updated_at: "2026-01-01T00:00:00Z".into(),
         }

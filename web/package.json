@@ -44,6 +44,7 @@
     "@tauri-apps/plugin-process": "^2.3.1",
     "@tauri-apps/plugin-updater": "^2.10.0",
     "@tauri-apps/plugin-websocket": "^2.4.2",
+    "@xyflow/svelte": "^1.5.2",
     "ai": "^6.0.116",
     "bits-ui": "^2.16.3",
     "clsx": "^2.1.1",
