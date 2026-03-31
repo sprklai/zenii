@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.7] - 2026-03-31
+
+### Added
+- Visual workflow builder with modular node registry
+
+### Fixed
+- Workflow builder polish — save, TOML serialization, audit fixes
+- Remove useSvelteFlow() call that crashed workflow builder
+- Resolve 6 workflow builder audit issues — data integrity and UI honesty
+- channel_send node missing required 'action' field in workflow args
+- False 'unsaved changes' after load + default channel_send action to 'send'
+
+### Changed
+- README hero redesign + mobile crate scaffold
+
 ## [0.1.6] - 2026-03-29
 
 ### Fixed
