@@ -15,6 +15,7 @@ function createWorkflowBuilderStore() {
 
   // UI state
   let isDirty = $state(false);
+  let suppressDirty = $state(false); // suppress dirty marking after load
   let viewMode = $state<"visual" | "code">("visual");
   let isRunning = $state(false); // whether this workflow is currently executing
 
@@ -58,14 +59,15 @@ function createWorkflowBuilderStore() {
         : undefined;
     },
 
-    // Setters that mark dirty
+    // Setters — SvelteFlow bind:nodes/bind:edges triggers these on every internal update.
+    // suppressDirty prevents false dirty state after loadWorkflow/reset.
     set nodes(v: Node[]) {
       nodes = v;
-      isDirty = true;
+      if (!suppressDirty) isDirty = true;
     },
     set edges(v: Edge[]) {
       edges = v;
-      isDirty = true;
+      if (!suppressDirty) isDirty = true;
     },
 
     selectNode(id: string | null) {
@@ -188,6 +190,7 @@ function createWorkflowBuilderStore() {
       graphNodes: Node[],
       graphEdges: Edge[],
     ) {
+      suppressDirty = true;
       workflowId = wf.id;
       workflowName = wf.name;
       workflowDescription = wf.description;
@@ -198,10 +201,13 @@ function createWorkflowBuilderStore() {
       isDirty = false;
       viewMode = "visual";
       isRunning = false;
+      // Release after SvelteFlow processes the initial bind:nodes/bind:edges update
+      requestAnimationFrame(() => { suppressDirty = false; });
     },
 
     // Reset for a new workflow
     reset() {
+      suppressDirty = true;
       workflowId = null;
       workflowName = "";
       workflowDescription = "";
@@ -212,6 +218,7 @@ function createWorkflowBuilderStore() {
       isDirty = false;
       viewMode = "visual";
       isRunning = false;
+      requestAnimationFrame(() => { suppressDirty = false; });
     },
 
     // Mark as saved (clears dirty flag)

@@ -92,9 +92,8 @@ impl Tool for ChannelSendTool {
     }
 
     async fn execute(&self, args: serde_json::Value) -> Result<ToolResult> {
-        let action = args["action"]
-            .as_str()
-            .ok_or_else(|| ZeniiError::Validation("missing 'action' field".into()))?;
+        // Default to "send" when action is omitted — covers workflow steps that only pass channel+message
+        let action = args["action"].as_str().unwrap_or("send");
 
         match action {
             "send" => {
