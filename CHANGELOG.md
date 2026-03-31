@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.8] - 2026-03-31
+
+### Changed
+- Bump sha2 from 0.10.9 to 0.11.0
+- Bump cron from 0.15.0 to 0.16.0
+- Bump typescript from 5.9.3 to 6.0.2
+- Bump @lucide/svelte from 0.577.0 to 1.7.0
+
 ## [0.1.7] - 2026-03-31
 
 ### Added
