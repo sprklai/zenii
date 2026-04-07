@@ -220,3 +220,16 @@ cargo build -p zenii-daemon --features scheduler     # + cron
 cargo build -p zenii-daemon --features web-dashboard # + web UI
 cargo build -p zenii-daemon --all-features           # Everything
 ```
+
+## Wiki
+
+A Karpathy-pattern LLM wiki lives in `wiki/`. The LLM maintains this as a persistent, structured
+knowledge base compiled from raw sources — knowledge is compiled at ingestion time, not re-derived
+at every query.
+
+- **Schema**: `wiki/SCHEMA.md` — **read this before any wiki operation**
+- **Sources**: drop raw documents into `wiki/sources/`
+- **Pages**: LLM writes and maintains all pages under `wiki/pages/`
+- **Operations**: ingest (add a source), query (ask a question), lint (health check)
+- **Usage guide**: `docs/wiki.md`
+- Works with Claude Code directly (this file) or via Zenii's agent through `/chat` — no new routes needed
