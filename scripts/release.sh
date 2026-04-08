@@ -63,13 +63,14 @@ fi
 CARGO_TOML="$ROOT_DIR/Cargo.toml"
 PACKAGE_JSON="$ROOT_DIR/web/package.json"
 TAURI_CONF="$ROOT_DIR/crates/zenii-desktop/tauri.conf.json"
+AGENT_MD="$ROOT_DIR/AGENT.md"
 
 echo "=== Zenii Release: v$VERSION ==="
 echo ""
 
 # --- Cargo.toml (workspace.package.version) ---
 CARGO_OLD=$(grep -oP '(?<=^version = ")[^"]+' "$CARGO_TOML" | head -1)
-echo "[1/3] Cargo.toml: $CARGO_OLD -> $VERSION"
+echo "[1/4] Cargo.toml: $CARGO_OLD -> $VERSION"
 
 if [[ "$DRY_RUN" == false ]]; then
     sed -i "0,/^version = \"$CARGO_OLD\"/s//version = \"$VERSION\"/" "$CARGO_TOML"
@@ -77,7 +78,7 @@ fi
 
 # --- web/package.json ---
 PKG_OLD=$(grep -oP '(?<="version": ")[^"]+' "$PACKAGE_JSON")
-echo "[2/3] web/package.json: $PKG_OLD -> $VERSION"
+echo "[2/4] web/package.json: $PKG_OLD -> $VERSION"
 
 if [[ "$DRY_RUN" == false ]]; then
     sed -i "s/\"version\": \"$PKG_OLD\"/\"version\": \"$VERSION\"/" "$PACKAGE_JSON"
@@ -85,10 +86,17 @@ fi
 
 # --- tauri.conf.json ---
 TAURI_OLD=$(grep -oP '(?<="version": ")[^"]+' "$TAURI_CONF" | head -1)
-echo "[3/3] tauri.conf.json: $TAURI_OLD -> $VERSION"
+echo "[3/4] tauri.conf.json: $TAURI_OLD -> $VERSION"
 
 if [[ "$DRY_RUN" == false ]]; then
     sed -i "s/\"version\": \"$TAURI_OLD\"/\"version\": \"$VERSION\"/" "$TAURI_CONF"
+fi
+
+# --- AGENT.md (health check example + A2A Agent Card) ---
+echo "[4/4] AGENT.md: $CARGO_OLD -> $VERSION"
+
+if [[ "$DRY_RUN" == false ]]; then
+    sed -i "s/\"version\":\"$CARGO_OLD\"/\"version\":\"$VERSION\"/g; s/\"version\": \"$CARGO_OLD\"/\"version\": \"$VERSION\"/g" "$AGENT_MD"
 fi
 
 echo ""
@@ -102,7 +110,7 @@ fi
 TAG="app-v$VERSION"
 if [[ "$DRY_RUN" == false ]]; then
     echo "Creating git tag: $TAG"
-    git -C "$ROOT_DIR" add "$CARGO_TOML" "$PACKAGE_JSON" "$TAURI_CONF"
+    git -C "$ROOT_DIR" add "$CARGO_TOML" "$PACKAGE_JSON" "$TAURI_CONF" "$AGENT_MD"
     git -C "$ROOT_DIR" commit -m "release: v$VERSION"
     git -C "$ROOT_DIR" tag "$TAG"
     echo "Tag $TAG created."
