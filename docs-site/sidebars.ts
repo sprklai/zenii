@@ -19,6 +19,7 @@ const sidebars: SidebarsConfig = {
       items: [
         "deployment",
         "scheduling",
+        "wiki",
         "development",
       ],
     },
