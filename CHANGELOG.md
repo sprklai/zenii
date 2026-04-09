@@ -7,15 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.1.9] - 2026-04-02
+## [0.1.9] - 2026-04-09
 
 ### Added
+- LLM wiki with Karpathy-pattern knowledge base — structured wiki under `wiki/` with smart title resolution
+- Wiki docs-site integration — wiki page added to documentation site
+- `AGENT.md` — integration guide for Claude Code, Cursor, Gemini CLI, and MCP clients
 - MCP server binary (`zenii-mcp-server`) — exposes all tools via Model Context Protocol over stdio transport
 - MCP tool visibility enforcement — `mcp_server_exposed_tools` (allowlist) and `mcp_server_hidden_tools` (denylist) in config
 - MCP tool prefix (`zenii_`) with configurable naming via `mcp_server_tool_prefix`
 - A2A Agent Card endpoint at `GET /.well-known/agent.json`
 - Security policy enforcement for MCP tool calls
-- `AGENT.md` — integration guide for Claude Code, Cursor, Gemini CLI, and MCP clients
+
+### Changed
+- Bump minijinja from 2.18.0 to 2.19.0
+- Bump tauri-plugin-updater from 2.10.0 to 2.10.1
+- Bump sqlite-vec from 0.1.8 to 0.1.9
+- Bump arc-swap from 1.9.0 to 1.9.1
+- Bump tokio from 1.50.0 to 1.51.0
+- Refreshed documentation, templates, and contributing guide
 
 ### Removed
 - MCP client module — removed non-functional client code and `mcp-client` feature flag

@@ -153,7 +153,7 @@ fn walk_pages_dir(dir: &Path, pages: &mut Vec<WikiPage>) -> Result<(), ZeniiErro
         let path = entry.path();
         if path.is_dir() {
             walk_pages_dir(&path, pages)?;
-        } else if path.extension().map_or(false, |e| e == "md") {
+        } else if path.extension().is_some_and(|e| e == "md") {
             let slug = path
                 .file_stem()
                 .unwrap_or_default()
@@ -176,7 +176,7 @@ fn find_page_in_dir(dir: &Path, slug: &str) -> Result<Option<WikiPage>, ZeniiErr
             if let Some(found) = find_page_in_dir(&path, slug)? {
                 return Ok(Some(found));
             }
-        } else if path.extension().map_or(false, |e| e == "md") {
+        } else if path.extension().is_some_and(|e| e == "md") {
             let file_slug = path.file_stem().unwrap_or_default().to_string_lossy();
             if file_slug == slug {
                 return Ok(Some(parse_page(slug.to_string(), &path, None)?));
@@ -189,8 +189,7 @@ fn find_page_in_dir(dir: &Path, slug: &str) -> Result<Option<WikiPage>, ZeniiErr
 fn parse_page(slug: String, path: &Path, filename_hint: Option<&str>) -> Result<WikiPage, ZeniiError> {
     let content = std::fs::read_to_string(path)?;
 
-    let (frontmatter_str, body) = if content.starts_with("---") {
-        let rest = &content[3..];
+    let (frontmatter_str, body) = if let Some(rest) = content.strip_prefix("---") {
         if let Some(end_idx) = rest.find("\n---") {
             (&rest[..end_idx], &rest[end_idx + 4..])
         } else {
