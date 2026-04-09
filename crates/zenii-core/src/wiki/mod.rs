@@ -10,12 +10,12 @@ use crate::error::ZeniiError;
 pub struct WikiPage {
     pub slug: String,
     pub title: String,
-    pub page_type: String,    // concept|entity|topic|comparison|query
+    pub page_type: String, // concept|entity|topic|comparison|query
     pub tags: Vec<String>,
     pub sources: Vec<String>,
-    pub updated: String,      // YYYY-MM-DD
-    pub tldr: String,         // content after ## TLDR heading
-    pub body: String,         // full raw markdown
+    pub updated: String,        // YYYY-MM-DD
+    pub tldr: String,           // content after ## TLDR heading
+    pub body: String,           // full raw markdown
     pub wikilinks: Vec<String>, // extracted [[slug]] targets
 }
 
@@ -77,9 +77,7 @@ impl WikiManager {
         let q = query.to_lowercase();
         Ok(all
             .into_iter()
-            .filter(|p| {
-                p.title.to_lowercase().contains(&q) || p.body.to_lowercase().contains(&q)
-            })
+            .filter(|p| p.title.to_lowercase().contains(&q) || p.body.to_lowercase().contains(&q))
             .collect())
     }
 
@@ -186,7 +184,11 @@ fn find_page_in_dir(dir: &Path, slug: &str) -> Result<Option<WikiPage>, ZeniiErr
     Ok(None)
 }
 
-fn parse_page(slug: String, path: &Path, filename_hint: Option<&str>) -> Result<WikiPage, ZeniiError> {
+fn parse_page(
+    slug: String,
+    path: &Path,
+    filename_hint: Option<&str>,
+) -> Result<WikiPage, ZeniiError> {
     let content = std::fs::read_to_string(path)?;
 
     let (frontmatter_str, body) = if let Some(rest) = content.strip_prefix("---") {
@@ -222,7 +224,11 @@ fn parse_page(slug: String, path: &Path, filename_hint: Option<&str>) -> Result<
             .find(|l| l.starts_with("# "))
             .map(|l| l[2..].trim().to_string())
             // 2. Original filename (preserves casing: "GitHub Stars.md" → "GitHub Stars")
-            .or_else(|| filename_hint.filter(|s| !s.is_empty()).map(|s| s.to_string()))
+            .or_else(|| {
+                filename_hint
+                    .filter(|s| !s.is_empty())
+                    .map(|s| s.to_string())
+            })
             // 3. Humanize slug: "my-doc" → "My Doc"
             .unwrap_or_else(|| {
                 slug.replace('-', " ")
@@ -572,7 +578,12 @@ No outbound links here.
     #[test]
     fn parse_page_title_falls_back_to_humanized_slug() {
         let dir = TempDir::new().unwrap();
-        write_page(dir.path(), "topics", "my-doc-slug", "No frontmatter, no heading.\n");
+        write_page(
+            dir.path(),
+            "topics",
+            "my-doc-slug",
+            "No frontmatter, no heading.\n",
+        );
         let mgr = WikiManager::new(dir.path().to_path_buf()).unwrap();
         let page = mgr.get_page("my-doc-slug").unwrap().unwrap();
         assert_eq!(page.title, "My Doc Slug");

@@ -27,7 +27,10 @@ pub async fn list(client: &ZeniiClient) -> Result<(), String> {
     } else {
         for page in &pages {
             let slug = page.get("slug").and_then(|v| v.as_str()).unwrap_or("?");
-            let title = page.get("title").and_then(|v| v.as_str()).unwrap_or("(no title)");
+            let title = page
+                .get("title")
+                .and_then(|v| v.as_str())
+                .unwrap_or("(no title)");
             let page_type = page.get("page_type").and_then(|v| v.as_str()).unwrap_or("");
             println!("[{page_type}] {slug} — {title}");
         }
@@ -44,7 +47,10 @@ pub async fn search(client: &ZeniiClient, query: &str) -> Result<(), String> {
     } else {
         for page in &pages {
             let slug = page.get("slug").and_then(|v| v.as_str()).unwrap_or("?");
-            let title = page.get("title").and_then(|v| v.as_str()).unwrap_or("(no title)");
+            let title = page
+                .get("title")
+                .and_then(|v| v.as_str())
+                .unwrap_or("(no title)");
             println!("{slug} — {title}");
         }
     }
@@ -53,7 +59,10 @@ pub async fn search(client: &ZeniiClient, query: &str) -> Result<(), String> {
 
 pub async fn show(client: &ZeniiClient, slug: &str) -> Result<(), String> {
     let page: serde_json::Value = client.get(&format!("/wiki/{slug}")).await?;
-    let title = page.get("title").and_then(|v| v.as_str()).unwrap_or("(no title)");
+    let title = page
+        .get("title")
+        .and_then(|v| v.as_str())
+        .unwrap_or("(no title)");
     let page_type = page.get("page_type").and_then(|v| v.as_str()).unwrap_or("");
     let updated = page.get("updated").and_then(|v| v.as_str()).unwrap_or("");
     let tldr = page.get("tldr").and_then(|v| v.as_str()).unwrap_or("");

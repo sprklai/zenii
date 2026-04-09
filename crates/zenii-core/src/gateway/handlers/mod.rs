@@ -24,9 +24,9 @@ pub mod skills;
 pub mod system;
 pub mod tools;
 pub mod user;
+pub mod wiki;
 #[cfg(feature = "workflows")]
 pub mod workflows;
-pub mod wiki;
 pub mod ws;
 
 #[cfg(test)]

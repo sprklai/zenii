@@ -89,9 +89,7 @@ pub async fn ingest_wiki_source(
 /// POST /wiki/sync — sync compiled wiki pages into the memory store.
 pub async fn sync_wiki_to_memory(State(state): State<Arc<AppState>>) -> impl IntoResponse {
     match state.wiki.sync_to_memory(state.memory.as_ref()).await {
-        Ok(count) => {
-            (StatusCode::OK, Json(serde_json::json!({"synced": count}))).into_response()
-        }
+        Ok(count) => (StatusCode::OK, Json(serde_json::json!({"synced": count}))).into_response(),
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(serde_json::json!({"error": e.to_string()})),
@@ -144,10 +142,7 @@ mod tests {
     async fn wiki_list_empty_returns_200_empty_array() {
         let (_dir, state) = test_state().await;
 
-        let req = Request::builder()
-            .uri("/wiki")
-            .body(Body::empty())
-            .unwrap();
+        let req = Request::builder().uri("/wiki").body(Body::empty()).unwrap();
 
         let resp = app(state).oneshot(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
@@ -162,10 +157,7 @@ mod tests {
     async fn wiki_list_returns_pages() {
         let (_dir, state) = test_state().await;
 
-        let req = Request::builder()
-            .uri("/wiki")
-            .body(Body::empty())
-            .unwrap();
+        let req = Request::builder().uri("/wiki").body(Body::empty()).unwrap();
 
         let resp = app(state).oneshot(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
@@ -192,7 +184,11 @@ mod tests {
             .body(Body::from(serde_json::to_string(&ingest_body).unwrap()))
             .unwrap();
         let seed_resp = app(state.clone()).oneshot(seed_req).await.unwrap();
-        assert_eq!(seed_resp.status(), StatusCode::OK, "ingest seed must succeed");
+        assert_eq!(
+            seed_resp.status(),
+            StatusCode::OK,
+            "ingest seed must succeed"
+        );
 
         let req = Request::builder()
             .uri("/wiki/test-page")
