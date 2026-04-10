@@ -3,16 +3,16 @@
 	import { toast } from 'svelte-sonner';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
-	import { Textarea } from '$lib/components/ui/textarea';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Skeleton } from '$lib/components/ui/skeleton';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import { Streamdown } from 'svelte-streamdown';
 	import Code from 'svelte-streamdown/code';
 	import WikiGraph from '$lib/components/wiki/WikiGraph.svelte';
-	import { wikiStore, type WikiPage } from '$lib/stores/wiki.svelte';
+	import { wikiStore, type WikiPage, type LintIssue, type QueryResult } from '$lib/stores/wiki.svelte';
 	import { themeStore } from '$lib/stores/theme.svelte';
 	import { shikiThemes } from '$lib/components/ai-elements/code/shiki';
+	import { isTauri, openPath } from '$lib/tauri';
 	import * as m from '$lib/paraglide/messages';
 	import Search from '@lucide/svelte/icons/search';
 	import BookOpen from '@lucide/svelte/icons/book-open';
@@ -20,12 +20,21 @@
 	import RefreshCw from '@lucide/svelte/icons/refresh-cw';
 	import Upload from '@lucide/svelte/icons/upload';
 	import FileUp from '@lucide/svelte/icons/file-up';
+	import FolderOpen from '@lucide/svelte/icons/folder-open';
+	import Trash2 from '@lucide/svelte/icons/trash-2';
 	import X from '@lucide/svelte/icons/x';
 	import Tag from '@lucide/svelte/icons/tag';
 	import Link from '@lucide/svelte/icons/link';
 	import Loader2 from '@lucide/svelte/icons/loader-2';
+	import MessageCircleQuestion from '@lucide/svelte/icons/message-circle-question';
+	import ShieldCheck from '@lucide/svelte/icons/shield-check';
+	import CheckCircle2 from '@lucide/svelte/icons/check-circle-2';
+	import AlertTriangle from '@lucide/svelte/icons/alert-triangle';
+	import ChevronDown from '@lucide/svelte/icons/chevron-down';
 
 	const CATEGORIES = ['all', 'concepts', 'entities', 'topics', 'comparisons', 'queries'] as const;
+	// Add new accepted types here — drives both the file input and the drop zone hint
+	const INGEST_ACCEPT = '.md,.txt,.html,.org,.rst';
 	type Category = (typeof CATEGORIES)[number];
 
 	let query = $state('');
@@ -33,10 +42,14 @@
 	let activeCategory = $state<Category>('all');
 	let selectedPage = $state<WikiPage | null>(null);
 	let pageLoading = $state(false);
+	// Replace [[slug]] wikilink syntax with markdown links so the prose renderer shows them.
+	const processedBody = $derived(
+		selectedPage?.body.replace(/\[\[([^\]]+)\]\]/g, (_, slug) => `[${slug}](#wiki-${slug})`) ?? ''
+	);
 	let showGraph = $state(false);
 	let ingestOpen = $state(false);
-	let ingestFilename = $state('');
-	let ingestContent = $state('');
+	let ingestFiles = $state<File[]>([]);
+	let ingestProgress = $state<{ current: number; total: number } | null>(null);
 	let ingesting = $state(false);
 	let fileInput: HTMLInputElement | undefined = $state();
 
@@ -89,16 +102,20 @@
 		}
 	}
 
-	async function loadFile(file: File) {
-		ingestFilename = file.name;
-		ingestContent = await file.text();
+	function addFiles(files: FileList | File[]) {
+		const existing = new Set(ingestFiles.map((f) => f.name));
+		const incoming = Array.from(files).filter((f) => !existing.has(f.name));
+		ingestFiles = [...ingestFiles, ...incoming];
 	}
 
-	async function handleFileSelect(e: Event) {
+	function removeIngestFile(index: number) {
+		ingestFiles = ingestFiles.filter((_, i) => i !== index);
+	}
+
+	function handleFileSelect(e: Event) {
 		const input = e.currentTarget as HTMLInputElement;
-		const file = input.files?.[0];
-		if (!file) return;
-		await loadFile(file);
+		if (input.files?.length) addFiles(input.files);
+		input.value = '';
 	}
 
 	function handleDropZoneDragOver(e: DragEvent) {
@@ -106,14 +123,12 @@
 		if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
 	}
 
-	async function handleDropZoneDrop(e: DragEvent) {
+	function handleDropZoneDrop(e: DragEvent) {
 		e.preventDefault();
-		const file = e.dataTransfer?.files?.[0];
-		if (!file) return;
-		await loadFile(file);
+		if (e.dataTransfer?.files.length) addFiles(e.dataTransfer.files);
 	}
 
-	// Whole-page drag-and-drop: open ingest dialog and pre-fill file
+	// Whole-page drag-and-drop: open ingest dialog and queue files
 	let pageDragOver = $state(false);
 
 	function handlePageDragOver(e: DragEvent) {
@@ -128,38 +143,44 @@
 		pageDragOver = false;
 	}
 
-	async function handlePageDrop(e: DragEvent) {
+	function handlePageDrop(e: DragEvent) {
 		e.preventDefault();
 		pageDragOver = false;
-		const file = e.dataTransfer?.files?.[0];
-		if (!file) return;
-		await loadFile(file);
+		if (e.dataTransfer?.files.length) addFiles(e.dataTransfer.files);
 		ingestOpen = true;
 	}
 
+	function handleIngestDialogClose() {
+		if (!ingesting) {
+			ingestFiles = [];
+			ingestProgress = null;
+		}
+	}
+
 	async function handleIngest() {
-		if (!ingestFilename.trim()) {
-			toast.error('Filename is required');
-			return;
-		}
-		if (!ingestContent.trim()) {
-			toast.error('Content is required');
-			return;
-		}
+		if (ingestFiles.length === 0) return;
 		ingesting = true;
-		try {
-			const res = await wikiStore.ingest(ingestFilename.trim(), ingestContent.trim());
-			toast.success(m.wiki_ingest_success({ slug: res.slug }));
+		let succeeded = 0;
+		for (let i = 0; i < ingestFiles.length; i++) {
+			ingestProgress = { current: i + 1, total: ingestFiles.length };
+			const file = ingestFiles[i];
+			try {
+				const content = await file.text();
+				const res = await wikiStore.ingest(file.name, content);
+				toast.success(m.wiki_ingest_success({ slug: res.slug }));
+				succeeded++;
+			} catch (e) {
+				const msg = e instanceof Error ? e.message : m.wiki_ingest_error();
+				toast.error(`${file.name}: ${msg}`);
+				console.error('[wiki] ingest failed:', file.name, e);
+			}
+		}
+		ingesting = false;
+		ingestProgress = null;
+		if (succeeded > 0) {
 			ingestOpen = false;
-			ingestFilename = '';
-			ingestContent = '';
+			ingestFiles = [];
 			await wikiStore.load();
-		} catch (e) {
-			const msg = e instanceof Error ? e.message : m.wiki_ingest_error();
-			toast.error(msg);
-			console.error('[wiki] ingest failed:', e);
-		} finally {
-			ingesting = false;
 		}
 	}
 
@@ -170,6 +191,119 @@
 
 	function handleWikilinkClick(slug: string) {
 		handleSelectPage(slug);
+	}
+
+	// ── Query ────────────────────────────────────────────────────────────────────
+
+	let queryOpen = $state(false);
+	let queryQuestion = $state('');
+	let querySave = $state(false);
+	let queryResult = $state<QueryResult | null>(null);
+	let queryError = $state<string | null>(null);
+
+	async function handleQuery() {
+		if (!queryQuestion.trim()) return;
+		queryResult = null;
+		queryError = null;
+		try {
+			queryResult = await wikiStore.query(queryQuestion.trim(), querySave);
+			if (querySave && queryResult.saved_page) {
+				await wikiStore.load();
+			}
+		} catch (e) {
+			queryError = e instanceof Error ? e.message : m.wiki_query_error();
+			toast.error(queryError);
+		}
+	}
+
+	// ── Open Folder ─────────────────────────────────────────────────────────────
+
+	async function handleOpenFolder() {
+		let path: string;
+		try {
+			path = await wikiStore.fetchWikiDir();
+		} catch (e) {
+			console.error('[wiki] fetchWikiDir failed:', e);
+			toast.error('Could not fetch wiki folder path from daemon');
+			return;
+		}
+		try {
+			await openPath(path);
+		} catch (e) {
+			console.error('[wiki] openPath failed:', e, 'path:', path);
+			// Fall back: show path in toast so user can navigate manually
+			toast.info(path);
+		}
+	}
+
+	// ── Sources panel ────────────────────────────────────────────────────────────
+
+	let showSourcesPanel = $state(false);
+	let confirmDeleteFilename = $state<string | null>(null);
+	let confirmDeleteOpen = $state(false);
+	let regenerateConfirmOpen = $state(false);
+
+	async function handleToggleSources() {
+		showSourcesPanel = !showSourcesPanel;
+		if (showSourcesPanel && wikiStore.sources.length === 0) {
+			await wikiStore.fetchSources();
+		}
+	}
+
+	function handleDeleteSourceClick(filename: string) {
+		confirmDeleteFilename = filename;
+		confirmDeleteOpen = true;
+	}
+
+	async function handleDeleteSourceConfirm() {
+		if (!confirmDeleteFilename) return;
+		const filename = confirmDeleteFilename;
+		confirmDeleteOpen = false;
+		confirmDeleteFilename = null;
+		try {
+			const result = await wikiStore.deleteSource(filename);
+			toast.success(m.wiki_sources_delete_success({ filename: result.filename }));
+		} catch (e) {
+			toast.error(m.wiki_sources_delete_error());
+			console.error('[wiki] delete source failed:', e);
+		}
+	}
+
+	async function handleRegenerate() {
+		regenerateConfirmOpen = false;
+		try {
+			const result = await wikiStore.regenerate();
+			toast.success(m.wiki_regenerate_success({
+				pages: result.pages_generated.toString(),
+				sources: result.sources_processed.toString()
+			}));
+		} catch (e) {
+			toast.error(m.wiki_regenerate_error());
+			console.error('[wiki] regenerate failed:', e);
+		}
+	}
+
+	// ── Lint ────────────────────────────────────────────────────────────────────
+
+	let showLintPanel = $state(false);
+
+	async function handleLint() {
+		showLintPanel = true;
+		try {
+			await wikiStore.lint();
+		} catch {
+			toast.error(m.wiki_lint_error());
+		}
+	}
+
+	function lintKindIcon(kind: string): string {
+		switch (kind) {
+			case 'broken_wikilink': return '🔗';
+			case 'orphan_page': return '🏝';
+			case 'missing_index_entry': return '📋';
+			case 'missing_updated': return '📅';
+			default: return '⚠';
+		}
 	}
 
 	function typeColor(type: string): string {
@@ -217,6 +351,30 @@
 				variant="outline"
 				size="sm"
 				class="gap-1.5"
+				onclick={() => { queryOpen = true; queryResult = null; queryError = null; }}
+			>
+				<MessageCircleQuestion class="h-3.5 w-3.5" />
+				{m.wiki_query_button()}
+			</Button>
+			<Button
+				variant={showLintPanel ? 'default' : 'outline'}
+				size="sm"
+				class="gap-1.5"
+				onclick={handleLint}
+				disabled={wikiStore.linting}
+			>
+				{#if wikiStore.linting}
+					<Loader2 class="h-3.5 w-3.5 animate-spin" />
+					{m.wiki_lint_running()}
+				{:else}
+					<ShieldCheck class="h-3.5 w-3.5" />
+					{m.wiki_lint_button()}
+				{/if}
+			</Button>
+			<Button
+				variant="outline"
+				size="sm"
+				class="gap-1.5"
 				onclick={() => (ingestOpen = true)}
 			>
 				<FileUp class="h-3.5 w-3.5" />
@@ -237,13 +395,161 @@
 					{m.wiki_sync_button()}
 				{/if}
 			</Button>
+			<Button
+				variant="outline"
+				size="sm"
+				class="gap-1.5"
+				onclick={handleOpenFolder}
+			>
+				<FolderOpen class="h-3.5 w-3.5" />
+				{m.wiki_open_folder()}
+			</Button>
+			<Button
+				variant={showSourcesPanel ? 'default' : 'outline'}
+				size="sm"
+				class="gap-1.5"
+				onclick={handleToggleSources}
+			>
+				<ChevronDown class="h-3.5 w-3.5 transition-transform {showSourcesPanel ? 'rotate-180' : ''}" />
+				{m.wiki_sources_button()}
+				{#if wikiStore.sources.length > 0}
+					<span class="ml-0.5 rounded-full bg-primary/20 px-1.5 py-0 text-[10px] font-medium text-primary">
+						{wikiStore.sources.length}
+					</span>
+				{/if}
+			</Button>
 		</div>
 	</div>
+
+	<!-- Lint panel -->
+	{#if showLintPanel}
+		<div class="shrink-0 border-b bg-muted/30">
+			<div class="flex items-center justify-between px-4 py-2">
+				<div class="flex items-center gap-2">
+					<ShieldCheck class="h-4 w-4 text-muted-foreground" />
+					<span class="text-sm font-medium">
+						{#if wikiStore.linting}
+							{m.wiki_lint_running()}
+						{:else if wikiStore.lintIssues !== null && wikiStore.lintIssues.length === 0}
+							<span class="flex items-center gap-1 text-green-600 dark:text-green-400">
+								<CheckCircle2 class="h-4 w-4" />
+								{m.wiki_lint_no_issues()}
+							</span>
+						{:else if wikiStore.lintIssues !== null}
+							{m.wiki_lint_issue_count({ count: wikiStore.lintIssues.length.toString(), suffix: wikiStore.lintIssues.length === 1 ? '' : 's' })}
+						{:else}
+							{m.wiki_lint_button()}
+						{/if}
+					</span>
+				</div>
+				<button
+					class="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+					onclick={() => { showLintPanel = false; }}
+					aria-label="Close lint panel"
+				>
+					<X class="h-3.5 w-3.5" />
+				</button>
+			</div>
+			{#if wikiStore.lintIssues !== null && wikiStore.lintIssues.length > 0}
+				<div class="max-h-48 overflow-y-auto px-4 pb-3">
+					<div class="space-y-1.5">
+						{#each wikiStore.lintIssues as issue}
+							<div class="rounded-md border bg-background p-2.5 text-xs">
+								<div class="flex items-center gap-1.5">
+									<AlertTriangle class="h-3.5 w-3.5 shrink-0 text-yellow-500" />
+									<span class="font-mono font-medium text-yellow-600 dark:text-yellow-400">{issue.kind}</span>
+									<button
+										class="font-medium text-primary hover:underline"
+										onclick={() => handleSelectPage(issue.page_slug)}
+									>
+										{issue.page_slug}
+									</button>
+								</div>
+								<p class="mt-1 text-muted-foreground">{issue.detail}</p>
+								{#if issue.fix}
+									<p class="mt-0.5 text-muted-foreground/70">
+										<span class="font-medium">{m.wiki_lint_fix_label()}:</span> {issue.fix}
+									</p>
+								{/if}
+							</div>
+						{/each}
+					</div>
+				</div>
+			{/if}
+		</div>
+	{/if}
+
+	<!-- Sources panel -->
+	{#if showSourcesPanel}
+		<div class="shrink-0 border-b bg-muted/30">
+			<div class="flex items-center justify-between px-4 py-2">
+				<span class="text-sm font-medium">{m.wiki_sources_button()}</span>
+				<div class="flex items-center gap-2">
+					<Button
+						variant="outline"
+						size="sm"
+						class="h-7 gap-1.5 text-xs"
+						onclick={() => (regenerateConfirmOpen = true)}
+						disabled={wikiStore.regenerating || wikiStore.sources.length === 0}
+					>
+						{#if wikiStore.regenerating}
+							<Loader2 class="h-3 w-3 animate-spin" />
+							{m.wiki_regenerating()}
+						{:else}
+							<RefreshCw class="h-3 w-3" />
+							{m.wiki_regenerate_button()}
+						{/if}
+					</Button>
+					<button
+						class="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+						onclick={() => (showSourcesPanel = false)}
+						aria-label="Close sources panel"
+					>
+						<X class="h-3.5 w-3.5" />
+					</button>
+				</div>
+			</div>
+			<div class="max-h-48 overflow-y-auto px-4 pb-3">
+				{#if wikiStore.sourcesLoading}
+					<div class="space-y-1.5">
+						{#each Array(3) as _}
+							<Skeleton class="h-8 w-full" />
+						{/each}
+					</div>
+				{:else if wikiStore.sources.length === 0}
+					<p class="py-2 text-center text-sm text-muted-foreground">{m.wiki_sources_empty()}</p>
+				{:else}
+					<div class="space-y-1">
+						{#each wikiStore.sources as source (source.filename)}
+							<div class="flex items-center justify-between rounded-md border bg-background px-3 py-2 text-xs">
+								<div class="flex min-w-0 flex-1 items-center gap-3">
+									<span class="truncate font-medium">{source.filename}</span>
+									<span class="shrink-0 font-mono text-[10px] text-muted-foreground">
+										{source.hash.slice(0, 12)}
+									</span>
+									<span class="shrink-0 rounded px-1 py-0 text-[10px] {source.active ? 'bg-green-500/10 text-green-600 dark:text-green-400' : 'bg-muted text-muted-foreground'}">
+										{source.active ? 'active' : 'inactive'}
+									</span>
+								</div>
+								<button
+									class="ml-2 shrink-0 rounded p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+									onclick={() => handleDeleteSourceClick(source.filename)}
+									aria-label="Delete {source.filename}"
+								>
+									<Trash2 class="h-3.5 w-3.5" />
+								</button>
+							</div>
+						{/each}
+					</div>
+				{/if}
+			</div>
+		</div>
+	{/if}
 
 	<!-- Main content -->
 	<div class="flex min-h-0 flex-1">
 		<!-- Left panel: search + category tabs + page list -->
-		<div class="flex w-64 shrink-0 flex-col border-r">
+		<div class="flex w-64 shrink-0 flex-col border-r overflow-hidden">
 			<!-- Search -->
 			<div class="border-b p-3">
 				<div class="relative">
@@ -373,9 +679,22 @@
 
 					<!-- Body -->
 					{#if selectedPage.body}
-						<div class="prose prose-sm dark:prose-invert max-w-none [&>*:first-child]:mt-0 [&>*:last-child]:mb-0">
+						<div
+							role="none"
+							class="prose prose-sm dark:prose-invert max-w-none [&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
+							onclick={(e) => {
+								const a = (e.target as HTMLElement).closest('a');
+								if (a) {
+									const href = a.getAttribute('href') ?? '';
+									if (href.startsWith('#wiki-')) {
+										e.preventDefault();
+										handleWikilinkClick(href.slice(6));
+									}
+								}
+							}}
+						>
 							<Streamdown
-								content={selectedPage.body}
+								content={processedBody}
 								shikiTheme={currentTheme}
 								baseTheme="shadcn"
 								components={{ code: Code }}
@@ -417,8 +736,117 @@
 	</div>
 </div>
 
+<!-- Query dialog -->
+<Dialog.Root bind:open={queryOpen} onOpenChange={(open) => { if (!open) { queryResult = null; queryError = null; } }}>
+	<Dialog.Content class="sm:max-w-2xl">
+		<Dialog.Header>
+			<Dialog.Title>{m.wiki_query_dialog_title()}</Dialog.Title>
+		</Dialog.Header>
+		<div class="space-y-3">
+			<div class="flex gap-2">
+				<textarea
+					class="min-h-[72px] flex-1 resize-none rounded-md border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+					placeholder={m.wiki_query_placeholder()}
+					bind:value={queryQuestion}
+					onkeydown={(e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) handleQuery(); }}
+				></textarea>
+				<Button
+					class="shrink-0 self-end gap-1.5"
+					onclick={handleQuery}
+					disabled={wikiStore.querying || !queryQuestion.trim()}
+				>
+					{#if wikiStore.querying}
+						<Loader2 class="h-4 w-4 animate-spin" />
+						{m.wiki_query_asking()}
+					{:else}
+						<MessageCircleQuestion class="h-4 w-4" />
+						{m.wiki_query_ask()}
+					{/if}
+				</Button>
+			</div>
+			<label class="flex cursor-pointer items-center gap-2 text-sm">
+				<input type="checkbox" class="h-4 w-4" bind:checked={querySave} />
+				{m.wiki_query_save_label()}
+			</label>
+			{#if queryError}
+				<p class="text-sm text-destructive">{queryError}</p>
+			{/if}
+			{#if queryResult}
+				<div class="max-h-96 overflow-y-auto space-y-3 rounded-md border p-3">
+					<div>
+						<p class="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+							{m.wiki_query_answer_heading()}
+						</p>
+						<div class="prose prose-sm dark:prose-invert max-w-none [&>*:first-child]:mt-0">
+							<Streamdown
+								content={queryResult.answer}
+								shikiTheme={currentTheme}
+								baseTheme="shadcn"
+								components={{ code: Code }}
+								{shikiThemes}
+							/>
+						</div>
+					</div>
+					{#if queryResult.citations.length > 0}
+						<div class="border-t pt-2">
+							<p class="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+								{m.wiki_query_citations_heading()}
+							</p>
+							<div class="flex flex-wrap gap-1.5">
+								{#each queryResult.citations as slug}
+									<button
+										class="rounded-md border px-2 py-0.5 text-xs text-foreground transition-colors hover:bg-accent"
+										onclick={() => { queryOpen = false; handleSelectPage(slug); }}
+									>
+										{slug}
+									</button>
+								{/each}
+							</div>
+						</div>
+					{/if}
+				</div>
+			{/if}
+		</div>
+	</Dialog.Content>
+</Dialog.Root>
+
+<!-- Delete source confirmation dialog -->
+<Dialog.Root bind:open={confirmDeleteOpen} onOpenChange={(open) => { if (!open) confirmDeleteFilename = null; }}>
+	<Dialog.Content class="sm:max-w-md">
+		<Dialog.Header>
+			<Dialog.Title>{m.wiki_sources_delete_confirm_title()}</Dialog.Title>
+		</Dialog.Header>
+		<p class="text-sm text-muted-foreground">
+			{m.wiki_sources_delete_confirm_body({ filename: confirmDeleteFilename ?? '' })}
+		</p>
+		<Dialog.Footer>
+			<Button variant="outline" onclick={() => (confirmDeleteOpen = false)}>Cancel</Button>
+			<Button variant="destructive" onclick={handleDeleteSourceConfirm}>
+				{m.wiki_sources_delete_button()}
+			</Button>
+		</Dialog.Footer>
+	</Dialog.Content>
+</Dialog.Root>
+
+<!-- Regenerate confirmation dialog -->
+<Dialog.Root bind:open={regenerateConfirmOpen}>
+	<Dialog.Content class="sm:max-w-md">
+		<Dialog.Header>
+			<Dialog.Title>{m.wiki_regenerate_confirm_title()}</Dialog.Title>
+		</Dialog.Header>
+		<p class="text-sm text-muted-foreground">{m.wiki_regenerate_confirm_body()}</p>
+		<Dialog.Footer>
+			<Button variant="outline" onclick={() => (regenerateConfirmOpen = false)}>Cancel</Button>
+			<Button onclick={handleRegenerate}>
+				<RefreshCw class="mr-1.5 h-4 w-4" />
+				{m.wiki_regenerate_button()}
+			</Button>
+		</Dialog.Footer>
+	</Dialog.Content>
+</Dialog.Root>
+
 <!-- Ingest dialog -->
-<Dialog.Root bind:open={ingestOpen}>
+<Dialog.Root bind:open={ingestOpen} onOpenChange={(open) => { if (!open) handleIngestDialogClose(); }}>
 	<Dialog.Content class="sm:max-w-lg">
 		<Dialog.Header>
 			<Dialog.Title>{m.wiki_ingest_dialog_title()}</Dialog.Title>
@@ -438,37 +866,52 @@
 				<p class="text-sm text-muted-foreground">
 					{m.wiki_ingest_drop_hint()}
 				</p>
+				<p class="mt-0.5 text-xs text-muted-foreground/60">
+					{INGEST_ACCEPT.split(',').join(', ')}
+				</p>
 				<input
 					bind:this={fileInput}
 					type="file"
-					accept=".md,.txt,.html"
+					accept={INGEST_ACCEPT}
+					multiple
 					class="hidden"
 					onchange={handleFileSelect}
 				/>
 			</div>
 
-			<div class="space-y-1">
-				<Input
-					placeholder={m.wiki_ingest_filename_placeholder()}
-					bind:value={ingestFilename}
-				/>
-				<p class="text-[11px] text-muted-foreground px-0.5">
-					{m.wiki_ingest_filename_hint()}
-				</p>
-			</div>
-			<Textarea
-				placeholder={m.wiki_ingest_content_placeholder()}
-				bind:value={ingestContent}
-				rows={6}
-				class="font-mono text-xs"
-			/>
-			<Button class="w-full gap-1.5" onclick={handleIngest} disabled={ingesting}>
-				{#if ingesting}
+			<!-- Selected file list -->
+			{#if ingestFiles.length > 0}
+				<div class="max-h-40 overflow-y-auto rounded-md border">
+					{#each ingestFiles as file, i (file.name)}
+						<div class="flex items-center justify-between px-3 py-1.5 text-sm {i > 0 ? 'border-t' : ''}">
+							<span class="truncate text-xs">{file.name}</span>
+							<button
+								class="ml-2 shrink-0 rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+								onclick={() => removeIngestFile(i)}
+								disabled={ingesting}
+								aria-label="Remove {file.name}"
+							>
+								<X class="h-3.5 w-3.5" />
+							</button>
+						</div>
+					{/each}
+				</div>
+			{/if}
+
+			<Button
+				class="w-full gap-1.5"
+				onclick={handleIngest}
+				disabled={ingesting || ingestFiles.length === 0}
+			>
+				{#if ingesting && ingestProgress}
 					<Loader2 class="h-4 w-4 animate-spin" />
+					{m.wiki_ingest_progress({ current: ingestProgress.current.toString(), total: ingestProgress.total.toString() })}
+				{:else if ingestFiles.length === 0}
+					{m.wiki_ingest_no_files()}
 				{:else}
 					<FileUp class="h-4 w-4" />
+					Ingest {ingestFiles.length} file{ingestFiles.length > 1 ? 's' : ''}
 				{/if}
-				{m.wiki_ingest_submit()}
 			</Button>
 		</div>
 	</Dialog.Content>

@@ -185,6 +185,8 @@
 		height = rect.height || 400;
 
 		buildSimulation(width, height);
+		// Auto-fit so the graph is always centered and fully visible on open
+		fitView();
 
 		observer = new ResizeObserver((entries) => {
 			const entry = entries[0];
