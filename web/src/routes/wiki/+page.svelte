@@ -9,9 +9,7 @@
 	import * as Dialog from '$lib/components/ui/dialog';
 	import { Streamdown } from 'svelte-streamdown';
 	import Code from 'svelte-streamdown/code';
-	import { SvelteFlow, Controls, Background } from '@xyflow/svelte';
-	import '@xyflow/svelte/dist/style.css';
-	import WikiDotNode from '$lib/components/wiki/WikiDotNode.svelte';
+	import WikiGraph from '$lib/components/wiki/WikiGraph.svelte';
 	import { wikiStore, type WikiPage } from '$lib/stores/wiki.svelte';
 	import { themeStore } from '$lib/stores/theme.svelte';
 	import { shikiThemes } from '$lib/components/ai-elements/code/shiki';
@@ -41,31 +39,6 @@
 	let ingestContent = $state('');
 	let ingesting = $state(false);
 	let fileInput: HTMLInputElement | undefined = $state();
-
-	const nodeTypes = { dot: WikiDotNode };
-
-	// SvelteFlow nodes/edges derived from wiki graph
-	let flowNodes = $derived.by(() => {
-		const g = wikiStore.graph;
-		if (!g) return [];
-		return g.nodes.map((n, i) => ({
-			id: n.id,
-			type: 'dot',
-			position: { x: (i % 5) * 200, y: Math.floor(i / 5) * 120 },
-			data: { label: n.label }
-		}));
-	});
-
-	let flowEdges = $derived.by(() => {
-		const g = wikiStore.graph;
-		if (!g) return [];
-		return g.edges.map((e) => ({
-			id: `${e.from}-${e.to}`,
-			source: e.from,
-			target: e.to,
-			type: 'smoothstep'
-		}));
-	});
 
 	let filteredPages = $derived.by(() => {
 		if (activeCategory === 'all') return wikiStore.pages;
@@ -317,9 +290,9 @@
 								class="w-full rounded-md px-2.5 py-2 text-left transition-colors {selectedPage?.slug === page.slug
 									? 'bg-accent text-accent-foreground'
 									: 'hover:bg-muted'}"
-								onclick={() => handleSelectPage(page.slug)}
+								onclick={() => { showGraph = false; handleSelectPage(page.slug); }}
 							>
-								<div class="truncate text-sm font-medium">{page.title}</div>
+								<div class="truncate text-xs font-medium">{page.title}</div>
 								<div class="mt-0.5 flex items-center gap-1.5">
 									<span class="rounded px-1 py-0 text-[10px] font-medium {typeColor(page.page_type)}">
 										{page.page_type}
@@ -339,27 +312,22 @@
 		<div class="flex min-w-0 flex-1 flex-col overflow-hidden">
 			{#if showGraph}
 				<!-- Graph view -->
-				<div class="flex-1">
+				<div class="flex-1 overflow-hidden">
 					{#if wikiStore.graphLoading}
 						<div class="flex h-full items-center justify-center">
 							<Loader2 class="h-8 w-8 animate-spin text-muted-foreground" />
 						</div>
-					{:else if flowNodes.length === 0}
+					{:else if !wikiStore.graph || wikiStore.graph.nodes.length === 0}
 						<div class="flex h-full items-center justify-center">
 							<p class="text-sm text-muted-foreground">{m.wiki_graph_empty()}</p>
 						</div>
 					{:else}
-						<SvelteFlow
-							nodes={flowNodes}
-							edges={flowEdges}
-							{nodeTypes}
-							fitView
-							colorMode={themeStore.isDark ? 'dark' : 'light'}
-							class="h-full"
-						>
-							<Controls />
-							<Background />
-						</SvelteFlow>
+						<WikiGraph
+							nodes={wikiStore.graph!.nodes}
+							edges={wikiStore.graph!.edges}
+							pages={wikiStore.pages}
+							onnodeclick={(e) => { handleSelectPage(e.detail.slug); showGraph = false; }}
+						/>
 					{/if}
 				</div>
 			{:else if pageLoading}

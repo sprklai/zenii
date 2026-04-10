@@ -1,0 +1,462 @@
+<script lang="ts">
+	import { onMount, onDestroy } from 'svelte';
+	import {
+		forceSimulation,
+		forceLink,
+		forceManyBody,
+		forceCenter,
+		forceCollide,
+		forceX,
+		forceY,
+		type Simulation,
+		type SimulationNodeDatum,
+		type SimulationLinkDatum
+	} from 'd3-force';
+	import type { WikiNode, WikiEdge, WikiPage } from '$lib/stores/wiki.svelte';
+
+	interface Props {
+		nodes: WikiNode[];
+		edges: WikiEdge[];
+		pages?: WikiPage[];
+		onnodeclick?: (e: CustomEvent<{ slug: string }>) => void;
+	}
+
+	let { nodes, edges, pages = [], onnodeclick }: Props = $props();
+
+	// ── types ─────────────────────────────────────────────────────────────────
+
+	interface SimNode extends SimulationNodeDatum {
+		id: string;
+		label: string;
+		page_type: string;
+	}
+
+	interface SimLink extends SimulationLinkDatum<SimNode> {
+		source: SimNode | string;
+		target: SimNode | string;
+	}
+
+	// ── state ─────────────────────────────────────────────────────────────────
+
+	let wrapEl = $state<HTMLDivElement | undefined>();
+	let svgEl = $state<SVGSVGElement | undefined>();
+	let width = $state(600);
+	let height = $state(400);
+	let simNodes = $state<SimNode[]>([]);
+	let simLinks = $state<SimLink[]>([]);
+
+	// pan / zoom
+	let tx = $state(0);
+	let ty = $state(0);
+	let scale = $state(1);
+
+	// drag state (plain vars — not reactive, only used in event handlers)
+	let dragNode = $state<SimNode | null>(null);
+	let dragMoved = false;
+	let dragDownPos = { x: 0, y: 0 };
+	let panning = $state(false);
+	let panStart = { x: 0, y: 0, tx: 0, ty: 0 };
+
+
+	// controls
+	let locked = $state(false);
+
+	function zoomIn() {
+		const cx = width / 2;
+		const cy = height / 2;
+		const newScale = Math.min(3, scale * 1.2);
+		tx = cx - (cx - tx) * (newScale / scale);
+		ty = cy - (cy - ty) * (newScale / scale);
+		scale = newScale;
+	}
+
+	function zoomOut() {
+		const cx = width / 2;
+		const cy = height / 2;
+		const newScale = Math.max(0.2, scale * (1 / 1.2));
+		tx = cx - (cx - tx) * (newScale / scale);
+		ty = cy - (cy - ty) * (newScale / scale);
+		scale = newScale;
+	}
+
+	function fitView() {
+		if (simNodes.length === 0) return;
+		const xs = simNodes.map((n) => n.x ?? 0);
+		const ys = simNodes.map((n) => n.y ?? 0);
+		const minX = Math.min(...xs) - 30;
+		const maxX = Math.max(...xs) + 30;
+		const minY = Math.min(...ys) - 30;
+		const maxY = Math.max(...ys) + 30;
+		const s = Math.min(3, Math.max(0.2, Math.min(width / (maxX - minX), height / (maxY - minY)) * 0.9));
+		scale = s;
+		tx = (width - (maxX + minX) * s) / 2;
+		ty = (height - (maxY + minY) * s) / 2;
+	}
+
+	// tooltip (pinned to bottom-left corner)
+	let tooltipNode = $state<SimNode | null>(null);
+
+	let simulation: Simulation<SimNode, SimLink> | null = null;
+	let observer: ResizeObserver | null = null;
+
+	// ── helpers ───────────────────────────────────────────────────────────────
+
+	const pageMap = $derived(new Map(pages.map((p) => [p.slug, p])));
+
+	// Set of IDs to highlight (selected node + direct neighbors). null = no filter.
+	const highlightIds = $derived.by(() => {
+		if (!tooltipNode) return null;
+		const ids = new Set<string>([tooltipNode.id]);
+		for (const link of simLinks) {
+			const s = link.source as SimNode;
+			const t = link.target as SimNode;
+			if (s.id === tooltipNode.id) ids.add(t.id);
+			if (t.id === tooltipNode.id) ids.add(s.id);
+		}
+		return ids;
+	});
+
+	function typeColor(type: string): string {
+		switch (type) {
+			case 'concept':    return '#3b82f6';
+			case 'entity':     return '#22c55e';
+			case 'topic':      return '#f97316';
+			case 'comparison': return '#a855f7';
+			case 'query':      return '#ec4899';
+			default:           return '#6b7280';
+		}
+	}
+
+	function typeBg(type: string): string {
+		switch (type) {
+			case 'concept':    return 'bg-blue-500/10 text-blue-400';
+			case 'entity':     return 'bg-green-500/10 text-green-400';
+			case 'topic':      return 'bg-orange-500/10 text-orange-400';
+			case 'comparison': return 'bg-purple-500/10 text-purple-400';
+			case 'query':      return 'bg-pink-500/10 text-pink-400';
+			default:           return 'bg-muted text-muted-foreground';
+		}
+	}
+
+	// ── simulation ────────────────────────────────────────────────────────────
+
+	function buildSimulation(w: number, h: number) {
+		const sNodes: SimNode[] = nodes.map((n) => ({
+			...n,
+			x: w / 2 + (Math.random() - 0.5) * 100,
+			y: h / 2 + (Math.random() - 0.5) * 100
+		}));
+
+		const idToNode = new Map(sNodes.map((n) => [n.id, n]));
+		const sLinks: SimLink[] = edges
+			.filter((e) => idToNode.has(e.from) && idToNode.has(e.to))
+			.map((e) => ({ source: e.from, target: e.to }));
+
+		const sim = forceSimulation<SimNode>(sNodes)
+			.force('link', forceLink<SimNode, SimLink>(sLinks).id((d) => d.id).distance(50).strength(0.8))
+			.force('charge', forceManyBody<SimNode>().strength(-60))
+			.force('center', forceCenter(w / 2, h / 2))
+			.force('collide', forceCollide<SimNode>(14))
+			.force('x', forceX(w / 2).strength(0.04))
+			.force('y', forceY(h / 2).strength(0.04))
+			.alphaDecay(0.03)
+			.on('tick', () => {
+				// Spread to new array so keyed {#each} patches existing DOM nodes
+				// (preserving SVG animate elements) rather than recreating them.
+				simNodes = [...simNodes];
+			});
+
+		// burst of ticks for stable initial layout before first render
+		for (let i = 0; i < 150; i++) sim.tick();
+		sim.alpha(0.05).restart();
+
+		simNodes = sNodes;
+		simLinks = sLinks as SimLink[];
+		simulation = sim;
+	}
+
+	// ── lifecycle ─────────────────────────────────────────────────────────────
+
+	onMount(() => {
+		if (!svgEl) return;
+
+		const rect = svgEl.getBoundingClientRect();
+		width = rect.width || 600;
+		height = rect.height || 400;
+
+		buildSimulation(width, height);
+
+		observer = new ResizeObserver((entries) => {
+			const entry = entries[0];
+			if (!entry) return;
+			width = entry.contentRect.width;
+			height = entry.contentRect.height;
+			simulation?.force('center', forceCenter(width / 2, height / 2));
+			simulation?.force('x', forceX(width / 2).strength(0.04));
+			simulation?.force('y', forceY(height / 2).strength(0.04));
+			simulation?.alpha(0.1).restart();
+		});
+		observer.observe(svgEl);
+	});
+
+	onDestroy(() => {
+		simulation?.stop();
+		observer?.disconnect();
+	});
+
+	// ── interaction ────────────────────────────────────────────────────────────
+
+	function svgPoint(e: PointerEvent): { x: number; y: number } {
+		return {
+			x: (e.clientX - svgEl!.getBoundingClientRect().left - tx) / scale,
+			y: (e.clientY - svgEl!.getBoundingClientRect().top - ty) / scale
+		};
+	}
+
+	function handleWheel(e: WheelEvent) {
+		e.preventDefault();
+		if (locked) return;
+		const factor = e.deltaY < 0 ? 1.1 : 0.9;
+		const rect = svgEl!.getBoundingClientRect();
+		const mx = e.clientX - rect.left;
+		const my = e.clientY - rect.top;
+		const newScale = Math.min(3, Math.max(0.2, scale * factor));
+		tx = mx - (mx - tx) * (newScale / scale);
+		ty = my - (my - ty) * (newScale / scale);
+		scale = newScale;
+	}
+
+	function handleSvgPointerDown(e: PointerEvent) {
+		// fires only on background (node pointerdown calls stopPropagation)
+		tooltipNode = null;
+		if (locked) return;
+		panning = true;
+		panStart = { x: e.clientX, y: e.clientY, tx, ty };
+
+		function onMove(me: PointerEvent) {
+			tx = panStart.tx + (me.clientX - panStart.x);
+			ty = panStart.ty + (me.clientY - panStart.y);
+		}
+		function onUp() {
+			panning = false;
+			window.removeEventListener('pointermove', onMove);
+			window.removeEventListener('pointerup', onUp);
+		}
+		window.addEventListener('pointermove', onMove);
+		window.addEventListener('pointerup', onUp);
+	}
+
+	function handleNodePointerDown(e: PointerEvent, node: SimNode) {
+		e.stopPropagation();
+		dragNode = node;
+		dragMoved = false;
+		dragDownPos = { x: e.clientX, y: e.clientY };
+		node.fx = node.x;
+		node.fy = node.y;
+		simulation?.alphaTarget(0.1).restart();
+
+		function onMove(me: PointerEvent) {
+			const dx = me.clientX - dragDownPos.x;
+			const dy = me.clientY - dragDownPos.y;
+			if (Math.sqrt(dx * dx + dy * dy) > 5) dragMoved = true;
+			const rect = svgEl!.getBoundingClientRect();
+			node.fx = (me.clientX - rect.left - tx) / scale;
+			node.fy = (me.clientY - rect.top - ty) / scale;
+		}
+		function onUp() {
+			node.fx = null;
+			node.fy = null;
+			simulation?.alphaTarget(0).restart();
+			dragNode = null;
+
+			if (!dragMoved) {
+				tooltipNode = tooltipNode?.id === node.id ? null : node;
+			}
+
+			window.removeEventListener('pointermove', onMove);
+			window.removeEventListener('pointerup', onUp);
+		}
+		window.addEventListener('pointermove', onMove);
+		window.addEventListener('pointerup', onUp);
+	}
+
+	function handleOpenPage() {
+		if (!tooltipNode) return;
+		const slug = tooltipNode.id;
+		tooltipNode = null;
+		onnodeclick?.(new CustomEvent('nodeclick', { detail: { slug } }));
+	}
+</script>
+
+<!-- svelte-ignore a11y_no_static_element_interactions -->
+<div bind:this={wrapEl} class="relative h-full w-full overflow-hidden">
+	<!-- svelte-ignore a11y_no_static_element_interactions -->
+	<svg
+		bind:this={svgEl}
+		class="h-full w-full"
+		style="cursor: {dragNode ? 'grabbing' : panning ? 'grabbing' : 'grab'}"
+		onwheel={handleWheel}
+		onpointerdown={handleSvgPointerDown}
+	>
+		<!-- transparent hit area covering the full SVG -->
+		<rect width={width} height={height} fill="transparent" />
+
+		<g transform="translate({tx},{ty}) scale({scale})">
+			<!-- edges -->
+			{#each simLinks as link, i (i)}
+				{@const s = link.source as SimNode}
+				{@const t = link.target as SimNode}
+				{#if s.x != null && s.y != null && t.x != null && t.y != null}
+					<line
+						x1={s.x}
+						y1={s.y}
+						x2={t.x}
+						y2={t.y}
+						stroke="currentColor"
+						stroke-opacity={highlightIds
+							? (highlightIds.has(s.id) && highlightIds.has(t.id) ? 0.5 : 0.04)
+							: 0.2}
+						stroke-width="1"
+					/>
+				{/if}
+			{/each}
+
+			<!-- nodes — keyed by id so DOM is patched on each tick, preserving animate -->
+			{#each simNodes as node (node.id)}
+				{#if node.x != null && node.y != null}
+					{@const dimmed = highlightIds ? !highlightIds.has(node.id) : false}
+					<!-- svelte-ignore a11y_no_static_element_interactions -->
+					<g
+						style="cursor: pointer"
+						onpointerdown={(e) => handleNodePointerDown(e, node)}
+					>
+						<!-- selection ring -->
+						{#if tooltipNode?.id === node.id}
+							<circle
+								cx={node.x}
+								cy={node.y}
+								r={12}
+								fill="none"
+								stroke={typeColor(node.page_type)}
+								stroke-opacity="0.7"
+								stroke-width="2"
+							/>
+						{/if}
+
+						<!-- main dot -->
+						<circle
+							cx={node.x}
+							cy={node.y}
+							r={tooltipNode?.id === node.id ? 8 : 6}
+							fill={typeColor(node.page_type)}
+							fill-opacity={dimmed ? 0.12 : (tooltipNode?.id === node.id ? 1 : 0.85)}
+						/>
+
+						<text
+							x={node.x}
+							y={node.y + 14 / scale}
+							text-anchor="middle"
+							font-size={10 / scale}
+							fill="currentColor"
+							fill-opacity={dimmed ? 0.15 : 0.8}
+							style="pointer-events: none; user-select: none"
+						>{node.label}</text>
+					</g>
+				{/if}
+			{/each}
+		</g>
+	</svg>
+
+	<!-- info panel — pinned bottom-left, above legend -->
+	{#if tooltipNode}
+		{@const page = pageMap.get(tooltipNode.id)}
+		<!-- svelte-ignore a11y_no_static_element_interactions -->
+		<div class="pointer-events-auto absolute bottom-3 left-3 z-10 w-52 rounded-lg border bg-popover p-3 shadow-lg">
+			<div class="mb-1.5 flex items-start justify-between gap-1">
+				<p class="text-sm font-semibold leading-tight">{tooltipNode.label}</p>
+				<button
+					class="mt-0.5 shrink-0 text-muted-foreground hover:text-foreground"
+					onclick={() => (tooltipNode = null)}
+					aria-label="Close"
+				>✕</button>
+			</div>
+			<span class="inline-block rounded px-1.5 py-0.5 text-[10px] font-medium {typeBg(tooltipNode.page_type)}">
+				{tooltipNode.page_type}
+			</span>
+			{#if page?.tldr}
+				<p class="mt-2 line-clamp-3 text-[11px] leading-relaxed text-muted-foreground">{page.tldr}</p>
+			{/if}
+			{#if page?.tags && page.tags.length > 0}
+				<div class="mt-1.5 flex flex-wrap gap-1">
+					{#each page.tags.slice(0, 4) as tag}
+						<span class="text-[10px] text-muted-foreground">#{tag}</span>
+					{/each}
+				</div>
+			{/if}
+			{#if onnodeclick}
+				<button
+					class="mt-2.5 w-full rounded-md bg-primary px-2 py-1 text-[11px] font-medium text-primary-foreground hover:bg-primary/90"
+					onclick={handleOpenPage}
+				>Open page</button>
+			{/if}
+		</div>
+	{/if}
+
+	<!-- zoom controls (matches workflow builder style) -->
+	<div class="absolute bottom-3 right-3 z-10 flex flex-col overflow-hidden rounded-md border bg-background shadow-md">
+		<button
+			class="border-b p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+			onclick={zoomIn}
+			title="Zoom in"
+		>
+			<svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+				<path d="M7 2v10M2 7h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+			</svg>
+		</button>
+		<button
+			class="border-b p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+			onclick={zoomOut}
+			title="Zoom out"
+		>
+			<svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+				<path d="M2 7h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+			</svg>
+		</button>
+		<button
+			class="border-b p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+			onclick={fitView}
+			title="Fit view"
+		>
+			<svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+				<path d="M1 4V1h3M10 1h3v3M13 10v3h-3M4 13H1v-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+			</svg>
+		</button>
+		<button
+			class="p-1.5 transition-colors {locked ? 'bg-muted text-foreground' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}"
+			onclick={() => (locked = !locked)}
+			title={locked ? 'Unlock pan/zoom' : 'Lock pan/zoom'}
+		>
+			<svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+				{#if locked}
+					<rect x="2" y="6" width="10" height="7" rx="1" stroke="currentColor" stroke-width="1.5"/>
+					<path d="M4 6V4a3 3 0 0 1 6 0v2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+				{:else}
+					<rect x="2" y="6" width="10" height="7" rx="1" stroke="currentColor" stroke-width="1.5"/>
+					<path d="M4 6V4a3 3 0 0 1 6 0" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+				{/if}
+			</svg>
+		</button>
+	</div>
+
+	<!-- legend -->
+	<div class="pointer-events-none absolute right-3 top-3 flex flex-col gap-1 rounded-lg border bg-popover/80 px-2.5 py-2 backdrop-blur-sm">
+		{#each [['concept','#3b82f6'],['entity','#22c55e'],['topic','#f97316'],['comparison','#a855f7'],['query','#ec4899']] as [type, color]}
+			<div class="flex items-center gap-1.5">
+				<svg width="10" height="10" viewBox="0 0 10 10">
+					<circle cx="5" cy="5" r="4" fill={color} fill-opacity="0.85" />
+				</svg>
+				<span class="text-[10px] capitalize text-muted-foreground">{type}</span>
+			</div>
+		{/each}
+	</div>
+</div>
