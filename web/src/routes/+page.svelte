@@ -53,6 +53,7 @@
 				channelsStore.load(),
 				inboxStore.load(),
 				wikiStore.load(),
+				wikiStore.fetchSources(),
 			]);
 		} finally {
 			loading = false;
@@ -312,10 +313,35 @@
 						{m.dashboard_wiki_pages_count({ count: wikiStore.pages.length, suffix: wikiStore.pages.length !== 1 ? 's' : '' })}
 					</p>
 					{#if wikiStore.pages.length > 0}
-						<div class="mt-2 flex flex-wrap gap-1">
-							{#each [...new Set(wikiStore.pages.map(p => p.page_type))].slice(0, 5) as type}
-								<span class="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">{type}</span>
-							{/each}
+						{@const byType = {
+							concept: wikiStore.pages.filter(p => p.page_type === 'concept').length,
+							entity: wikiStore.pages.filter(p => p.page_type === 'entity').length,
+							topic: wikiStore.pages.filter(p => p.page_type === 'topic').length,
+							comparison: wikiStore.pages.filter(p => p.page_type === 'comparison').length,
+						}}
+						<div class="mt-3 flex flex-wrap gap-6">
+							<div class="text-center">
+								<div class="text-2xl font-bold text-blue-500">{byType.concept}</div>
+								<div class="text-xs text-muted-foreground">{m.dashboard_wiki_concepts()}</div>
+							</div>
+							<div class="text-center">
+								<div class="text-2xl font-bold text-orange-500">{byType.entity}</div>
+								<div class="text-xs text-muted-foreground">{m.dashboard_wiki_entities()}</div>
+							</div>
+							<div class="text-center">
+								<div class="text-2xl font-bold text-green-500">{byType.topic}</div>
+								<div class="text-xs text-muted-foreground">{m.dashboard_wiki_topics()}</div>
+							</div>
+							{#if byType.comparison > 0}
+								<div class="text-center">
+									<div class="text-2xl font-bold text-purple-500">{byType.comparison}</div>
+									<div class="text-xs text-muted-foreground">{m.dashboard_wiki_comparisons()}</div>
+								</div>
+							{/if}
+							<div class="text-center">
+								<div class="text-2xl font-bold text-zinc-400">{wikiStore.sources.length}</div>
+								<div class="text-xs text-muted-foreground">{m.dashboard_wiki_sources()}</div>
+							</div>
 						</div>
 					{:else}
 						<p class="mt-1 text-sm text-muted-foreground">{m.dashboard_wiki_no_pages()}</p>

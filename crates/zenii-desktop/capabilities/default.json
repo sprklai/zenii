@@ -6,6 +6,10 @@
   "permissions": [
     "core:default",
     "opener:default",
+    {
+      "identifier": "opener:allow-open-path",
+      "allow": [{ "path": "$DATA/**" }]
+    },
     "window-state:default",
     "notification:default",
     "updater:default",

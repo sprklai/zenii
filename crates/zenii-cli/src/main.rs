@@ -643,6 +643,22 @@ async fn main() {
             }
             commands::wiki::WikiAction::Show { slug } => commands::wiki::show(&client, &slug).await,
             commands::wiki::WikiAction::Sync => commands::wiki::sync(&client).await,
+            commands::wiki::WikiAction::Ingest { file, model } => {
+                commands::wiki::ingest(&client, &file, model.as_deref()).await
+            }
+            commands::wiki::WikiAction::Query {
+                question,
+                save,
+                model,
+            } => commands::wiki::query(&client, &question, save, model.as_deref()).await,
+            commands::wiki::WikiAction::Lint => commands::wiki::lint(&client).await,
+            commands::wiki::WikiAction::Sources => commands::wiki::sources(&client).await,
+            commands::wiki::WikiAction::DeleteSource { filename, model } => {
+                commands::wiki::delete_source(&client, &filename, model.as_deref()).await
+            }
+            commands::wiki::WikiAction::Regenerate { model } => {
+                commands::wiki::regenerate(&client, model.as_deref()).await
+            }
         },
         Commands::Onboard => commands::onboard::run(&client).await,
         Commands::Completions { shell } => {

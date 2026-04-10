@@ -25,6 +25,32 @@ wiki/
 
 ---
 
+## Page Types
+
+Each wiki page has a `type` field that determines how it is classified and where it is stored.
+
+| Type | What it covers | Examples |
+|------|----------------|---------|
+| **entity** | Named, concrete things that exist: people, orgs, products, tools, models, datasets, events | "Andrej Karpathy", "OpenAI", "GPT-4", "PyTorch" |
+| **concept** | Abstract ideas, techniques, or patterns — not a named thing, but an idea | "attention mechanism", "zero-shot prompting", "chain-of-thought" |
+| **topic** | Subject area or domain that organizes related pages — broader than a concept | "natural language processing", "model evaluation", "RAG" |
+| **comparison** | Side-by-side analysis of two or more entities or concepts | "GPT-4 vs Claude 3", "LoRA vs full fine-tuning" |
+| **query** | A saved answer to a specific question | "What are the main scaling laws?", "When was RLHF introduced?" |
+
+### How the LLM extracts them
+
+During **ingest**, the LLM runs a two-pass analysis:
+
+1. **Entity pass** — scans the full source for every named person, organization, product, tool,
+   model, dataset, and project. Each gets its own entity page (err on the side of more pages).
+2. **Synthesis pass** — identifies abstract ideas and techniques (concepts), organizes them under
+   subject domains (topics), and flags any direct comparisons. If the answer to a question is
+   novel synthesis, it can be saved as a query page.
+
+Knowledge is compiled once at ingest time, not re-derived on every query.
+
+---
+
 ## Quick Start: Claude Code
 
 Claude Code reads `CLAUDE.md` which points to `wiki/SCHEMA.md`, so it already knows how to operate

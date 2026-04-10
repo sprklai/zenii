@@ -45,6 +45,13 @@ export async function showNotification(
   }
 }
 
+/** Open a filesystem path in the OS native file manager. No-op outside Tauri. */
+export async function openPath(path: string): Promise<void> {
+  if (!isTauri) return;
+  const { openPath: _openPath } = await import("@tauri-apps/plugin-opener");
+  await _openPath(path);
+}
+
 /** Open a URL in the native browser via Tauri opener plugin. Falls back to window.open. */
 export async function openInBrowser(url: string): Promise<void> {
   if (isTauri) {

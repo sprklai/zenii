@@ -18,6 +18,43 @@ pub enum WikiAction {
     },
     /// Sync wiki page TLDRs to memory
     Sync,
+    /// Ingest a local file into the wiki (LLM-driven multi-page generation)
+    Ingest {
+        /// Path to the file to ingest (markdown, text, HTML, etc.)
+        file: String,
+        /// Optional model override (e.g. gpt-4o, claude-3-5-sonnet)
+        #[arg(long)]
+        model: Option<String>,
+    },
+    /// Ask a question answered from wiki knowledge
+    Query {
+        /// The question to answer
+        question: String,
+        /// Save the answer as a query page in the wiki
+        #[arg(long)]
+        save: bool,
+        /// Optional model override
+        #[arg(long)]
+        model: Option<String>,
+    },
+    /// Lint all wiki pages for structural issues
+    Lint,
+    /// List all ingested source documents
+    Sources,
+    /// Delete a source document and cascade-cleanup its derived pages
+    DeleteSource {
+        /// Filename of the source to delete (e.g. paper.md)
+        filename: String,
+        /// Optional model override for rebuilding shared pages
+        #[arg(long)]
+        model: Option<String>,
+    },
+    /// Regenerate all wiki pages from saved sources (use after editing INGEST_PROMPT.md or changing model)
+    Regenerate {
+        /// Optional model override
+        #[arg(long)]
+        model: Option<String>,
+    },
 }
 
 pub async fn list(client: &ZeniiClient) -> Result<(), String> {
@@ -94,6 +131,179 @@ pub async fn sync(client: &ZeniiClient) -> Result<(), String> {
     Ok(())
 }
 
+pub async fn ingest(client: &ZeniiClient, file: &str, model: Option<&str>) -> Result<(), String> {
+    let path = std::path::Path::new(file);
+    let filename = path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .ok_or_else(|| format!("invalid file path: {file}"))?
+        .to_string();
+    let content = std::fs::read_to_string(path)
+        .map_err(|e| format!("failed to read '{file}': {e}"))?;
+
+    println!("Ingesting '{filename}'… (this may take 30–120s with LLM)");
+
+    let mut body = serde_json::json!({ "filename": filename, "content": content });
+    if let Some(m) = model {
+        body["model"] = serde_json::Value::String(m.to_string());
+    }
+
+    let result: serde_json::Value = client.post("/wiki/ingest", &body).await?;
+
+    let primary_slug = result
+        .get("primary_slug")
+        .and_then(|v| v.as_str())
+        .unwrap_or("?");
+    let message = result
+        .get("message")
+        .and_then(|v| v.as_str())
+        .unwrap_or("done");
+    println!("{message}");
+
+    if let Some(pages) = result.get("pages").and_then(|v| v.as_array()) {
+        for page in pages {
+            let slug = page.get("slug").and_then(|v| v.as_str()).unwrap_or("?");
+            let title = page
+                .get("title")
+                .and_then(|v| v.as_str())
+                .unwrap_or("(no title)");
+            let page_type = page.get("page_type").and_then(|v| v.as_str()).unwrap_or("");
+            println!("  [{page_type}] {slug} — {title}");
+        }
+    }
+    println!("Primary slug: {primary_slug}");
+    Ok(())
+}
+
+pub async fn query(
+    client: &ZeniiClient,
+    question: &str,
+    save: bool,
+    model: Option<&str>,
+) -> Result<(), String> {
+    let mut body = serde_json::json!({ "question": question, "save": save });
+    if let Some(m) = model {
+        body["model"] = serde_json::Value::String(m.to_string());
+    }
+
+    let result: serde_json::Value = client.post("/wiki/query", &body).await?;
+
+    let answer = result.get("answer").and_then(|v| v.as_str()).unwrap_or("");
+    println!("{answer}");
+
+    if let Some(citations) = result.get("citations").and_then(|v| v.as_array()) {
+        let cite_strs: Vec<&str> = citations.iter().filter_map(|v| v.as_str()).collect();
+        if !cite_strs.is_empty() {
+            println!("\nCitations:");
+            for c in cite_strs {
+                println!("  [[{c}]]");
+            }
+        }
+    }
+
+    if let Some(saved) = result.get("saved_page").filter(|v| !v.is_null()) {
+        let slug = saved.get("slug").and_then(|v| v.as_str()).unwrap_or("?");
+        println!("\nSaved as wiki page: {slug}");
+    }
+    Ok(())
+}
+
+pub async fn lint(client: &ZeniiClient) -> Result<(), String> {
+    println!("Running wiki lint…");
+    let result: serde_json::Value =
+        client.post("/wiki/lint", &serde_json::json!({})).await?;
+
+    let summary = result.get("summary").and_then(|v| v.as_str()).unwrap_or("");
+    let issues = result
+        .get("issues")
+        .and_then(|v| v.as_array())
+        .cloned()
+        .unwrap_or_default();
+
+    if issues.is_empty() {
+        println!("No issues found.");
+        return Ok(());
+    }
+
+    println!("{summary}\n");
+    for issue in &issues {
+        let kind = issue.get("kind").and_then(|v| v.as_str()).unwrap_or("?");
+        let page = issue
+            .get("page_slug")
+            .and_then(|v| v.as_str())
+            .unwrap_or("?");
+        let detail = issue.get("detail").and_then(|v| v.as_str()).unwrap_or("");
+        println!("[{kind}] {page}: {detail}");
+    }
+    Ok(())
+}
+
+pub async fn sources(client: &ZeniiClient) -> Result<(), String> {
+    let records: Vec<serde_json::Value> = client.get("/wiki/sources").await?;
+    if records.is_empty() {
+        println!("No sources ingested yet.");
+    } else {
+        for rec in &records {
+            let filename = rec.get("filename").and_then(|v| v.as_str()).unwrap_or("?");
+            let hash = rec.get("hash").and_then(|v| v.as_str()).unwrap_or("");
+            let active = rec.get("active").and_then(|v| v.as_bool()).unwrap_or(true);
+            let run_id = rec
+                .get("last_run_id")
+                .and_then(|v| v.as_str())
+                .unwrap_or("—");
+            let status = if active { "active" } else { "inactive" };
+            println!("{filename}  [{status}]  run={run_id}  sha256={}", &hash[..12.min(hash.len())]);
+        }
+        println!("\n{} source(s)", records.len());
+    }
+    Ok(())
+}
+
+pub async fn delete_source(
+    client: &ZeniiClient,
+    filename: &str,
+    model: Option<&str>,
+) -> Result<(), String> {
+    let mut path = format!("/wiki/sources/{}", urlencoded(filename));
+    if let Some(m) = model {
+        path = format!("{path}?model={}", urlencoded(m));
+    }
+    println!("Deleting source '{filename}' and its exclusive pages…");
+    let result: serde_json::Value = client.delete_json(&path).await?;
+    let deleted: Vec<&str> = result
+        .get("deleted_pages")
+        .and_then(|v| v.as_array())
+        .map(|a| a.iter().filter_map(|v| v.as_str()).collect())
+        .unwrap_or_default();
+    let rebuilt: Vec<&str> = result
+        .get("rebuilt_pages")
+        .and_then(|v| v.as_array())
+        .map(|a| a.iter().filter_map(|v| v.as_str()).collect())
+        .unwrap_or_default();
+    if !deleted.is_empty() {
+        println!("Deleted pages: {}", deleted.join(", "));
+    }
+    if !rebuilt.is_empty() {
+        println!("Rebuilt pages: {}", rebuilt.join(", "));
+    }
+    if deleted.is_empty() && rebuilt.is_empty() {
+        println!("No pages were affected.");
+    }
+    Ok(())
+}
+
+pub async fn regenerate(client: &ZeniiClient, model: Option<&str>) -> Result<(), String> {
+    let mut body = serde_json::json!({});
+    if let Some(m) = model {
+        body["model"] = serde_json::Value::String(m.to_string());
+    }
+    println!("Regenerating wiki from all sources… (this may take several minutes)");
+    let result: serde_json::Value = client.post("/wiki/regenerate", &body).await?;
+    let message = result.get("message").and_then(|v| v.as_str()).unwrap_or("done");
+    println!("{message}");
+    Ok(())
+}
+
 fn urlencoded(s: &str) -> String {
     let mut result = String::new();
     for byte in s.bytes() {
@@ -148,5 +358,76 @@ mod tests {
     fn wiki_sync_parses() {
         let cli = TestCli::parse_from(["test", "sync"]);
         assert!(matches!(cli.action, WikiAction::Sync));
+    }
+
+    #[test]
+    fn wiki_ingest_parses_file_and_model() {
+        let cli = TestCli::parse_from(["test", "ingest", "my-doc.md", "--model", "gpt-4o"]);
+        match cli.action {
+            WikiAction::Ingest { file, model } => {
+                assert_eq!(file, "my-doc.md");
+                assert_eq!(model.as_deref(), Some("gpt-4o"));
+            }
+            other => panic!("expected WikiAction::Ingest, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn wiki_ingest_parses_file_only() {
+        let cli = TestCli::parse_from(["test", "ingest", "notes.txt"]);
+        match cli.action {
+            WikiAction::Ingest { file, model } => {
+                assert_eq!(file, "notes.txt");
+                assert!(model.is_none());
+            }
+            other => panic!("expected WikiAction::Ingest, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn wiki_query_parses_question_and_flags() {
+        let cli = TestCli::parse_from([
+            "test",
+            "query",
+            "What is attention?",
+            "--save",
+            "--model",
+            "claude-3-5-sonnet",
+        ]);
+        match cli.action {
+            WikiAction::Query {
+                question,
+                save,
+                model,
+            } => {
+                assert_eq!(question, "What is attention?");
+                assert!(save);
+                assert_eq!(model.as_deref(), Some("claude-3-5-sonnet"));
+            }
+            other => panic!("expected WikiAction::Query, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn wiki_query_parses_question_only() {
+        let cli = TestCli::parse_from(["test", "query", "What is RAG?"]);
+        match cli.action {
+            WikiAction::Query {
+                question,
+                save,
+                model,
+            } => {
+                assert_eq!(question, "What is RAG?");
+                assert!(!save);
+                assert!(model.is_none());
+            }
+            other => panic!("expected WikiAction::Query, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn wiki_lint_parses() {
+        let cli = TestCli::parse_from(["test", "lint"]);
+        assert!(matches!(cli.action, WikiAction::Lint));
     }
 }

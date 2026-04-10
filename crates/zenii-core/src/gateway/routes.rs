@@ -58,12 +58,21 @@ pub fn build_router(state: Arc<AppState>) -> Router {
                 .put(handlers::memory::update_memory)
                 .delete(handlers::memory::delete_memory),
         )
-        // Wiki
+        // Wiki — static paths must precede the /{slug} dynamic segment
         .route("/wiki", get(handlers::wiki::list_wiki_pages))
         .route("/wiki/search", get(handlers::wiki::search_wiki_pages))
         .route("/wiki/ingest", post(handlers::wiki::ingest_wiki_source))
         .route("/wiki/sync", post(handlers::wiki::sync_wiki_to_memory))
         .route("/wiki/graph", get(handlers::wiki::get_wiki_graph))
+        .route("/wiki/query", post(handlers::wiki::query_wiki))
+        .route("/wiki/lint", post(handlers::wiki::lint_wiki))
+        .route("/wiki/sources", get(handlers::wiki::list_wiki_sources))
+        .route(
+            "/wiki/sources/{filename}",
+            delete(handlers::wiki::delete_wiki_source),
+        )
+        .route("/wiki/regenerate", post(handlers::wiki::regenerate_wiki))
+        .route("/wiki/dir", get(handlers::wiki::get_wiki_dir))
         .route("/wiki/{slug}", get(handlers::wiki::get_wiki_page))
         // Config
         .route(

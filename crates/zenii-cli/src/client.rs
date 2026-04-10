@@ -133,6 +133,23 @@ impl ZeniiClient {
         resp.text().await.map_err(|e| e.to_string())
     }
 
+    pub async fn delete_json<T: serde::de::DeserializeOwned>(
+        &self,
+        path: &str,
+    ) -> Result<T, String> {
+        let mut req = self.http.delete(format!("{}{path}", self.base_url));
+        if let Some(ref val) = self.auth_header_value() {
+            req = req.header("authorization", val);
+        }
+        let resp = req.send().await.map_err(|e| e.to_string())?;
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let body = resp.text().await.unwrap_or_default();
+            return Err(Self::format_error(status, &body));
+        }
+        resp.json::<T>().await.map_err(|e| e.to_string())
+    }
+
     pub async fn delete(&self, path: &str) -> Result<(), String> {
         let mut req = self.http.delete(format!("{}{path}", self.base_url));
         if let Some(ref val) = self.auth_header_value() {

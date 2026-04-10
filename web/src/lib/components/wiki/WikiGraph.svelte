@@ -4,7 +4,6 @@
 		forceSimulation,
 		forceLink,
 		forceManyBody,
-		forceCenter,
 		forceCollide,
 		forceX,
 		forceY,
@@ -60,6 +59,14 @@
 
 	// controls
 	let locked = $state(false);
+	let showLabels = $state(true);
+	let hoveredNode = $state<SimNode | null>(null);
+
+	// Reactive tick counter — incremented by d3 simulation each tick so that
+	// inner template effects re-run and pick up d3's in-place x/y mutations.
+	// (Svelte 5 fine-grained reactivity won't re-evaluate cx={node.x} when d3
+	// mutates the underlying object directly; _tick forces the re-read.)
+	let _tick = $state(0);
 
 	function zoomIn() {
 		const cx = width / 2;
@@ -153,22 +160,21 @@
 			.map((e) => ({ source: e.from, target: e.to }));
 
 		const sim = forceSimulation<SimNode>(sNodes)
-			.force('link', forceLink<SimNode, SimLink>(sLinks).id((d) => d.id).distance(50).strength(0.8))
-			.force('charge', forceManyBody<SimNode>().strength(-60))
-			.force('center', forceCenter(w / 2, h / 2))
+			.force('link', forceLink<SimNode, SimLink>(sLinks).id((d) => d.id))
+			.force('charge', forceManyBody<SimNode>().strength(-30))
 			.force('collide', forceCollide<SimNode>(14))
-			.force('x', forceX(w / 2).strength(0.04))
-			.force('y', forceY(h / 2).strength(0.04))
+			.force('x', forceX(w / 2))
+			.force('y', forceY(h / 2))
 			.alphaDecay(0.03)
 			.on('tick', () => {
-				// Spread to new array so keyed {#each} patches existing DOM nodes
-				// (preserving SVG animate elements) rather than recreating them.
-				simNodes = [...simNodes];
+				// Increment reactive counter so template effects re-run and read
+				// the current x/y values that d3 mutated in-place on the nodes.
+				_tick++;
 			});
 
-		// burst of ticks for stable initial layout before first render
-		for (let i = 0; i < 150; i++) sim.tick();
-		sim.alpha(0.05).restart();
+		// Few pre-ticks to separate overlapping nodes; let the rest animate visibly
+		for (let i = 0; i < 20; i++) sim.tick();
+		sim.alpha(0.5).restart();
 
 		simNodes = sNodes;
 		simLinks = sLinks as SimLink[];
@@ -180,23 +186,29 @@
 	onMount(() => {
 		if (!svgEl) return;
 
-		const rect = svgEl.getBoundingClientRect();
-		width = rect.width || 600;
-		height = rect.height || 400;
-
-		buildSimulation(width, height);
-		// Auto-fit so the graph is always centered and fully visible on open
-		fitView();
-
+		// Use ResizeObserver for initial setup so we get guaranteed non-zero
+		// dimensions (getBoundingClientRect on mount can return 0 before layout).
 		observer = new ResizeObserver((entries) => {
 			const entry = entries[0];
 			if (!entry) return;
-			width = entry.contentRect.width;
-			height = entry.contentRect.height;
-			simulation?.force('center', forceCenter(width / 2, height / 2));
-			simulation?.force('x', forceX(width / 2).strength(0.04));
-			simulation?.force('y', forceY(height / 2).strength(0.04));
-			simulation?.alpha(0.1).restart();
+			const newW = entry.contentRect.width;
+			const newH = entry.contentRect.height;
+			if (newW === 0 || newH === 0) return;
+
+			if (!simulation) {
+				// First valid measurement: build and fit
+				width = newW;
+				height = newH;
+				buildSimulation(width, height);
+				fitView();
+			} else {
+				// Subsequent resize: re-center forces, keep user's pan/zoom
+				width = newW;
+				height = newH;
+				simulation.force('x', forceX(width / 2));
+				simulation.force('y', forceY(height / 2));
+				simulation.alpha(0.1).restart();
+			}
 		});
 		observer.observe(svgEl);
 	});
@@ -250,36 +262,47 @@
 
 	function handleNodePointerDown(e: PointerEvent, node: SimNode) {
 		e.stopPropagation();
+		e.preventDefault();
+		// Pointer capture routes all subsequent move/up events here regardless of
+		// how fast the cursor moves — the standard d3-force drag fix.
+		const target = e.currentTarget as SVGGElement;
+		target.setPointerCapture(e.pointerId);
+
 		dragNode = node;
 		dragMoved = false;
 		dragDownPos = { x: e.clientX, y: e.clientY };
 		node.fx = node.x;
 		node.fy = node.y;
-		simulation?.alphaTarget(0.1).restart();
+		node.vx = 0;
+		node.vy = 0;
+		simulation?.alphaTarget(0.3).restart();
 
 		function onMove(me: PointerEvent) {
 			const dx = me.clientX - dragDownPos.x;
 			const dy = me.clientY - dragDownPos.y;
-			if (Math.sqrt(dx * dx + dy * dy) > 5) dragMoved = true;
-			const rect = svgEl!.getBoundingClientRect();
-			node.fx = (me.clientX - rect.left - tx) / scale;
-			node.fy = (me.clientY - rect.top - ty) / scale;
+			if (Math.sqrt(dx * dx + dy * dy) > 3) dragMoved = true;
+			const pt = svgPoint(me);
+			node.fx = pt.x;
+			node.fy = pt.y;
 		}
 		function onUp() {
+			node.vx = 0;
+			node.vy = 0;
 			node.fx = null;
 			node.fy = null;
 			simulation?.alphaTarget(0).restart();
 			dragNode = null;
+			hoveredNode = null;
 
 			if (!dragMoved) {
 				tooltipNode = tooltipNode?.id === node.id ? null : node;
 			}
 
-			window.removeEventListener('pointermove', onMove);
-			window.removeEventListener('pointerup', onUp);
+			target.removeEventListener('pointermove', onMove);
+			target.removeEventListener('pointerup', onUp);
 		}
-		window.addEventListener('pointermove', onMove);
-		window.addEventListener('pointerup', onUp);
+		target.addEventListener('pointermove', onMove);
+		target.addEventListener('pointerup', onUp);
 	}
 
 	function handleOpenPage() {
@@ -296,7 +319,7 @@
 	<svg
 		bind:this={svgEl}
 		class="h-full w-full"
-		style="cursor: {dragNode ? 'grabbing' : panning ? 'grabbing' : 'grab'}"
+		style="cursor: {dragNode ? 'grabbing' : panning ? 'grabbing' : 'grab'}; touch-action: none"
 		onwheel={handleWheel}
 		onpointerdown={handleSvgPointerDown}
 	>
@@ -308,7 +331,7 @@
 			{#each simLinks as link, i (i)}
 				{@const s = link.source as SimNode}
 				{@const t = link.target as SimNode}
-				{#if s.x != null && s.y != null && t.x != null && t.y != null}
+				{#if _tick >= 0 && s.x != null && s.y != null && t.x != null && t.y != null}
 					<line
 						x1={s.x}
 						y1={s.y}
@@ -325,13 +348,25 @@
 
 			<!-- nodes — keyed by id so DOM is patched on each tick, preserving animate -->
 			{#each simNodes as node (node.id)}
-				{#if node.x != null && node.y != null}
+				{#if _tick >= 0 && node.x != null && node.y != null}
 					{@const dimmed = highlightIds ? !highlightIds.has(node.id) : false}
 					<!-- svelte-ignore a11y_no_static_element_interactions -->
 					<g
 						style="cursor: pointer"
 						onpointerdown={(e) => handleNodePointerDown(e, node)}
+						onpointerenter={() => { if (!dragNode) hoveredNode = node; }}
+						onpointerleave={() => { hoveredNode = null; }}
 					>
+						<!-- invisible hit area — stays large in SVG coords so nodes are
+						     always draggable even when the graph is zoomed out (small scale) -->
+						<circle
+							cx={node.x}
+							cy={node.y}
+							r={20 / scale}
+							fill="transparent"
+							stroke="none"
+						/>
+
 						<!-- selection ring -->
 						{#if tooltipNode?.id === node.id}
 							<circle
@@ -354,15 +389,17 @@
 							fill-opacity={dimmed ? 0.12 : (tooltipNode?.id === node.id ? 1 : 0.85)}
 						/>
 
-						<text
-							x={node.x}
-							y={node.y + 14 / scale}
-							text-anchor="middle"
-							font-size={10 / scale}
-							fill="currentColor"
-							fill-opacity={dimmed ? 0.15 : 0.8}
-							style="pointer-events: none; user-select: none"
-						>{node.label}</text>
+						{#if showLabels || hoveredNode?.id === node.id || tooltipNode?.id === node.id}
+							<text
+								x={node.x}
+								y={node.y + 14 / scale}
+								text-anchor="middle"
+								font-size={10 / scale}
+								fill="currentColor"
+								fill-opacity={dimmed ? 0.15 : 0.8}
+								style="pointer-events: none; user-select: none"
+							>{node.label}</text>
+						{/if}
 					</g>
 				{/if}
 			{/each}
@@ -404,10 +441,21 @@
 		</div>
 	{/if}
 
-	<!-- zoom controls (matches workflow builder style) -->
+	<!-- zoom controls -->
 	<div class="absolute bottom-3 right-3 z-10 flex flex-col overflow-hidden rounded-md border bg-background shadow-md">
+		<!-- Labels toggle — text-lines icon, above zoom buttons -->
 		<button
-			class="border-b p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+			class="flex items-center justify-center border-b p-1.5 transition-colors {showLabels ? 'bg-muted text-foreground' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}"
+			onclick={() => (showLabels = !showLabels)}
+			title={showLabels ? 'Hide labels' : 'Show labels'}
+		>
+			<!-- text/label icon: three horizontal lines of varying width -->
+			<svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+				<path d="M2 3h10M2 7h7M2 11h9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+			</svg>
+		</button>
+		<button
+			class="flex items-center justify-center border-b p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
 			onclick={zoomIn}
 			title="Zoom in"
 		>
@@ -416,7 +464,7 @@
 			</svg>
 		</button>
 		<button
-			class="border-b p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+			class="flex items-center justify-center border-b p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
 			onclick={zoomOut}
 			title="Zoom out"
 		>
@@ -425,7 +473,7 @@
 			</svg>
 		</button>
 		<button
-			class="border-b p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+			class="flex items-center justify-center border-b p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
 			onclick={fitView}
 			title="Fit view"
 		>
@@ -434,7 +482,7 @@
 			</svg>
 		</button>
 		<button
-			class="p-1.5 transition-colors {locked ? 'bg-muted text-foreground' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}"
+			class="flex items-center justify-center p-1.5 transition-colors {locked ? 'bg-muted text-foreground' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}"
 			onclick={() => (locked = !locked)}
 			title={locked ? 'Unlock pan/zoom' : 'Lock pan/zoom'}
 		>
