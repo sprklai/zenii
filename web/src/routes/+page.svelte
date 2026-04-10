@@ -192,7 +192,12 @@
 					</p>
 					<div class="mb-2 flex flex-wrap gap-1.5">
 						{#each channelsStore.channels as channel (channel.id)}
-							<Badge variant={channel.connected ? 'default' : 'secondary'} class="text-xs">
+							<Badge
+								variant={channel.connected ? 'default' : 'secondary'}
+								class={channel.connected
+									? 'bg-green-500 text-white hover:bg-green-600 text-xs'
+									: 'text-xs'}
+							>
 								{channel.name}
 							</Badge>
 						{/each}

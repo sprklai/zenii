@@ -46,7 +46,7 @@
 	const processedBody = $derived(
 		selectedPage?.body.replace(/\[\[([^\]]+)\]\]/g, (_, slug) => `[${slug}](#wiki-${slug})`) ?? ''
 	);
-	let showGraph = $state(false);
+	let showGraph = $state(true);
 	let ingestOpen = $state(false);
 	let ingestFiles = $state<File[]>([]);
 	let ingestProgress = $state<{ current: number; total: number } | null>(null);
@@ -62,6 +62,7 @@
 
 	onMount(() => {
 		wikiStore.load();
+		wikiStore.loadGraph();
 	});
 
 	function handleSearch() {
