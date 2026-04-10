@@ -560,6 +560,27 @@ impl WikiManager {
         Ok(())
     }
 
+    /// Delete every file in `wiki/sources/` and clear source records from the manifest.
+    /// Does NOT delete wiki pages. Returns count of deleted source files.
+    pub fn delete_all_sources(&self) -> Result<usize, ZeniiError> {
+        let sources_dir = self.wiki_dir.join("sources");
+        let mut count = 0usize;
+        if sources_dir.exists() {
+            for entry in std::fs::read_dir(&sources_dir)? {
+                let entry = entry?;
+                let ft = entry.file_type()?;
+                if ft.is_file() {
+                    std::fs::remove_file(entry.path())?;
+                    count += 1;
+                }
+            }
+        }
+        // Clear source records from manifest; preserve page records
+        let (_, pages) = self.read_manifest()?;
+        self.write_manifest(&[], &pages)?;
+        Ok(count)
+    }
+
     /// Compute SHA-256 hex of content.
     pub fn hash_content(content: &str) -> String {
         let result = Sha256::digest(content.as_bytes());
@@ -1486,5 +1507,41 @@ No outbound links here.
         wm.delete_all_pages().unwrap();
         let index = std::fs::read_to_string(dir.path().join("index.md")).unwrap();
         assert!(index.contains("No pages yet"));
+    }
+
+    #[test]
+    fn test_delete_all_sources_removes_files_and_clears_manifest() {
+        let dir = tempfile::tempdir().unwrap();
+        let wm = WikiManager::new(dir.path().to_path_buf()).unwrap();
+        // Create two source files
+        let src_dir = dir.path().join("sources");
+        std::fs::write(src_dir.join("a.md"), "content a").unwrap();
+        std::fs::write(src_dir.join("b.txt"), "content b").unwrap();
+        // Write a manifest with those sources
+        wm.write_manifest(
+            &[
+                crate::wiki::SourceRecord {
+                    filename: "a.md".into(),
+                    hash: "aaa".into(),
+                    active: true,
+                    last_run_id: None,
+                },
+                crate::wiki::SourceRecord {
+                    filename: "b.txt".into(),
+                    hash: "bbb".into(),
+                    active: true,
+                    last_run_id: None,
+                },
+            ],
+            &[],
+        )
+        .unwrap();
+        let count = wm.delete_all_sources().unwrap();
+        assert_eq!(count, 2);
+        assert!(!src_dir.join("a.md").exists());
+        assert!(!src_dir.join("b.txt").exists());
+        // Manifest sources should now be empty
+        let (sources, _) = wm.read_manifest().unwrap();
+        assert!(sources.is_empty());
     }
 }
