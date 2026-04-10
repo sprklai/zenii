@@ -528,7 +528,7 @@
 										{source.hash.slice(0, 12)}
 									</span>
 									<span class="shrink-0 rounded px-1 py-0 text-[10px] {source.active ? 'bg-green-500/10 text-green-600 dark:text-green-400' : 'bg-muted text-muted-foreground'}">
-										{source.active ? 'active' : 'inactive'}
+										{source.active ? m.wiki_source_status_active() : m.wiki_source_status_inactive()}
 									</span>
 								</div>
 								<button
@@ -549,7 +549,7 @@
 	<!-- Main content -->
 	<div class="flex min-h-0 flex-1">
 		<!-- Left panel: search + category tabs + page list -->
-		<div class="flex w-64 shrink-0 flex-col border-r overflow-hidden">
+		<div class="flex w-64 shrink-0 flex-col border-r">
 			<!-- Search -->
 			<div class="border-b p-3">
 				<div class="relative">
@@ -578,7 +578,7 @@
 			</div>
 
 			<!-- Page list -->
-			<div class="flex-1 overflow-y-auto">
+			<div class="min-h-0 flex-1 overflow-y-auto">
 				{#if wikiStore.loading}
 					<div class="space-y-1 p-2">
 						{#each Array(6) as _}
@@ -820,7 +820,7 @@
 			{m.wiki_sources_delete_confirm_body({ filename: confirmDeleteFilename ?? '' })}
 		</p>
 		<Dialog.Footer>
-			<Button variant="outline" onclick={() => (confirmDeleteOpen = false)}>Cancel</Button>
+			<Button variant="outline" onclick={() => (confirmDeleteOpen = false)}>{m.common_cancel()}</Button>
 			<Button variant="destructive" onclick={handleDeleteSourceConfirm}>
 				{m.wiki_sources_delete_button()}
 			</Button>
@@ -836,7 +836,7 @@
 		</Dialog.Header>
 		<p class="text-sm text-muted-foreground">{m.wiki_regenerate_confirm_body()}</p>
 		<Dialog.Footer>
-			<Button variant="outline" onclick={() => (regenerateConfirmOpen = false)}>Cancel</Button>
+			<Button variant="outline" onclick={() => (regenerateConfirmOpen = false)}>{m.common_cancel()}</Button>
 			<Button onclick={handleRegenerate}>
 				<RefreshCw class="mr-1.5 h-4 w-4" />
 				{m.wiki_regenerate_button()}
@@ -910,7 +910,7 @@
 					{m.wiki_ingest_no_files()}
 				{:else}
 					<FileUp class="h-4 w-4" />
-					Ingest {ingestFiles.length} file{ingestFiles.length > 1 ? 's' : ''}
+					{m.wiki_ingest_file_count({ count: ingestFiles.length.toString(), suffix: ingestFiles.length > 1 ? 's' : '' })}
 				{/if}
 			</Button>
 		</div>
