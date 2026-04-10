@@ -56,8 +56,9 @@
 
 		<!-- Step Name (always present) -->
 		<div class="space-y-1">
-			<label class="text-xs font-medium text-muted-foreground">{t('wb_config_name_label')}</label>
+			<label for="step-name-{node.id}" class="text-xs font-medium text-muted-foreground">{t('wb_config_name_label')}</label>
 			<input
+				id="step-name-{node.id}"
 				type="text"
 				value={node.data.stepName ?? ''}
 				oninput={(e) => updateStepName((e.target as HTMLInputElement).value)}
@@ -69,13 +70,14 @@
 		<!-- Dynamic fields from definition -->
 		{#each definition.fields as field (field.key)}
 			<div class="space-y-1">
-				<label class="text-xs font-medium text-muted-foreground">
+				<label for="{node.id}-{field.key}" class="text-xs font-medium text-muted-foreground">
 					{t(field.label)}
 					{#if field.required}<span class="text-red-400">*</span>{/if}
 				</label>
 
 				{#if field.type === 'text'}
 					<input
+						id="{node.id}-{field.key}"
 						type="text"
 						value={String(node.data[field.key] ?? field.default ?? '')}
 						oninput={(e) => updateField(field.key, (e.target as HTMLInputElement).value)}
@@ -85,6 +87,7 @@
 
 				{:else if field.type === 'textarea'}
 					<textarea
+						id="{node.id}-{field.key}"
 						value={String(node.data[field.key] ?? field.default ?? '')}
 						oninput={(e) => updateField(field.key, (e.target as HTMLTextAreaElement).value)}
 						placeholder={field.placeholder ? t(field.placeholder) : ''}
@@ -94,6 +97,7 @@
 
 				{:else if field.type === 'number'}
 					<input
+						id="{node.id}-{field.key}"
 						type="number"
 						value={String(node.data[field.key] ?? field.default ?? '')}
 						oninput={(e) => updateField(field.key, Number((e.target as HTMLInputElement).value))}
@@ -102,6 +106,7 @@
 
 				{:else if field.type === 'select'}
 					<select
+						id="{node.id}-{field.key}"
 						value={String(node.data[field.key] ?? field.default ?? '')}
 						onchange={(e) => updateField(field.key, (e.target as HTMLSelectElement).value)}
 						class="w-full rounded-md border bg-background text-foreground px-2 py-1.5 text-sm"
@@ -124,6 +129,7 @@
 
 				{:else if field.type === 'json'}
 					<textarea
+						id="{node.id}-{field.key}"
 						value={typeof node.data[field.key] === 'string' ? String(node.data[field.key]) : JSON.stringify(node.data[field.key] ?? field.default ?? {}, null, 2)}
 						oninput={(e) => {
 							try {
@@ -139,6 +145,7 @@
 
 				{:else if field.type === 'step-ref'}
 					<select
+						id="{node.id}-{field.key}"
 						value={String(node.data[field.key] ?? '')}
 						onchange={(e) => updateField(field.key, (e.target as HTMLSelectElement).value)}
 						class="w-full rounded-md border bg-background text-foreground px-2 py-1.5 text-sm"
@@ -170,8 +177,9 @@
 		<!-- Common fields -->
 		<div class="border-t pt-3 mt-3 space-y-3">
 			<div class="space-y-1">
-				<label class="text-xs font-medium text-muted-foreground">{t('wb_config_timeout_label')}</label>
+				<label for="timeout-{node.id}" class="text-xs font-medium text-muted-foreground">{t('wb_config_timeout_label')}</label>
 				<input
+					id="timeout-{node.id}"
 					type="number"
 					value={String(node.data.timeout_secs ?? '')}
 					oninput={(e) => updateCommon('timeout_secs', Number((e.target as HTMLInputElement).value) || undefined)}
@@ -179,8 +187,9 @@
 				/>
 			</div>
 			<div class="space-y-1">
-				<label class="text-xs font-medium text-muted-foreground">{t('wb_config_retry_max_label')}</label>
+				<label for="retry-max-{node.id}" class="text-xs font-medium text-muted-foreground">{t('wb_config_retry_max_label')}</label>
 				<input
+					id="retry-max-{node.id}"
 					type="number"
 					value={String(((node.data.retry as Record<string, unknown>)?.max_retries) ?? '')}
 					oninput={(e) => {
@@ -194,8 +203,9 @@
 				/>
 			</div>
 			<div class="space-y-1">
-				<label class="text-xs font-medium text-muted-foreground">{t('wb_config_retry_delay_label')}</label>
+				<label for="retry-delay-{node.id}" class="text-xs font-medium text-muted-foreground">{t('wb_config_retry_delay_label')}</label>
 				<input
+					id="retry-delay-{node.id}"
 					type="number"
 					value={String(((node.data.retry as Record<string, unknown>)?.retry_delay_ms) ?? '')}
 					oninput={(e) => {
@@ -210,8 +220,9 @@
 				/>
 			</div>
 			<div class="space-y-1">
-				<label class="text-xs font-medium text-muted-foreground">{t('wb_config_failure_policy_label')}</label>
+				<label for="failure-policy-{node.id}" class="text-xs font-medium text-muted-foreground">{t('wb_config_failure_policy_label')}</label>
 				<select
+					id="failure-policy-{node.id}"
 					value={fpValue}
 					onchange={(e) => {
 						const val = (e.target as HTMLSelectElement).value;
@@ -230,8 +241,9 @@
 			</div>
 			{#if fpValue === 'fallback'}
 				<div class="space-y-1">
-					<label class="text-xs font-medium text-muted-foreground">{t('wb_config_fallback_step_label')}</label>
+					<label for="fallback-step-{node.id}" class="text-xs font-medium text-muted-foreground">{t('wb_config_fallback_step_label')}</label>
 					<select
+						id="fallback-step-{node.id}"
 						value={String((node.data.failure_policy as Record<string, Record<string, string>>)?.Fallback?.step ?? '')}
 						onchange={(e) => updateCommon('failure_policy', { Fallback: { step: (e.target as HTMLSelectElement).value } })}
 						class="w-full rounded-md border bg-background text-foreground px-2 py-1.5 text-sm"

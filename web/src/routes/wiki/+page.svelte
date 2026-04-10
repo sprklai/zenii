@@ -11,6 +11,7 @@
 	import Code from 'svelte-streamdown/code';
 	import { SvelteFlow, Controls, Background } from '@xyflow/svelte';
 	import '@xyflow/svelte/dist/style.css';
+	import WikiDotNode from '$lib/components/wiki/WikiDotNode.svelte';
 	import { wikiStore, type WikiPage } from '$lib/stores/wiki.svelte';
 	import { themeStore } from '$lib/stores/theme.svelte';
 	import { shikiThemes } from '$lib/components/ai-elements/code/shiki';
@@ -41,16 +42,17 @@
 	let ingesting = $state(false);
 	let fileInput: HTMLInputElement | undefined = $state();
 
+	const nodeTypes = { dot: WikiDotNode };
+
 	// SvelteFlow nodes/edges derived from wiki graph
 	let flowNodes = $derived.by(() => {
 		const g = wikiStore.graph;
 		if (!g) return [];
 		return g.nodes.map((n, i) => ({
 			id: n.id,
-			type: 'default',
+			type: 'dot',
 			position: { x: (i % 5) * 200, y: Math.floor(i / 5) * 120 },
-			data: { label: n.label },
-			style: `font-size: 12px; border-radius: 6px; padding: 6px 10px;`
+			data: { label: n.label }
 		}));
 	});
 
@@ -350,6 +352,7 @@
 						<SvelteFlow
 							nodes={flowNodes}
 							edges={flowEdges}
+							{nodeTypes}
 							fitView
 							colorMode={themeStore.isDark ? 'dark' : 'light'}
 							class="h-full"

@@ -57,6 +57,11 @@ impl WikiManager {
         Ok(Self { wiki_dir })
     }
 
+    /// Return the root wiki directory path.
+    pub fn wiki_dir(&self) -> &Path {
+        &self.wiki_dir
+    }
+
     pub fn list_pages(&self) -> Result<Vec<WikiPage>, ZeniiError> {
         let pages_dir = self.wiki_dir.join("pages");
         let mut pages = Vec::new();
@@ -86,16 +91,24 @@ impl WikiManager {
         memory: &dyn crate::memory::traits::Memory,
     ) -> Result<usize, ZeniiError> {
         let pages = self.list_pages()?;
-        let count = pages.len();
+        let mut count = 0;
         for page in pages {
+            let content = if !page.tldr.trim().is_empty() {
+                page.tldr.clone()
+            } else if !page.title.trim().is_empty() {
+                page.title.clone()
+            } else {
+                continue;
+            };
             let key = format!("wiki:{}", page.slug);
             memory
                 .store(
                     &key,
-                    &page.tldr,
+                    &content,
                     crate::memory::traits::MemoryCategory::Custom("wiki".into()),
                 )
                 .await?;
+            count += 1;
         }
         Ok(count)
     }
@@ -137,6 +150,77 @@ impl WikiManager {
         let name_hint = filename.trim_end_matches(".md").trim().to_string();
         std::fs::write(&page_path, content)?;
         parse_page(slug, &page_path, Some(&name_hint))
+    }
+
+    /// Write a wiki page to the appropriate subdirectory for the given type.
+    /// `page_type` must be one of: concepts, entities, topics, comparisons, queries.
+    pub fn write_page(
+        &self,
+        page_type: &str,
+        slug: &str,
+        content: &str,
+    ) -> Result<WikiPage, ZeniiError> {
+        if !PAGE_SUBDIRS.contains(&page_type) {
+            return Err(ZeniiError::Validation(format!(
+                "invalid page type '{page_type}'; must be one of: {}",
+                PAGE_SUBDIRS.join(", ")
+            )));
+        }
+        let page_path = self
+            .wiki_dir
+            .join("pages")
+            .join(page_type)
+            .join(format!("{slug}.md"));
+        std::fs::write(&page_path, content)?;
+        parse_page(slug.to_string(), &page_path, None)
+    }
+
+    /// Save raw source content to wiki/sources/{filename}.
+    pub fn save_source(&self, filename: &str, content: &str) -> Result<(), ZeniiError> {
+        let sources_dir = self.wiki_dir.join("sources");
+        std::fs::create_dir_all(&sources_dir)?;
+        std::fs::write(sources_dir.join(filename), content)?;
+        Ok(())
+    }
+
+    /// Rewrite wiki/index.md from the current set of pages.
+    pub fn update_index(&self) -> Result<(), ZeniiError> {
+        let pages = self.list_pages()?;
+        let mut lines = vec![
+            "# Wiki Index".to_string(),
+            "<!-- LLM maintains this file. Do not edit manually. -->".to_string(),
+            "<!-- Format: - [[page-name]] — one-line summary (type) -->".to_string(),
+            String::new(),
+        ];
+        if pages.is_empty() {
+            lines.push("_No pages yet. Ingest your first source to get started._".to_string());
+        } else {
+            for page in &pages {
+                let tldr = if page.tldr.is_empty() {
+                    "—".to_string()
+                } else {
+                    page.tldr.lines().next().unwrap_or("—").to_string()
+                };
+                lines.push(format!("- [[{}]] — {} ({})", page.slug, tldr, page.page_type));
+            }
+        }
+        let content = lines.join("\n") + "\n";
+        std::fs::write(self.wiki_dir.join("index.md"), content)?;
+        Ok(())
+    }
+
+    /// Append a log entry to wiki/log.md.
+    pub fn append_log(&self, entry: &str) -> Result<(), ZeniiError> {
+        let log_path = self.wiki_dir.join("log.md");
+        let existing = if log_path.exists() {
+            std::fs::read_to_string(&log_path)?
+        } else {
+            "# Wiki Log\n<!-- Append-only. LLM appends entries after each operation. -->\n"
+                .to_string()
+        };
+        let updated = format!("{existing}\n{entry}\n");
+        std::fs::write(&log_path, updated)?;
+        Ok(())
     }
 }
 
@@ -587,5 +671,65 @@ No outbound links here.
         let mgr = WikiManager::new(dir.path().to_path_buf()).unwrap();
         let page = mgr.get_page("my-doc-slug").unwrap().unwrap();
         assert_eq!(page.title, "My Doc Slug");
+    }
+
+    // W19: write_page creates the file in the correct subdirectory and parses it back
+    #[test]
+    fn write_page_creates_file_in_correct_subdir() {
+        let dir = TempDir::new().unwrap();
+        let mgr = WikiManager::new(dir.path().to_path_buf()).unwrap();
+        let page = mgr
+            .write_page("concepts", "test-concept", sample_page_content())
+            .unwrap();
+        assert_eq!(page.slug, "test-concept");
+        assert!(dir.path().join("pages/concepts/test-concept.md").exists());
+    }
+
+    // W20: write_page returns a Validation error for an unrecognised page type
+    #[test]
+    fn write_page_rejects_invalid_type() {
+        let dir = TempDir::new().unwrap();
+        let mgr = WikiManager::new(dir.path().to_path_buf()).unwrap();
+        let err = mgr
+            .write_page("invalid-type", "my-page", "content")
+            .unwrap_err();
+        assert!(matches!(err, crate::error::ZeniiError::Validation(_)));
+    }
+
+    // W21: update_index rewrites index.md with a line per page
+    #[test]
+    fn update_index_writes_entries_for_all_pages() {
+        let dir = TempDir::new().unwrap();
+        write_page(dir.path(), "concepts", "page-a", sample_page_content());
+        write_page(dir.path(), "topics", "page-b", sample_page_content());
+        let mgr = WikiManager::new(dir.path().to_path_buf()).unwrap();
+        mgr.update_index().unwrap();
+        let index = fs::read_to_string(dir.path().join("index.md")).unwrap();
+        assert!(index.contains("[[page-a]]"), "index must mention page-a");
+        assert!(index.contains("[[page-b]]"), "index must mention page-b");
+    }
+
+    // W22: append_log appends entries to log.md without overwriting existing content
+    #[test]
+    fn append_log_appends_without_overwriting() {
+        let dir = TempDir::new().unwrap();
+        fs::write(dir.path().join("log.md"), "# Wiki Log\n").unwrap();
+        let mgr = WikiManager::new(dir.path().to_path_buf()).unwrap();
+        mgr.append_log("## [2026-04-09] ingest | first-entry").unwrap();
+        mgr.append_log("## [2026-04-09] ingest | second-entry").unwrap();
+        let log = fs::read_to_string(dir.path().join("log.md")).unwrap();
+        assert!(log.contains("# Wiki Log"), "initial content must be preserved");
+        assert!(log.contains("first-entry"), "first entry must be present");
+        assert!(log.contains("second-entry"), "second entry must be present");
+    }
+
+    // W23: save_source writes raw content to wiki/sources/
+    #[test]
+    fn save_source_writes_to_sources_dir() {
+        let dir = TempDir::new().unwrap();
+        let mgr = WikiManager::new(dir.path().to_path_buf()).unwrap();
+        mgr.save_source("my-doc.md", "Raw source content").unwrap();
+        let saved = fs::read_to_string(dir.path().join("sources/my-doc.md")).unwrap();
+        assert_eq!(saved, "Raw source content");
     }
 }

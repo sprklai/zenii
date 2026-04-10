@@ -131,7 +131,7 @@ export function graphToWorkflow(
       const data = node.data as Record<string, unknown>;
       const defType = data.definitionType as string | undefined;
       const def = defType ? nodeRegistry.get(defType) : undefined;
-      const stepFields = def?.toStep ? def.toStep(data) : {};
+      const stepFields: Record<string, unknown> = def?.toStep ? def.toStep(data) : { ...data };
 
       const step: WorkflowStep = {
         ...(stepFields as Partial<WorkflowStep>),

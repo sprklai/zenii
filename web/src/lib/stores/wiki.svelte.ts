@@ -105,7 +105,7 @@ function createWikiStore() {
       filename: string,
       content: string,
     ): Promise<{ slug: string; status: string }> {
-      return apiPost("/wiki/ingest", { filename, content });
+      return apiPost("/wiki/ingest", { filename, content }, { timeout: 120_000 });
     },
 
     clear() {

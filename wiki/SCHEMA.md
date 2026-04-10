@@ -10,6 +10,18 @@ Read this file before any wiki operation. Never modify `wiki/sources/`. Never le
 Page subdirs: `pages/concepts/` `pages/entities/` `pages/topics/` `pages/comparisons/` `pages/queries/`
 Filenames: lowercase hyphen-separated slug (e.g. `transformer-architecture.md`)
 
+## Type Taxonomy
+
+| Type | What it covers | Examples |
+|------|----------------|---------|
+| entity | Named, concrete things that exist: people, orgs, products, tools, frameworks, models, datasets, events | "Andrej Karpathy", "OpenAI", "GPT-4", "PyTorch", "ImageNet" |
+| concept | Abstract ideas, techniques, or patterns — not a named thing, but an idea | "attention mechanism", "zero-shot prompting", "chain-of-thought" |
+| topic | Subject area or domain that organizes related pages — broader than a concept | "natural language processing", "model evaluation", "retrieval-augmented generation" |
+| comparison | Side-by-side analysis of two or more entities or concepts | "GPT-4 vs Claude 3", "LoRA vs full fine-tuning" |
+| query | A saved answer to a specific question about the wiki | "What are the main scaling laws?", "When was RLHF introduced?" |
+
+**Entity extraction rule**: For every named person, organization, product, tool, model, dataset, or project mentioned in the source — create an entity page. Err on the side of more entity pages.
+
 ## Page Format
 
 ```
@@ -34,11 +46,12 @@ Content. Use [[page-name]] for wiki links. Note counterarguments and (low confid
 ## Ingest
 
 1. Read source fully
-2. List 2-5 key takeaways for the human
-3. Create or update 5-15 pages (integrate new info, do not replace existing content)
-4. Cross-link pages with `[[wiki-links]]`
-5. Update `wiki/index.md` — add new entries, update changed summaries
-6. Append to `wiki/log.md`: `## [YYYY-MM-DD] ingest | <filename> — <summary>`
+2. **Entity pass**: list all named people, orgs, products, tools, models, datasets, and projects in the source — each gets an entity page
+3. List 2-5 key takeaways for the human
+4. Create or update 5-15 pages: entity pages first, then concepts, topics, comparisons as needed (integrate new info, do not replace existing content)
+5. Cross-link pages with `[[wiki-links]]`
+6. Update `wiki/index.md` — add new entries, update changed summaries
+7. Append to `wiki/log.md`: `## [YYYY-MM-DD] ingest | <filename> — <summary>`
 
 ## Query
 

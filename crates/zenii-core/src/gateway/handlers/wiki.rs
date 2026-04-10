@@ -4,9 +4,10 @@ use axum::Json;
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::gateway::state::AppState;
+use crate::wiki::WikiPage;
 
 // ── Request / query types ────────────────────────────────────────────────────
 
@@ -19,6 +20,21 @@ pub struct SearchQuery {
 pub struct IngestRequest {
     pub content: String,
     pub filename: String,
+    pub model: Option<String>,
+}
+
+#[derive(Serialize)]
+struct IngestResponse {
+    pages: Vec<WikiPage>,
+    message: String,
+}
+
+/// Page definition as returned by the LLM in JSON.
+#[derive(Deserialize)]
+struct LlmPage {
+    page_type: String,
+    slug: String,
+    content: String,
 }
 
 // ── Handlers ─────────────────────────────────────────────────────────────────
@@ -68,22 +84,148 @@ pub async fn search_wiki_pages(
 }
 
 /// POST /wiki/ingest — ingest a raw source document into the wiki.
+///
+/// Calls the configured AI agent to synthesize multiple typed wiki pages (concepts, entities,
+/// topics, comparisons, queries) from the source. Falls back to a single topic page when no
+/// AI model is configured or the LLM response cannot be parsed.
 pub async fn ingest_wiki_source(
     State(state): State<Arc<AppState>>,
     Json(body): Json<IngestRequest>,
 ) -> impl IntoResponse {
-    match state.wiki.ingest(&body.filename, &body.content) {
-        Ok(page) => (
-            StatusCode::OK,
-            Json(serde_json::json!({"slug": page.slug, "status": "created"})),
+    // Save the raw source for future re-ingestion.
+    if let Err(e) = state.wiki.save_source(&body.filename, &body.content) {
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({"error": format!("failed to save source: {e}")})),
         )
-            .into_response(),
+            .into_response();
+    }
+
+    // Attempt LLM-driven multi-page generation.
+    if let Ok(pages) = llm_ingest(&state, &body.filename, &body.content, body.model.as_deref()).await
+    {
+        let date = chrono::Utc::now().format("%Y-%m-%d").to_string();
+        let log_entry = format!(
+            "## [{date}] ingest | {} — {} page(s) generated",
+            body.filename,
+            pages.len()
+        );
+        let _ = state.wiki.update_index();
+        let _ = state.wiki.append_log(&log_entry);
+        return (
+            StatusCode::OK,
+            Json(serde_json::json!(IngestResponse {
+                message: format!("{} page(s) generated from '{}'", pages.len(), body.filename),
+                pages,
+            })),
+        )
+            .into_response();
+    }
+
+    // Fallback: write raw content as a single topic page.
+    match state.wiki.ingest(&body.filename, &body.content) {
+        Ok(page) => {
+            let date = chrono::Utc::now().format("%Y-%m-%d").to_string();
+            let log_entry = format!(
+                "## [{date}] ingest | {} — fallback single-page (no LLM)",
+                body.filename
+            );
+            let _ = state.wiki.update_index();
+            let _ = state.wiki.append_log(&log_entry);
+            (
+                StatusCode::OK,
+                Json(serde_json::json!(IngestResponse {
+                    message: format!(
+                        "1 page created from '{}' (LLM unavailable — configure a provider for full wiki generation)",
+                        body.filename
+                    ),
+                    pages: vec![page],
+                })),
+            )
+                .into_response()
+        }
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(serde_json::json!({"error": e.to_string()})),
         )
             .into_response(),
     }
+}
+
+/// Call the AI agent to generate typed wiki pages from a source document.
+/// Returns `Ok(pages)` on success or `Err` when the agent or JSON parsing fails.
+async fn llm_ingest(
+    state: &AppState,
+    filename: &str,
+    content: &str,
+    model: Option<&str>,
+) -> Result<Vec<WikiPage>, ()> {
+    use crate::ai::resolve_agent;
+
+    // Read SCHEMA.md for the system prompt.
+    let schema = std::fs::read_to_string(state.wiki.wiki_dir().join("SCHEMA.md"))
+        .unwrap_or_default();
+
+    let system_prompt = format!(
+        r#"You are a wiki knowledge compiler. Analyze source documents and generate structured wiki pages.
+
+{schema}
+
+## Generation Instructions
+
+Work in two phases:
+
+**Phase 1 — Entity extraction** (do this mentally first):
+Scan the source for every named entity: people, organizations, products, tools, frameworks, models, datasets, events, or projects. Each named thing gets its own entity page with page_type "entities".
+
+**Phase 2 — Synthesis pages**:
+After entity pages, generate concept pages (abstract ideas/techniques), topic pages (subject domains), and comparisons or queries as appropriate.
+
+Generate 5-15 wiki pages total as a JSON array. Each object must have exactly these fields:
+- "page_type": one of "entities", "concepts", "topics", "comparisons", or "queries"
+- "slug": kebab-case unique identifier (lowercase, hyphens only)
+- "content": complete markdown with YAML frontmatter (---) and ## TLDR / ## Body sections;
+  use [[slug]] wikilinks to cross-reference other pages you generate
+
+Entity pages must include these frontmatter fields:
+- "title": the canonical name of the entity
+- "type": "entity"
+- "tags": relevant category tags (e.g. [person, researcher], [org, lab], [tool, framework])
+- "sources": list of source filenames
+- "updated": today's date YYYY-MM-DD
+
+Return ONLY a valid JSON array. No explanation, no markdown code fences."#
+    );
+
+    let agent = resolve_agent(model, state, None, Some(&system_prompt), "wiki")
+        .await
+        .map_err(|_| ())?;
+
+    let user_prompt = format!("Filename: {filename}\n\nContent:\n{content}");
+    let response = agent.prompt(&user_prompt).await.map_err(|_| ())?;
+
+    // Strip optional markdown code fences the model may add.
+    let raw = response
+        .output
+        .trim()
+        .trim_start_matches("```json")
+        .trim_start_matches("```")
+        .trim_end_matches("```")
+        .trim();
+
+    let llm_pages: Vec<LlmPage> = serde_json::from_str(raw).map_err(|_| ())?;
+    if llm_pages.is_empty() {
+        return Err(());
+    }
+
+    let mut written = Vec::new();
+    for p in llm_pages {
+        if let Ok(page) = state.wiki.write_page(&p.page_type, &p.slug, &p.content) {
+            written.push(page);
+        }
+    }
+
+    if written.is_empty() { Err(()) } else { Ok(written) }
 }
 
 /// POST /wiki/sync — sync compiled wiki pages into the memory store.
@@ -294,5 +436,40 @@ mod tests {
             val.get("edges").is_some(),
             "response body must contain 'edges' key"
         );
+    }
+
+    /// H9: POST /wiki/ingest falls back to a single topic page when no LLM is configured;
+    /// response body must have a `pages` array and a `message` string.
+    #[tokio::test]
+    async fn wiki_ingest_fallback_returns_pages_array() {
+        let (_dir, state) = test_state().await;
+
+        let body = serde_json::to_string(&serde_json::json!({
+            "content": "# Hello\nThis is a test document.",
+            "filename": "hello.md"
+        }))
+        .unwrap();
+
+        let req = Request::builder()
+            .method("POST")
+            .uri("/wiki/ingest")
+            .header("content-type", "application/json")
+            .body(Body::from(body))
+            .unwrap();
+
+        let resp = app(state).oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        let bytes = axum::body::to_bytes(resp.into_body(), 16 * 1024)
+            .await
+            .unwrap();
+        let val: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        assert!(val.get("pages").is_some(), "response must have 'pages' key");
+        assert!(
+            val.get("message").is_some(),
+            "response must have 'message' key"
+        );
+        let pages = val["pages"].as_array().unwrap();
+        assert!(!pages.is_empty(), "at least one page must be returned");
     }
 }

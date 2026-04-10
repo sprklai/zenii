@@ -34,12 +34,13 @@ export function withTimeout<T>(
 async function resolvedFetch(
   input: string | URL | Request,
   init?: RequestInit,
+  timeoutMs = 15_000,
 ): Promise<Response> {
   if (isTauri) {
     const { fetch: tauriFetch } = await import("@tauri-apps/plugin-http");
-    return withTimeout(tauriFetch(input, init), 15000, String(input));
+    return withTimeout(tauriFetch(input, init), timeoutMs, String(input));
   }
-  return withTimeout(fetch(input, init), 15000, String(input));
+  return withTimeout(fetch(input, init), timeoutMs, String(input));
 }
 
 export function getToken(): string | null {
@@ -122,15 +123,16 @@ export class MesoApiError extends Error {
 
 export async function api<T>(
   path: string,
-  options: RequestInit = {},
+  options: RequestInit & { timeout?: number } = {},
 ): Promise<T> {
+  const { timeout, ...fetchOptions } = options;
   const token = getToken();
   const baseUrl = getBaseUrl();
   const url = `${baseUrl}${path}`;
 
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
-    ...(options.headers as Record<string, string>),
+    ...(fetchOptions.headers as Record<string, string>),
   };
 
   if (token) {
@@ -139,10 +141,7 @@ export async function api<T>(
 
   let response: Response;
   try {
-    response = await resolvedFetch(url, {
-      ...options,
-      headers,
-    });
+    response = await resolvedFetch(url, { ...fetchOptions, headers }, timeout);
   } catch (e) {
     console.error(`[API] ${options.method ?? "GET"} ${url} fetch error:`, e);
     throw e;
@@ -180,10 +179,15 @@ export async function apiGet<T>(path: string): Promise<T> {
   return api<T>(path, { method: "GET" });
 }
 
-export async function apiPost<T>(path: string, body?: unknown): Promise<T> {
+export async function apiPost<T>(
+  path: string,
+  body?: unknown,
+  opts?: { timeout?: number },
+): Promise<T> {
   return api<T>(path, {
     method: "POST",
     body: body ? JSON.stringify(body) : undefined,
+    ...opts,
   });
 }
 

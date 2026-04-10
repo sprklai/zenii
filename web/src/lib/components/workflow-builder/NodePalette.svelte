@@ -99,6 +99,8 @@
 							{#each defs as def (def.type)}
 								<div
 									draggable="true"
+									role="button"
+									tabindex="0"
 									ondragstart={(e) => handleDragStart(e, def)}
 									class="flex items-center gap-2 px-2 py-1.5 rounded text-xs cursor-grab hover:bg-muted active:cursor-grabbing"
 									title={t(def.description)}
