@@ -312,6 +312,50 @@
 		promptOpen = true;
 	}
 
+	async function handleSavePrompt() {
+		promptSaving = true;
+		try {
+			await wikiStore.savePrompt(promptContent);
+			toast.success(m.wiki_prompt_saved());
+			promptOpen = false;
+		} catch (e) {
+			toast.error(e instanceof Error ? e.message : String(e));
+		} finally {
+			promptSaving = false;
+		}
+	}
+
+	async function handleDeleteWiki() {
+		if (deleteConfirmText !== 'DELETE') return;
+		deletingWiki = true;
+		try {
+			const count = await wikiStore.deleteAllPages();
+			toast.success(m.wiki_delete_success({ count: count.toString() }));
+			selectedPage = null;
+			deleteWikiOpen = false;
+			deleteConfirmText = '';
+			await wikiStore.load();
+			await wikiStore.loadGraph();
+		} catch (e) {
+			toast.error(e instanceof Error ? e.message : String(e));
+		} finally {
+			deletingWiki = false;
+		}
+	}
+
+	async function handleDeleteAllSources() {
+		deletingAllSources = true;
+		try {
+			const count = await wikiStore.deleteAllSources();
+			toast.success(m.wiki_sources_delete_all_success({ count: count.toString() }));
+			deleteAllSourcesOpen = false;
+		} catch (e) {
+			toast.error(e instanceof Error ? e.message : String(e));
+		} finally {
+			deletingAllSources = false;
+		}
+	}
+
 	async function handleRegenerate() {
 		regenerateConfirmOpen = false;
 		try {
@@ -980,5 +1024,83 @@
 				{/if}
 			</Button>
 		</div>
+	</Dialog.Content>
+</Dialog.Root>
+
+<!-- Change Prompt modal -->
+<Dialog.Root bind:open={promptOpen}>
+	<Dialog.Content class="sm:max-w-lg">
+		<Dialog.Header>
+			<Dialog.Title>{m.wiki_prompt_modal_title()}</Dialog.Title>
+			<Dialog.Description>{m.wiki_prompt_modal_desc()}</Dialog.Description>
+		</Dialog.Header>
+		{#if promptLoading}
+			<Skeleton class="h-32 w-full" />
+		{:else}
+			<textarea
+				class="min-h-[130px] w-full resize-none rounded-md border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+				bind:value={promptContent}
+			></textarea>
+		{/if}
+		<Dialog.Footer>
+			<Button variant="outline" onclick={() => (promptOpen = false)}>Cancel</Button>
+			<Button onclick={handleSavePrompt} disabled={promptSaving || promptLoading || !promptContent.trim()}>
+				{#if promptSaving}<Loader2 class="mr-1.5 h-3.5 w-3.5 animate-spin" />{/if}
+				{m.wiki_prompt_save()}
+			</Button>
+		</Dialog.Footer>
+	</Dialog.Content>
+</Dialog.Root>
+
+<!-- Delete All Wiki modal -->
+<Dialog.Root bind:open={deleteWikiOpen} onOpenChange={(open) => { if (!open) deleteConfirmText = ''; }}>
+	<Dialog.Content class="sm:max-w-md">
+		<Dialog.Header>
+			<Dialog.Title class="text-destructive">{m.wiki_delete_modal_title()}</Dialog.Title>
+		</Dialog.Header>
+		<div class="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+			<AlertTriangle class="mb-1 h-4 w-4" />
+			{m.wiki_delete_modal_warning({ count: wikiStore.pages.length.toString() })}
+		</div>
+		<div class="space-y-2">
+			<p class="text-xs text-muted-foreground">{m.wiki_delete_confirm_placeholder()}</p>
+			<input
+				type="text"
+				class="w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-destructive/50"
+				placeholder="DELETE"
+				bind:value={deleteConfirmText}
+				onkeydown={(e) => { if (e.key === 'Enter' && deleteConfirmText === 'DELETE') handleDeleteWiki(); }}
+			/>
+		</div>
+		<Dialog.Footer>
+			<Button variant="outline" onclick={() => (deleteWikiOpen = false)}>Cancel</Button>
+			<Button
+				variant="destructive"
+				onclick={handleDeleteWiki}
+				disabled={deleteConfirmText !== 'DELETE' || deletingWiki}
+			>
+				{#if deletingWiki}<Loader2 class="mr-1.5 h-3.5 w-3.5 animate-spin" />{/if}
+				{m.wiki_delete_confirm_button()}
+			</Button>
+		</Dialog.Footer>
+	</Dialog.Content>
+</Dialog.Root>
+
+<!-- Delete All Sources dialog -->
+<Dialog.Root bind:open={deleteAllSourcesOpen}>
+	<Dialog.Content class="sm:max-w-sm">
+		<Dialog.Header>
+			<Dialog.Title>{m.wiki_sources_delete_all_button()}</Dialog.Title>
+		</Dialog.Header>
+		<p class="text-sm text-muted-foreground">
+			{m.wiki_sources_delete_all_confirm({ count: wikiStore.sources.length.toString() })}
+		</p>
+		<Dialog.Footer>
+			<Button variant="outline" onclick={() => (deleteAllSourcesOpen = false)}>Cancel</Button>
+			<Button variant="destructive" onclick={handleDeleteAllSources} disabled={deletingAllSources}>
+				{#if deletingAllSources}<Loader2 class="mr-1.5 h-3.5 w-3.5 animate-spin" />{/if}
+				{m.wiki_sources_delete_all_button()}
+			</Button>
+		</Dialog.Footer>
 	</Dialog.Content>
 </Dialog.Root>
