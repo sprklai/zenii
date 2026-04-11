@@ -25,6 +25,14 @@ pub struct WikiPage {
     pub tldr: String,           // content after ## TLDR heading
     pub body: String,           // full raw markdown
     pub wikilinks: Vec<String>, // extracted [[slug]] targets
+    #[serde(default)]
+    pub aliases: Vec<String>, // alternative names / abbreviations
+    #[serde(default)]
+    pub related: Vec<String>, // explicit semantic peer slugs ("read next")
+    #[serde(default)]
+    pub confidence: String, // "low" | "medium" | "high"
+    #[serde(default)]
+    pub category: String, // sub-type within page_type
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -44,6 +52,7 @@ pub struct WikiNode {
 pub struct WikiEdge {
     pub from: String,
     pub to: String,
+    pub kind: String, // "wikilink" | "related"
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -221,15 +230,21 @@ impl WikiManager {
                 page_type: p.page_type.clone(),
             })
             .collect();
-        let edges = pages
-            .iter()
-            .flat_map(|p| {
-                p.wikilinks.iter().map(move |link| WikiEdge {
-                    from: p.slug.clone(),
-                    to: link.clone(),
-                })
+        let wikilink_edges = pages.iter().flat_map(|p| {
+            p.wikilinks.iter().map(move |link| WikiEdge {
+                from: p.slug.clone(),
+                to: link.clone(),
+                kind: "wikilink".to_string(),
             })
-            .collect();
+        });
+        let related_edges = pages.iter().flat_map(|p| {
+            p.related.iter().map(move |rel| WikiEdge {
+                from: p.slug.clone(),
+                to: rel.clone(),
+                kind: "related".to_string(),
+            })
+        });
+        let edges = wikilink_edges.chain(related_edges).collect();
         Ok(WikiGraph { nodes, edges })
     }
 
@@ -971,6 +986,14 @@ fn parse_page(
         sources: Option<Vec<String>>,
         #[serde(default)]
         updated: Option<String>,
+        #[serde(default)]
+        aliases: Option<Vec<String>>,
+        #[serde(default)]
+        related: Option<Vec<String>>,
+        #[serde(default)]
+        confidence: Option<String>,
+        #[serde(default)]
+        category: Option<String>,
     }
 
     let fm: Frontmatter = serde_yaml::from_str(frontmatter_str).unwrap_or_default();
@@ -1028,6 +1051,10 @@ fn parse_page(
         tldr,
         body: body.to_string(),
         wikilinks,
+        aliases: fm.aliases.unwrap_or_default(),
+        related: fm.related.unwrap_or_default(),
+        confidence: fm.confidence.unwrap_or_default(),
+        category: fm.category.unwrap_or_default(),
     })
 }
 

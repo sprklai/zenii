@@ -29,12 +29,16 @@ Filenames: lowercase hyphen-separated slug (e.g. `transformer-architecture.md`)
 title: "Title"
 type: concept|entity|topic|comparison|query
 tags: [tag1, tag2]
+aliases: ["alt name", "abbreviation"]
+related: ["slug-1", "slug-2"]
+confidence: low|medium|high
+category: <subcategory>
 sources: [source-file.md]
 updated: YYYY-MM-DD
 ---
 
 ## TLDR
-1-3 sentences. What is this and why does it matter?
+2-3 sentences. Definition sentence + significance sentence + optional relationship sentence.
 
 ## Body
 Content. Use [[page-name]] for wiki links. Note counterarguments and (low confidence) claims.
@@ -42,6 +46,20 @@ Content. Use [[page-name]] for wiki links. Note counterarguments and (low confid
 ## See Also
 - [[related-page]]
 ```
+
+### Frontmatter Fields
+
+| Field | Required | Type | Description |
+|-------|----------|------|-------------|
+| `title` | yes | string | Canonical name |
+| `type` | yes | string | One of: `concept`, `entity`, `topic`, `comparison`, `query` |
+| `tags` | yes | `string[]` | Lowercase hyphenated category tags |
+| `aliases` | yes | `string[]` | Alternative names/abbreviations. Empty `[]` if none. |
+| `related` | yes | `string[]` | Semantic peer slugs ("read next"). 2–5 entries. |
+| `confidence` | yes | `low\|medium\|high` | How well-sourced: high=direct evidence, low=inferred |
+| `category` | yes | string | Sub-type within the page type (see taxonomy in INGEST_PROMPT.md) |
+| `sources` | yes | `string[]` | Source filenames this page was compiled from |
+| `updated` | yes | string | ISO 8601 date `YYYY-MM-DD` |
 
 ## Ingest
 
