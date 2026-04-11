@@ -518,29 +518,42 @@ impl WikiManager {
 
     // ── Sources ──────────────────────────────────────────────────────────────
 
-    /// List all source files in `wiki/sources/`.
-    /// Falls back to a filesystem scan if no manifest exists.
+    /// List all source files in `wiki/sources/`, merged with manifest metadata.
+    ///
+    /// Always scans the filesystem so files dropped into the folder after the last
+    /// ingest are visible. Manifest entries keep their `active` flag and
+    /// `last_run_id`; untracked files appear as `active: false` (pending ingest).
     pub fn list_sources(&self) -> Result<Vec<SourceRecord>, ZeniiError> {
         let (manifest_sources, _) = self.read_manifest()?;
-        if !manifest_sources.is_empty() {
-            return Ok(manifest_sources);
-        }
-        // Bootstrap: scan filesystem
         let sources_dir = self.wiki_dir.join("sources");
         if !sources_dir.exists() {
-            return Ok(Vec::new());
+            return Ok(manifest_sources);
         }
-        let mut records = Vec::new();
+
+        // Build lookup: filename → manifest record
+        let mut known: std::collections::HashMap<String, SourceRecord> =
+            manifest_sources.into_iter().map(|r| (r.filename.clone(), r)).collect();
+
+        // Scan filesystem; add untracked files as inactive records
         for entry in std::fs::read_dir(&sources_dir)? {
             let entry = entry?;
             let path = entry.path();
-            if path.is_file() {
-                let filename = path.file_name().unwrap_or_default().to_string_lossy().into_owned();
+            if !path.is_file() {
+                continue;
+            }
+            let filename = path.file_name().unwrap_or_default().to_string_lossy().into_owned();
+            if filename.starts_with('.') {
+                continue; // skip .gitkeep and other dotfiles
+            }
+            if !known.contains_key(&filename) {
                 let content = std::fs::read_to_string(&path).unwrap_or_default();
                 let hash = Self::hash_content(&content);
-                records.push(SourceRecord { filename, hash, active: true, last_run_id: None });
+                known.insert(filename.clone(), SourceRecord { filename, hash, active: false, last_run_id: None });
             }
         }
+
+        let mut records: Vec<SourceRecord> = known.into_values().collect();
+        records.sort_by(|a, b| a.filename.cmp(&b.filename));
         Ok(records)
     }
 

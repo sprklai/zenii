@@ -308,6 +308,19 @@ pub async fn ingest_wiki_source(
     match state.wiki.ingest(&body.filename, &body.content) {
         Ok(page) => {
             let date = chrono::Utc::now().format("%Y-%m-%d").to_string();
+            // Mark source as active in the manifest even on the fallback path.
+            let source_hash = WikiManager::hash_content(&body.content);
+            let (mut sources, page_records) = state.wiki.read_manifest().unwrap_or_default();
+            sources.retain(|s| s.filename != body.filename);
+            sources.push(crate::wiki::SourceRecord {
+                filename: body.filename.clone(),
+                hash: source_hash,
+                active: true,
+                last_run_id: None,
+            });
+            if let Err(e) = state.wiki.write_manifest(&sources, &page_records) {
+                tracing::warn!("manifest write failed after fallback ingest: {e}");
+            }
             if let Err(e) = state.wiki.update_index() {
                 tracing::error!("wiki index update failed after fallback ingest: {e}");
                 return (

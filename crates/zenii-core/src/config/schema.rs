@@ -230,6 +230,32 @@ pub struct AppConfig {
     /// Install with: pip install markitdown[all]
     /// Override to use a different binary, e.g. "pandoc" or "/usr/local/bin/markitdown".
     pub doc_converter_bin: String,
+    // Wiki Graph visualization tunables (served to frontend via GET /config)
+    pub wiki_graph_pre_ticks: u32,
+    pub wiki_graph_initial_alpha: f64,
+    pub wiki_graph_alpha_decay: f64,
+    pub wiki_graph_link_distance: f64,
+    pub wiki_graph_charge_strength: f64,
+    pub wiki_graph_collide_radius: f64,
+    pub wiki_graph_center_force_strength: f64,
+    pub wiki_graph_cluster_force_strength: f64,
+    /// Cluster center distance from canvas center, as fraction of min(width, height).
+    pub wiki_graph_cluster_radius_factor: f64,
+    pub wiki_graph_cluster_scatter: f64,
+    pub wiki_graph_drag_alpha_target: f64,
+    pub wiki_graph_label_auto_hide_threshold: u32,
+    pub wiki_graph_zoom_min: f64,
+    pub wiki_graph_zoom_max: f64,
+    pub wiki_graph_zoom_step: f64,
+    pub wiki_graph_fit_padding: f64,
+    pub wiki_graph_fit_scale_factor: f64,
+    pub wiki_graph_node_radius: f64,
+    pub wiki_graph_node_radius_selected: f64,
+    pub wiki_graph_node_hit_radius: f64,
+    pub wiki_graph_selection_ring_radius: f64,
+    pub wiki_graph_label_font_size: f64,
+    pub wiki_graph_label_y_offset: f64,
+    pub wiki_graph_wheel_zoom_step: f64,
 
     // MCP (Model Context Protocol)
     /// Prefix prepended to tool names when exposed via MCP (e.g., "zenii_")
@@ -450,6 +476,30 @@ impl Default for AppConfig {
             // Wiki
             wiki_dir: None,
             doc_converter_bin: "markitdown".into(),
+            wiki_graph_pre_ticks: 40,
+            wiki_graph_initial_alpha: 0.5,
+            wiki_graph_alpha_decay: 0.02,
+            wiki_graph_link_distance: 60.0,
+            wiki_graph_charge_strength: -120.0,
+            wiki_graph_collide_radius: 18.0,
+            wiki_graph_center_force_strength: 0.02,
+            wiki_graph_cluster_force_strength: 0.12,
+            wiki_graph_cluster_radius_factor: 0.28,
+            wiki_graph_cluster_scatter: 60.0,
+            wiki_graph_drag_alpha_target: 0.3,
+            wiki_graph_label_auto_hide_threshold: 200,
+            wiki_graph_zoom_min: 0.2,
+            wiki_graph_zoom_max: 3.0,
+            wiki_graph_zoom_step: 1.2,
+            wiki_graph_fit_padding: 30.0,
+            wiki_graph_fit_scale_factor: 0.9,
+            wiki_graph_node_radius: 6.0,
+            wiki_graph_node_radius_selected: 8.0,
+            wiki_graph_node_hit_radius: 20.0,
+            wiki_graph_selection_ring_radius: 12.0,
+            wiki_graph_label_font_size: 10.0,
+            wiki_graph_label_y_offset: 14.0,
+            wiki_graph_wheel_zoom_step: 1.1,
 
             // MCP
             mcp_server_tool_prefix: "zenii_".into(),

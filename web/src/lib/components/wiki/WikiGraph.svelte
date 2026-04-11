@@ -12,6 +12,7 @@
 		type SimulationLinkDatum
 	} from 'd3-force';
 	import type { WikiNode, WikiEdge, WikiPage } from '$lib/stores/wiki.svelte';
+	import { configStore } from '$lib/stores/config.svelte';
 
 	interface Props {
 		nodes: WikiNode[];
@@ -21,6 +22,40 @@
 	}
 
 	let { nodes, edges, pages = [], onnodeclick }: Props = $props();
+
+	// ── config ────────────────────────────────────────────────────────────────
+
+	function num(key: string, fallback: number): number {
+		const v = configStore.config[key];
+		return typeof v === 'number' ? v : fallback;
+	}
+
+	const GC = $derived({
+		preTicks:            num('wiki_graph_pre_ticks', 40),
+		initialAlpha:        num('wiki_graph_initial_alpha', 0.5),
+		alphaDecay:          num('wiki_graph_alpha_decay', 0.02),
+		linkDistance:        num('wiki_graph_link_distance', 60),
+		chargeStrength:      num('wiki_graph_charge_strength', -120),
+		collideRadius:       num('wiki_graph_collide_radius', 18),
+		centerForce:         num('wiki_graph_center_force_strength', 0.02),
+		clusterForce:        num('wiki_graph_cluster_force_strength', 0.12),
+		clusterRadiusFactor: num('wiki_graph_cluster_radius_factor', 0.28),
+		clusterScatter:      num('wiki_graph_cluster_scatter', 60),
+		dragAlphaTarget:     num('wiki_graph_drag_alpha_target', 0.3),
+		labelThreshold:      num('wiki_graph_label_auto_hide_threshold', 200),
+		zoomMin:             num('wiki_graph_zoom_min', 0.2),
+		zoomMax:             num('wiki_graph_zoom_max', 3),
+		zoomStep:            num('wiki_graph_zoom_step', 1.2),
+		fitPadding:          num('wiki_graph_fit_padding', 30),
+		fitScaleFactor:      num('wiki_graph_fit_scale_factor', 0.9),
+		nodeRadius:          num('wiki_graph_node_radius', 6),
+		nodeRadiusSelected:  num('wiki_graph_node_radius_selected', 8),
+		nodeHitRadius:       num('wiki_graph_node_hit_radius', 20),
+		selectionRingRadius: num('wiki_graph_selection_ring_radius', 12),
+		labelFontSize:       num('wiki_graph_label_font_size', 10),
+		labelYOffset:        num('wiki_graph_label_y_offset', 14),
+		wheelZoomStep:       num('wiki_graph_wheel_zoom_step', 1.1),
+	});
 
 	// ── types ─────────────────────────────────────────────────────────────────
 
@@ -66,7 +101,7 @@
 	// Auto-hide labels when node count exceeds 200; respect manual user override.
 	$effect(() => {
 		if (!labelsManuallySet && nodes.length > 0) {
-			showLabels = nodes.length <= 200;
+			showLabels = nodes.length <= GC.labelThreshold;
 		}
 	});
 
@@ -79,7 +114,7 @@
 	function zoomIn() {
 		const cx = width / 2;
 		const cy = height / 2;
-		const newScale = Math.min(3, scale * 1.2);
+		const newScale = Math.min(GC.zoomMax, scale * GC.zoomStep);
 		tx = cx - (cx - tx) * (newScale / scale);
 		ty = cy - (cy - ty) * (newScale / scale);
 		scale = newScale;
@@ -88,7 +123,7 @@
 	function zoomOut() {
 		const cx = width / 2;
 		const cy = height / 2;
-		const newScale = Math.max(0.2, scale * (1 / 1.2));
+		const newScale = Math.max(GC.zoomMin, scale * (1 / GC.zoomStep));
 		tx = cx - (cx - tx) * (newScale / scale);
 		ty = cy - (cy - ty) * (newScale / scale);
 		scale = newScale;
@@ -98,11 +133,11 @@
 		if (simNodes.length === 0) return;
 		const xs = simNodes.map((n) => n.x ?? 0);
 		const ys = simNodes.map((n) => n.y ?? 0);
-		const minX = Math.min(...xs) - 30;
-		const maxX = Math.max(...xs) + 30;
-		const minY = Math.min(...ys) - 30;
-		const maxY = Math.max(...ys) + 30;
-		const s = Math.min(3, Math.max(0.2, Math.min(width / (maxX - minX), height / (maxY - minY)) * 0.9));
+		const minX = Math.min(...xs) - GC.fitPadding;
+		const maxX = Math.max(...xs) + GC.fitPadding;
+		const minY = Math.min(...ys) - GC.fitPadding;
+		const maxY = Math.max(...ys) + GC.fitPadding;
+		const s = Math.min(GC.zoomMax, Math.max(GC.zoomMin, Math.min(width / (maxX - minX), height / (maxY - minY)) * GC.fitScaleFactor));
 		scale = s;
 		tx = (width - (maxX + minX) * s) / 2;
 		ty = (height - (maxY + minY) * s) / 2;
@@ -155,34 +190,67 @@
 
 	// ── simulation ────────────────────────────────────────────────────────────
 
+	// Cluster centers: each page_type gets a fixed position on a pentagon
+	// around the canvas center so same-type nodes naturally group together.
+	const CLUSTER_ANGLE: Record<string, number> = {
+		concept:    0,
+		entity:     72,
+		topic:      144,
+		comparison: 216,
+		query:      288,
+	};
+
+	function clusterCenter(w: number, h: number, type: string): { x: number; y: number } {
+		const deg = CLUSTER_ANGLE[type] ?? 0;
+		const rad = (deg - 90) * (Math.PI / 180);
+		const r = Math.min(w, h) * GC.clusterRadiusFactor;
+		return { x: w / 2 + r * Math.cos(rad), y: h / 2 + r * Math.sin(rad) };
+	}
+
 	function buildSimulation(w: number, h: number) {
-		const sNodes: SimNode[] = nodes.map((n) => ({
-			...n,
-			x: w / 2 + (Math.random() - 0.5) * 100,
-			y: h / 2 + (Math.random() - 0.5) * 100
-		}));
+		// Initialize nodes near their type's cluster center (not all at canvas center)
+		const sNodes: SimNode[] = nodes.map((n) => {
+			const center = clusterCenter(w, h, n.page_type);
+			return {
+				...n,
+				x: center.x + (Math.random() - 0.5) * GC.clusterScatter,
+				y: center.y + (Math.random() - 0.5) * GC.clusterScatter,
+			};
+		});
 
 		const idToNode = new Map(sNodes.map((n) => [n.id, n]));
 		const sLinks: SimLink[] = edges
 			.filter((e) => idToNode.has(e.from) && idToNode.has(e.to))
 			.map((e) => ({ source: e.from, target: e.to }));
 
+		// Custom cluster force: gently pulls each node toward its type's center.
+		// D3 expects a bare function (alpha) => void, not an object wrapper.
+		function clusterForce(alpha: number) {
+			for (const node of sNodes) {
+				const center = clusterCenter(w, h, node.page_type);
+				node.vx = (node.vx ?? 0) + (center.x - (node.x ?? 0)) * GC.clusterForce * alpha;
+				node.vy = (node.vy ?? 0) + (center.y - (node.y ?? 0)) * GC.clusterForce * alpha;
+			}
+		}
+
 		const sim = forceSimulation<SimNode>(sNodes)
-			.force('link', forceLink<SimNode, SimLink>(sLinks).id((d) => d.id))
-			.force('charge', forceManyBody<SimNode>().strength(-30))
-			.force('collide', forceCollide<SimNode>(14))
-			.force('x', forceX(w / 2))
-			.force('y', forceY(h / 2))
-			.alphaDecay(0.03)
+			.force('link', forceLink<SimNode, SimLink>(sLinks).id((d) => d.id).distance(GC.linkDistance))
+			.force('charge', forceManyBody<SimNode>().strength(GC.chargeStrength))
+			.force('collide', forceCollide<SimNode>(GC.collideRadius))
+			.force('cluster', clusterForce)
+			// Weak global centering — cluster force handles spatial placement
+			.force('x', forceX(w / 2).strength(GC.centerForce))
+			.force('y', forceY(h / 2).strength(GC.centerForce))
+			.alphaDecay(GC.alphaDecay)
 			.on('tick', () => {
 				// Increment reactive counter so template effects re-run and read
 				// the current x/y values that d3 mutated in-place on the nodes.
 				_tick++;
 			});
 
-		// Few pre-ticks to separate overlapping nodes; let the rest animate visibly
-		for (let i = 0; i < 20; i++) sim.tick();
-		sim.alpha(0.5).restart();
+		// More pre-ticks for better initial cluster separation before user sees layout
+		for (let i = 0; i < GC.preTicks; i++) sim.tick();
+		sim.alpha(GC.initialAlpha).restart();
 
 		simNodes = sNodes;
 		simLinks = sLinks as SimLink[];
@@ -213,9 +281,9 @@
 				// Subsequent resize: re-center forces, keep user's pan/zoom
 				width = newW;
 				height = newH;
-				simulation.force('x', forceX(width / 2));
-				simulation.force('y', forceY(height / 2));
-				simulation.alpha(0.1).restart();
+				simulation.force('x', forceX(width / 2).strength(GC.centerForce));
+				simulation.force('y', forceY(height / 2).strength(GC.centerForce));
+				simulation.alpha(GC.dragAlphaTarget).restart();
 			}
 		});
 		observer.observe(svgEl);
@@ -238,11 +306,11 @@
 	function handleWheel(e: WheelEvent) {
 		e.preventDefault();
 		if (locked) return;
-		const factor = e.deltaY < 0 ? 1.1 : 0.9;
+		const factor = e.deltaY < 0 ? GC.wheelZoomStep : 1 / GC.wheelZoomStep;
 		const rect = svgEl!.getBoundingClientRect();
 		const mx = e.clientX - rect.left;
 		const my = e.clientY - rect.top;
-		const newScale = Math.min(3, Math.max(0.2, scale * factor));
+		const newScale = Math.min(GC.zoomMax, Math.max(GC.zoomMin, scale * factor));
 		tx = mx - (mx - tx) * (newScale / scale);
 		ty = my - (my - ty) * (newScale / scale);
 		scale = newScale;
@@ -283,7 +351,7 @@
 		node.fy = node.y;
 		node.vx = 0;
 		node.vy = 0;
-		simulation?.alphaTarget(0.3).restart();
+		simulation?.alphaTarget(GC.dragAlphaTarget).restart();
 
 		function onMove(me: PointerEvent) {
 			const dx = me.clientX - dragDownPos.x;
@@ -370,7 +438,7 @@
 						<circle
 							cx={node.x}
 							cy={node.y}
-							r={20 / scale}
+							r={GC.nodeHitRadius / scale}
 							fill="transparent"
 							stroke="none"
 						/>
@@ -380,7 +448,7 @@
 							<circle
 								cx={node.x}
 								cy={node.y}
-								r={12}
+								r={GC.selectionRingRadius}
 								fill="none"
 								stroke={typeColor(node.page_type)}
 								stroke-opacity="0.7"
@@ -392,7 +460,7 @@
 						<circle
 							cx={node.x}
 							cy={node.y}
-							r={tooltipNode?.id === node.id ? 8 : 6}
+							r={tooltipNode?.id === node.id ? GC.nodeRadiusSelected : GC.nodeRadius}
 							fill={typeColor(node.page_type)}
 							fill-opacity={dimmed ? 0.12 : (tooltipNode?.id === node.id ? 1 : 0.85)}
 						/>
@@ -400,9 +468,9 @@
 						{#if showLabels || hoveredNode?.id === node.id || tooltipNode?.id === node.id}
 							<text
 								x={node.x}
-								y={node.y + 14 / scale}
+								y={node.y + GC.labelYOffset / scale}
 								text-anchor="middle"
-								font-size={10 / scale}
+								font-size={GC.labelFontSize / scale}
 								fill="currentColor"
 								fill-opacity={dimmed ? 0.15 : 0.8}
 								style="pointer-events: none; user-select: none"
