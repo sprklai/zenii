@@ -8,29 +8,29 @@
 *                                           @rakeshdhote
 
 # Security-critical paths (require maintainer sign-off)
-crates/mesoclaw-core/src/security/**        @rakeshdhote
-crates/mesoclaw-core/src/credential/**      @rakeshdhote
-crates/mesoclaw-core/src/db/**              @rakeshdhote
+crates/zenii-core/src/security/**        @rakeshdhote
+crates/zenii-core/src/credential/**      @rakeshdhote
+crates/zenii-core/src/db/**              @rakeshdhote
 .github/**                                  @rakeshdhote
 
 # AI providers and agent logic
-crates/mesoclaw-core/src/ai/**              @rakeshdhote
+crates/zenii-core/src/ai/**              @rakeshdhote
 
 # Memory subsystem
-crates/mesoclaw-core/src/memory/**          @rakeshdhote
+crates/zenii-core/src/memory/**          @rakeshdhote
 
 # Channels integration
-crates/mesoclaw-core/src/channels/**        @rakeshdhote
+crates/zenii-core/src/channels/**        @rakeshdhote
 
 # Gateway (API surface)
-crates/mesoclaw-core/src/gateway/**         @rakeshdhote
+crates/zenii-core/src/gateway/**         @rakeshdhote
 
 # Frontend
 web/**                                      @rakeshdhote
 
 # Config and boot (affects all binaries)
-crates/mesoclaw-core/src/config/**          @rakeshdhote
-crates/mesoclaw-core/src/boot.rs            @rakeshdhote
+crates/zenii-core/src/config/**          @rakeshdhote
+crates/zenii-core/src/boot.rs            @rakeshdhote
 
 # Docs and CI (lower risk)
 docs/**                                     @rakeshdhote

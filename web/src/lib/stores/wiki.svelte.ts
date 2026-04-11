@@ -1,4 +1,4 @@
-import { api, apiDelete, apiGet, apiPost, apiPut, getToken, getBaseUrl, MesoApiError } from "$lib/api/client";
+import { api, apiDelete, apiGet, apiPost, apiPut, getToken, getBaseUrl, ZeniiApiError } from "$lib/api/client";
 
 export interface WikiPage {
   slug: string;
@@ -249,7 +249,7 @@ function createWikiStore() {
           errorCode = body.error_code ?? errorCode;
           details = body.message ?? body.error ?? details;
         } catch { /* not JSON */ }
-        throw new MesoApiError(response.status, errorCode, details);
+        throw new ZeniiApiError(response.status, errorCode, details);
       }
       const text = await response.text();
       const res = text ? JSON.parse(text) as { pages: WikiPage[]; primary_slug: string; message: string } : { pages: [], primary_slug: "", message: "" };

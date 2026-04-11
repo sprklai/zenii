@@ -1,10 +1,10 @@
-# MesoClaw Cross-Compilation Dockerfile
+# Zenii Cross-Compilation Dockerfile
 # Multi-stage build for cross-compiling to multiple targets.
 #
 # Usage:
-#   docker build -f Dockerfile.cross-compile --target universal -t mesoclaw-cross .
-#   docker run --rm -v $(pwd):/workspace mesoclaw-cross \
-#     cargo build --release --target aarch64-unknown-linux-gnu -p mesoclaw-daemon
+#   docker build -f Dockerfile.cross-compile --target universal -t zenii-cross .
+#   docker run --rm -v $(pwd):/workspace zenii-cross \
+#     cargo build --release --target aarch64-unknown-linux-gnu -p zenii-daemon
 #
 # Stages:
 #   base         — Rust stable + common build deps

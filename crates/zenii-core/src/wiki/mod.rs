@@ -315,17 +315,19 @@ impl WikiManager {
     /// Write content as a new wiki page (used by ingest handler).
     /// Converts filename to a slug, writes to pages/topics/{slug}.md.
     pub fn ingest(&self, filename: &str, content: &str) -> Result<WikiPage, ZeniiError> {
-        let slug = filename
-            .trim_end_matches(".md")
-            .to_lowercase()
-            .replace(' ', "-");
+        // Strip any file extension and convert to slug
+        let name_without_ext = Path::new(filename)
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or(filename);
+        let slug = name_without_ext.to_lowercase().replace(' ', "-");
         validate_slug(&slug)?;
         let page_path = self
             .wiki_dir
             .join("pages")
             .join("topics")
             .join(format!("{slug}.md"));
-        let name_hint = filename.trim_end_matches(".md").trim().to_string();
+        let name_hint = name_without_ext.trim().to_string();
         std::fs::write(&page_path, content)?;
         parse_page(slug, &page_path, Some(&name_hint))
     }

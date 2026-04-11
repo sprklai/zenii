@@ -174,13 +174,13 @@ impl ChannelLifecycle for DiscordChannel {
 }
 
 /// Internal event handler for serenity gateway.
-struct MesoHandler {
+struct ZeniiHandler {
     tx: mpsc::Sender<ChannelMessage>,
     config: DiscordConfig,
 }
 
 #[async_trait]
-impl EventHandler for MesoHandler {
+impl EventHandler for ZeniiHandler {
     async fn message(&self, _ctx: Context, msg: Message) {
         // Skip bot messages
         if msg.author.bot {
@@ -246,7 +246,7 @@ impl Channel for DiscordChannel {
 
         let intents = GatewayIntents::from_bits_truncate(REQUIRED_INTENTS);
 
-        let handler = MesoHandler {
+        let handler = ZeniiHandler {
             tx,
             config: self.config.clone(),
         };

@@ -10,7 +10,7 @@ COPY Cargo.toml Cargo.lock ./
 COPY crates/ crates/
 
 # Build daemon with all features
-RUN cargo build --profile ci-release -p mesoclaw-daemon --all-features
+RUN cargo build --profile ci-release -p zenii-daemon --all-features
 
 # Stage 2: Runtime
 FROM debian:bookworm-slim
@@ -20,13 +20,13 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 # Create non-root user
-RUN useradd --system --no-create-home --shell /usr/sbin/nologin mesoclaw && \
+RUN useradd --system --no-create-home --shell /usr/sbin/nologin zenii && \
     mkdir -p /data /config && \
-    chown mesoclaw:mesoclaw /data /config
+    chown zenii:zenii /data /config
 
-COPY --from=builder /app/target/ci-release/mesoclaw-daemon /usr/local/bin/mesoclaw-daemon
+COPY --from=builder /app/target/ci-release/zenii-daemon /usr/local/bin/zenii-daemon
 
-USER mesoclaw
+USER zenii
 
 EXPOSE 18981
 
@@ -35,4 +35,4 @@ ENV RUST_LOG=info
 HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
     CMD curl -f http://localhost:18981/health || exit 1
 
-ENTRYPOINT ["mesoclaw-daemon"]
+ENTRYPOINT ["zenii-daemon"]

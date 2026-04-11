@@ -5,7 +5,7 @@ import {
   apiPost,
   apiPut,
   apiDelete,
-  MesoApiError,
+  ZeniiApiError,
   healthCheck,
   getToken,
   setToken,
@@ -107,7 +107,7 @@ describe("API client", () => {
   });
 
   // 6.2: API client handles error responses
-  it("throws MesoApiError with parsed error body", async () => {
+  it("throws ZeniiApiError with parsed error body", async () => {
     const mockFetch = vi.fn().mockResolvedValue({
       ok: false,
       status: 401,
@@ -120,12 +120,12 @@ describe("API client", () => {
     });
     vi.stubGlobal("fetch", mockFetch);
 
-    await expect(apiGet("/protected")).rejects.toThrow(MesoApiError);
+    await expect(apiGet("/protected")).rejects.toThrow(ZeniiApiError);
 
     try {
       await apiGet("/protected");
     } catch (e) {
-      const err = e as MesoApiError;
+      const err = e as ZeniiApiError;
       expect(err.status).toBe(401);
       expect(err.errorCode).toBe("ZENII_AUTH");
       expect(err.details).toBe("Invalid token");
@@ -141,7 +141,7 @@ describe("API client", () => {
     });
     vi.stubGlobal("fetch", mockFetch);
 
-    await expect(apiGet("/fail")).rejects.toThrow(MesoApiError);
+    await expect(apiGet("/fail")).rejects.toThrow(ZeniiApiError);
   });
 
   it("handles 204 No Content responses", async () => {

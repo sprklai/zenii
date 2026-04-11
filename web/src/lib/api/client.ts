@@ -109,7 +109,7 @@ export interface ApiError {
   hint?: string;
 }
 
-export class MesoApiError extends Error {
+export class ZeniiApiError extends Error {
   constructor(
     public status: number,
     public errorCode: string,
@@ -117,7 +117,7 @@ export class MesoApiError extends Error {
     public hint?: string,
   ) {
     super(`${errorCode}: ${details ?? "Unknown error"}`);
-    this.name = "MesoApiError";
+    this.name = "ZeniiApiError";
   }
 }
 
@@ -162,7 +162,7 @@ export async function api<T>(
     console.warn(
       `[API] ${options.method ?? "GET"} ${url} -> ${response.status} ${errorCode}: ${details}`,
     );
-    throw new MesoApiError(response.status, errorCode, details, hint);
+    throw new ZeniiApiError(response.status, errorCode, details, hint);
   }
 
   // Handle responses with no body — read text first, only parse if non-empty.
@@ -213,7 +213,7 @@ export async function apiGetText(path: string): Promise<string> {
   }
   const response = await resolvedFetch(url, { headers });
   if (!response.ok) {
-    throw new MesoApiError(
+    throw new ZeniiApiError(
       response.status,
       "ZENII_UNKNOWN",
       response.statusText,

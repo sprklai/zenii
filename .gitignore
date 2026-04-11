@@ -31,7 +31,7 @@ Thumbs.db
 !.env.test
 
 # Tauri
-crates/mesoclaw-desktop/gen/
+crates/zenii-desktop/gen/
 
 # Logs
 *.log
