@@ -37,8 +37,23 @@
 	import RotateCw from '@lucide/svelte/icons/rotate-cw';
 
 	const CATEGORIES = ['all', 'concepts', 'entities', 'topics', 'comparisons', 'queries'] as const;
-	// Add new accepted types here — drives both the file input and the drop zone hint
-	const INGEST_ACCEPT = '.md,.txt,.html,.org,.rst';
+	// Add new accepted types here — drives both the file input and the drop zone hint.
+	// Text types go to /wiki/ingest (JSON body); binary types go to /wiki/upload (multipart).
+	const INGEST_ACCEPT =
+		'.md,.txt,.html,.org,.rst,' +
+		'application/pdf,.pdf,' +
+		'application/vnd.openxmlformats-officedocument.wordprocessingml.document,.docx,' +
+		'application/vnd.ms-powerpoint,.pptx,' +
+		'image/jpeg,.jpg,.jpeg,image/png,.png,image/gif,.gif,image/webp,.webp';
+	const BINARY_EXTENSIONS = new Set(['pdf', 'docx', 'pptx', 'jpg', 'jpeg', 'png', 'gif', 'webp']);
+	const BINARY_MIME_PREFIXES = ['application/pdf', 'application/vnd.openxmlformats', 'application/vnd.ms-powerpoint', 'image/'];
+
+	function isBinaryFile(file: File): boolean {
+		const ext = file.name.split('.').pop()?.toLowerCase() ?? '';
+		if (BINARY_EXTENSIONS.has(ext)) return true;
+		return BINARY_MIME_PREFIXES.some((prefix) => file.type.startsWith(prefix));
+	}
+
 	type Category = (typeof CATEGORIES)[number];
 
 	let query = $state('');
@@ -71,6 +86,9 @@
 		return wikiStore.pages.filter((p) => p.page_type === type);
 	});
 
+	// L6: deferred — currentTheme is already a minimal $derived that only changes when
+	// isDark flips. Svelte 5 re-renders only the Streamdown components that receive the
+	// updated prop; debouncing would add complexity without meaningful gain here.
 	let currentTheme = $derived(themeStore.isDark ? 'github-dark-default' : 'github-light-default');
 
 	onMount(async () => {
@@ -203,8 +221,14 @@
 				continue;
 			}
 			try {
-				const content = await file.text();
-				const res = await wikiStore.ingest(file.name, content);
+				let res: { slug: string; page_count: number; message: string };
+				if (isBinaryFile(file)) {
+					// H6: binary files (PDF/DOCX/image) go to /wiki/upload (multipart)
+					res = await wikiStore.uploadBinary(file);
+				} else {
+					const content = await file.text();
+					res = await wikiStore.ingest(file.name, content);
+				}
 				toast.success(m.wiki_ingest_success({ slug: res.slug }));
 				succeeded++;
 			} catch (e) {

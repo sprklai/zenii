@@ -72,6 +72,15 @@ pub struct SourceRecord {
     pub hash: String, // SHA-256 hex of file content
     pub active: bool,
     pub last_run_id: Option<String>,
+    /// Storage layout for this source.
+    /// `"text"` — plain drop into `sources/` (`.md`, `.txt`, etc.)
+    /// `"binary"` — original bytes in `sources/original/`, converted markdown in `sources/converted/`
+    #[serde(default = "default_source_type")]
+    pub source_type: String,
+}
+
+fn default_source_type() -> String {
+    "text".to_string()
 }
 
 /// One record per generated page in wiki/pages/.
@@ -160,8 +169,10 @@ impl WikiManager {
         for subdir in PAGE_SUBDIRS {
             std::fs::create_dir_all(pages_dir.join(subdir))?;
         }
-        // sources/ directory
+        // sources/ directory (text sources), plus binary sub-dirs
         std::fs::create_dir_all(wiki_dir.join("sources"))?;
+        std::fs::create_dir_all(wiki_dir.join("sources").join("original"))?;
+        std::fs::create_dir_all(wiki_dir.join("sources").join("converted"))?;
         // .meta/ directory for manifest files
         std::fs::create_dir_all(wiki_dir.join(".meta"))?;
         // SCHEMA.md — seed from embedded template, never overwrite existing
@@ -202,6 +213,10 @@ impl WikiManager {
         let pages_dir = self.wiki_dir.join("pages");
         let mut pages = Vec::new();
         walk_pages_dir(&pages_dir, &mut pages)?;
+        // L14: deterministic ordering regardless of OS read_dir order
+        pages.sort_by(|a, b| {
+            a.page_type.cmp(&b.page_type).then_with(|| a.slug.cmp(&b.slug))
+        });
         Ok(pages)
     }
 
@@ -345,6 +360,26 @@ impl WikiManager {
         let sources_dir = self.wiki_dir.join("sources");
         std::fs::create_dir_all(&sources_dir)?;
         std::fs::write(sources_dir.join(filename), content)?;
+        Ok(())
+    }
+
+    /// Save original binary bytes to wiki/sources/original/{filename}.
+    /// The original is immutable — re-ingestion always converts from this file.
+    pub fn save_original_source(&self, filename: &str, bytes: &[u8]) -> Result<(), ZeniiError> {
+        validate_filename(filename)?;
+        let dir = self.wiki_dir.join("sources").join("original");
+        std::fs::create_dir_all(&dir)?;
+        std::fs::write(dir.join(filename), bytes)?;
+        Ok(())
+    }
+
+    /// Save the converted markdown text to wiki/sources/converted/{filename}.
+    /// This is what the LLM ingest pipeline reads; the original binary is preserved separately.
+    pub fn save_converted_source(&self, filename: &str, content: &str) -> Result<(), ZeniiError> {
+        validate_filename(filename)?;
+        let dir = self.wiki_dir.join("sources").join("converted");
+        std::fs::create_dir_all(&dir)?;
+        std::fs::write(dir.join(filename), content)?;
         Ok(())
     }
 
@@ -749,7 +784,16 @@ impl WikiManager {
             if !known.contains_key(&filename) {
                 let content = std::fs::read_to_string(&path).unwrap_or_default();
                 let hash = Self::hash_content(&content);
-                known.insert(filename.clone(), SourceRecord { filename, hash, active: false, last_run_id: None });
+                known.insert(
+                    filename.clone(),
+                    SourceRecord {
+                        filename,
+                        hash,
+                        active: false,
+                        last_run_id: None,
+                        source_type: "text".to_string(),
+                    },
+                );
             }
         }
 
@@ -932,14 +976,40 @@ impl WikiManager {
     /// Append a log entry to wiki/log.md.
     ///
     /// Uses O(1) atomic file-append to avoid the read-then-write race (C3 fix).
+    /// Pass `max_lines > 0` for log rotation (L10): after appending, if the file exceeds
+    /// `max_lines`, oldest body lines are trimmed while preserving the header.
     pub fn append_log(&self, entry: &str) -> Result<(), ZeniiError> {
+        self.append_log_with_limit(entry, 0)
+    }
+
+    /// Append with explicit rotation limit. `max_lines = 0` disables rotation.
+    pub fn append_log_with_limit(&self, entry: &str, max_lines: usize) -> Result<(), ZeniiError> {
         use std::io::Write;
         let log_path = self.wiki_dir.join("log.md");
-        let mut file = std::fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&log_path)?;
-        writeln!(file, "\n{entry}")?;
+        {
+            let mut file = std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&log_path)?;
+            writeln!(file, "\n{entry}")?;
+        }
+        // L10: log rotation — trim oldest lines when over the limit
+        if max_lines > 0 {
+            let content = std::fs::read_to_string(&log_path)?;
+            let lines: Vec<&str> = content.lines().collect();
+            if lines.len() > max_lines {
+                // Preserve header lines (lines starting with `#` at the top)
+                let header_end = lines
+                    .iter()
+                    .position(|l| !l.starts_with('#') && !l.is_empty())
+                    .unwrap_or(2)
+                    .min(2);
+                let keep_from = lines.len().saturating_sub(max_lines.saturating_sub(header_end));
+                let mut kept: Vec<&str> = lines[..header_end].to_vec();
+                kept.extend_from_slice(&lines[keep_from..]);
+                std::fs::write(&log_path, kept.join("\n") + "\n")?;
+            }
+        }
         Ok(())
     }
 }
@@ -1115,6 +1185,7 @@ fn parse_page(
             "concepts" => "concept",
             "entities" => "entity",
             "comparisons" => "comparison",
+            "queries" => "query",
             _ => "topic",
         });
 
@@ -1793,12 +1864,14 @@ No outbound links here.
                     hash: "aaa".into(),
                     active: true,
                     last_run_id: None,
+                    source_type: "text".to_string(),
                 },
                 SourceRecord {
                     filename: "b.txt".into(),
                     hash: "bbb".into(),
                     active: true,
                     last_run_id: None,
+                    source_type: "text".to_string(),
                 },
             ],
             &[],
@@ -1858,6 +1931,7 @@ No outbound links here.
                 hash: "custom-hash-abc".into(),
                 active: true,
                 last_run_id: Some("run-001".into()),
+                source_type: "text".to_string(),
             }],
             &[],
         )
@@ -1909,12 +1983,14 @@ No outbound links here.
                 hash: "hash-a".into(),
                 active: true,
                 last_run_id: Some("run-1".into()),
+                source_type: "text".to_string(),
             },
             SourceRecord {
                 filename: "doc-b.md".into(),
                 hash: "hash-b".into(),
                 active: false,
                 last_run_id: None,
+                source_type: "text".to_string(),
             },
         ];
         let pages = vec![PageRecord {

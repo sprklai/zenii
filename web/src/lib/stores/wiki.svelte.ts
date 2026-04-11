@@ -1,4 +1,4 @@
-import { api, apiDelete, apiGet, apiPost, apiPut } from "$lib/api/client";
+import { api, apiDelete, apiGet, apiPost, apiPut, getToken, getBaseUrl, MesoApiError } from "$lib/api/client";
 
 export interface WikiPage {
   slug: string;
@@ -213,6 +213,46 @@ function createWikiStore() {
         if (e instanceof Error && e.name === "AbortError") throw e;
         throw e;
       }
+    },
+
+    /** Upload a binary file (PDF/DOCX/image) via multipart to /wiki/upload. */
+    async uploadBinary(
+      file: File,
+    ): Promise<{ slug: string; page_count: number; message: string }> {
+      ingestController?.abort();
+      ingestController = new AbortController();
+      const formData = new FormData();
+      formData.append("file", file);
+      const token = getToken();
+      const baseUrl = getBaseUrl();
+      const headers: Record<string, string> = {};
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+      // Do NOT set Content-Type — browser sets multipart boundary automatically
+      let response: Response;
+      try {
+        response = await fetch(`${baseUrl}/wiki/upload`, {
+          method: "POST",
+          headers,
+          body: formData,
+          signal: ingestController.signal,
+        });
+      } catch (e) {
+        if (e instanceof Error && e.name === "AbortError") throw e;
+        throw e;
+      }
+      if (!response.ok) {
+        let errorCode = "ZENII_UNKNOWN";
+        let details = response.statusText;
+        try {
+          const body = await response.json();
+          errorCode = body.error_code ?? errorCode;
+          details = body.message ?? body.error ?? details;
+        } catch { /* not JSON */ }
+        throw new MesoApiError(response.status, errorCode, details);
+      }
+      const text = await response.text();
+      const res = text ? JSON.parse(text) as { pages: WikiPage[]; primary_slug: string; message: string } : { pages: [], primary_slug: "", message: "" };
+      return { slug: res.primary_slug, page_count: res.pages.length, message: res.message };
     },
 
     async query(

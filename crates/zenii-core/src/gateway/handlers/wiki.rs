@@ -211,6 +211,8 @@ pub async fn ingest_wiki_source(
 ) -> impl IntoResponse {
     use crate::wiki::{PageRecord, RunRecord, SourceRecord, WikiManager};
 
+    let log_max_lines = state.config.load().wiki_log_max_lines;
+
     // ── Size guard: reject source content that exceeds the configured limit ──
     {
         let max_bytes = state.config.load().wiki_max_source_size_mb * 1024 * 1024;
@@ -250,8 +252,9 @@ pub async fn ingest_wiki_source(
     let run_id = WikiManager::new_run_id();
     let source_hash = WikiManager::hash_content(&body.content);
 
-    // ── Step 2: Read prompts for hashing (blocking, holds mutex) ────────────
-    let (prompt_hash, schema_hash) = {
+    // ── Step 2: Read prompts + schema for hashing (blocking, holds mutex) ──────
+    // Also retains the schema text so run_compiler can receive it without re-reading (M4 fix).
+    let (prompt_hash, schema_hash, schema_text) = {
         let wiki = Arc::clone(&state.wiki).lock_owned().await;
         tokio::task::spawn_blocking(move || {
             let prompt = wiki.read_ingest_prompt().unwrap_or_default();
@@ -260,10 +263,11 @@ pub async fn ingest_wiki_source(
             (
                 WikiManager::hash_content(&prompt),
                 WikiManager::hash_content(&schema),
+                schema,
             )
         })
         .await
-        .unwrap_or_else(|_| (String::new(), String::new()))
+        .unwrap_or_else(|_| (String::new(), String::new(), String::new()))
     };
 
     // ── Step 3: LLM compiler (async, no mutex held) ──────────────────────────
@@ -271,6 +275,7 @@ pub async fn ingest_wiki_source(
         &state,
         &[(body.filename.clone(), body.content.clone())],
         body.model.as_deref(),
+        &schema_text,
     )
     .await;
 
@@ -345,6 +350,7 @@ pub async fn ingest_wiki_source(
                 hash: source_hash_c,
                 active: true,
                 last_run_id: Some(run_id_c.clone()),
+                source_type: "text".to_string(),
             });
             for page in &pages_c {
                 page_records.retain(|r| r.slug != page.slug);
@@ -374,10 +380,10 @@ pub async fn ingest_wiki_source(
             if let Err(e) = wiki.update_index() {
                 tracing::error!("wiki index update failed after ingest: {e}");
             }
-            if let Err(e) = wiki.append_log(&format!(
+            if let Err(e) = wiki.append_log_with_limit(&format!(
                 "## [{date}] ingest | {filename} — {} page(s) generated",
                 pages_c.len()
-            )) {
+            ), log_max_lines) {
                 tracing::warn!("wiki log append failed: {e}");
             }
         })
@@ -415,14 +421,15 @@ pub async fn ingest_wiki_source(
             hash: source_hash_fb,
             active: true,
             last_run_id: None,
+            source_type: "text".to_string(),
         });
         if let Err(e) = wiki.write_manifest(&sources, &page_records) {
             tracing::warn!("manifest write failed after fallback ingest: {e}");
         }
         let index_err = wiki.update_index().err();
-        if let Err(e) = wiki.append_log(&format!(
+        if let Err(e) = wiki.append_log_with_limit(&format!(
             "## [{date}] ingest | {filename} — fallback single-page (no LLM)"
-        )) {
+        ), log_max_lines) {
             tracing::warn!("wiki log append failed: {e}");
         }
         Ok::<_, crate::error::ZeniiError>((page, index_err))
@@ -535,6 +542,8 @@ pub async fn regenerate_wiki(
     use std::collections::HashMap;
     use crate::wiki::{PageRecord, RunRecord, SourceRecord, WikiManager};
 
+    let log_max_lines = state.config.load().wiki_log_max_lines;
+
     // ── Step 1: Read manifest + collect sources (blocking) ─────────────────────
     // NOTE: live pages are NOT deleted here — deletion happens inside Step 3 only
     // after the staged build is committed (H3 fix: atomic swap, no pre-delete).
@@ -588,18 +597,30 @@ pub async fn regenerate_wiki(
             .into_response();
     }
 
+    // ── Step 1b: Read SCHEMA.md once before the LLM loop (M4 fix) ──────────────
+    // run_compiler iterates over N sources; reading SCHEMA.md inside would cost N disk reads.
+    // We read it here and pass it in so it is read exactly once per regenerate call.
+    let schema_text = {
+        let wiki = Arc::clone(&state.wiki).lock_owned().await;
+        tokio::task::spawn_blocking(move || {
+            std::fs::read_to_string(wiki.wiki_dir().join("SCHEMA.md")).unwrap_or_default()
+        })
+        .await
+        .unwrap_or_default()
+    };
+
     // ── Step 2: LLM compiler (async, no mutex held) ──────────────────────────
     // Returns (LlmPage, source_filename) pairs for correct provenance tracking (C6 fix).
-    let llm_result = run_compiler(&state, &prep.sources_list, body.model.as_deref()).await;
+    let llm_result = run_compiler(&state, &prep.sources_list, body.model.as_deref(), &schema_text).await;
     let llm_pages_with_source = match llm_result {
         Ok(p) if !p.is_empty() => p,
         _ => {
             let date = chrono::Utc::now().format("%Y-%m-%d").to_string();
             let wiki = Arc::clone(&state.wiki).lock_owned().await;
             let _ = tokio::task::spawn_blocking(move || {
-                wiki.append_log(&format!(
+                wiki.append_log_with_limit(&format!(
                     "## [{date}] regenerate | failed — LLM unavailable, no pages written"
-                ))
+                ), log_max_lines)
             })
             .await;
             return (
@@ -616,6 +637,7 @@ pub async fn regenerate_wiki(
     let manifest_pages_c = prep.manifest_pages;
     let model_c = body.model.clone();
     let llm_pages_with_source_c = llm_pages_with_source.clone();
+    let schema_text_c = schema_text.clone();
     let write_result = {
         let wiki = Arc::clone(&state.wiki).lock_owned().await;
         tokio::task::spawn_blocking(move || {
@@ -660,9 +682,8 @@ pub async fn regenerate_wiki(
 
             let run_id = WikiManager::new_run_id();
             let prompt_hash = WikiManager::hash_content(&wiki.read_ingest_prompt().unwrap_or_default());
-            let schema_hash = WikiManager::hash_content(
-                &std::fs::read_to_string(wiki.wiki_dir().join("SCHEMA.md")).unwrap_or_default(),
-            );
+            // Use the schema already read before the compiler loop (M4 fix: no extra disk read).
+            let schema_hash = WikiManager::hash_content(&schema_text_c);
 
             let mut written_pages = Vec::new();
             let mut new_page_records: Vec<PageRecord> = Vec::new();
@@ -691,6 +712,7 @@ pub async fn regenerate_wiki(
                     hash: WikiManager::hash_content(content),
                     active: true,
                     last_run_id: Some(run_id.clone()),
+                    source_type: "text".to_string(),
                 })
                 .collect();
             let preserved_query_pages: Vec<PageRecord> = manifest_pages_c
@@ -717,11 +739,11 @@ pub async fn regenerate_wiki(
             if let Err(e) = wiki.update_index() {
                 tracing::warn!("wiki index update failed after regenerate: {e}");
             }
-            if let Err(e) = wiki.append_log(&format!(
+            if let Err(e) = wiki.append_log_with_limit(&format!(
                 "## [{date}] regenerate | {} source(s) → {} page(s)",
                 sources_list_c.len(),
                 written_pages.len()
-            )) {
+            ), log_max_lines) {
                 tracing::warn!("wiki log append failed: {e}");
             }
             Ok::<_, crate::error::ZeniiError>(written_pages)
@@ -780,6 +802,7 @@ pub async fn regenerate_wiki_source(
 ) -> impl IntoResponse {
     use crate::wiki::{PageRecord, RunRecord, SourceRecord, WikiManager};
 
+    let log_max_lines = state.config.load().wiki_log_max_lines;
     let model = body.as_ref().and_then(|b| b.model.as_deref().map(String::from));
 
     // ── Step 1: Verify source, read manifest (blocking) ─────────────────────────
@@ -837,11 +860,22 @@ pub async fn regenerate_wiki_source(
         }
     };
 
+    // ── Step 1b: Read SCHEMA.md once before the compiler (M4 fix) ──────────────
+    // Avoids re-reading on every run_compiler call; passed in to avoid N disk reads.
+    let schema_text = {
+        let wiki = Arc::clone(&state.wiki).lock_owned().await;
+        tokio::task::spawn_blocking(move || {
+            std::fs::read_to_string(wiki.wiki_dir().join("SCHEMA.md")).unwrap_or_default()
+        })
+        .await
+        .unwrap_or_default()
+    };
+
     // ── Step 2: LLM compiler (async, no mutex held) ──────────────────────────
     // Returns (LlmPage, source_filename) pairs. Source is always `filename` here
     // since we compile a single source.
     let sources_list = vec![(filename.clone(), prep.source_content.clone())];
-    let llm_result = run_compiler(&state, &sources_list, model.as_deref()).await;
+    let llm_result = run_compiler(&state, &sources_list, model.as_deref(), &schema_text).await;
     let llm_pages_with_source = match llm_result {
         Ok(p) if !p.is_empty() => p,
         _ => {
@@ -849,9 +883,9 @@ pub async fn regenerate_wiki_source(
             let wiki = Arc::clone(&state.wiki).lock_owned().await;
             let filename_c = filename.clone();
             let _ = tokio::task::spawn_blocking(move || {
-                wiki.append_log(&format!(
+                wiki.append_log_with_limit(&format!(
                     "## [{date}] regenerate-source | {filename_c} — failed: LLM unavailable, live pages unchanged"
-                ))
+                ), log_max_lines)
             })
             .await;
             return (
@@ -871,6 +905,7 @@ pub async fn regenerate_wiki_source(
     let llm_pages_with_source_c = llm_pages_with_source.clone();
     let source_content_c = prep.source_content.clone();
     let model_c = model.clone();
+    let schema_text_c = schema_text.clone();
     let write_result = {
         let wiki = Arc::clone(&state.wiki).lock_owned().await;
         tokio::task::spawn_blocking(move || {
@@ -895,9 +930,8 @@ pub async fn regenerate_wiki_source(
 
             let run_id = WikiManager::new_run_id();
             let prompt_hash = WikiManager::hash_content(&wiki.read_ingest_prompt().unwrap_or_default());
-            let schema_hash = WikiManager::hash_content(
-                &std::fs::read_to_string(wiki.wiki_dir().join("SCHEMA.md")).unwrap_or_default(),
-            );
+            // Use the schema already read before the compiler call (M4 fix: no extra disk read).
+            let schema_hash = WikiManager::hash_content(&schema_text_c);
 
             let mut written_pages = Vec::new();
             let mut new_page_records: Vec<PageRecord> = Vec::new();
@@ -933,6 +967,7 @@ pub async fn regenerate_wiki_source(
                             hash: WikiManager::hash_content(&source_content_c),
                             active: s.active,
                             last_run_id: Some(run_id.clone()),
+                            source_type: s.source_type,
                         }
                     } else {
                         s
@@ -957,10 +992,10 @@ pub async fn regenerate_wiki_source(
             if let Err(e) = wiki.update_index() {
                 tracing::warn!("wiki index update failed after per-source regenerate: {e}");
             }
-            let _ = wiki.append_log(&format!(
+            let _ = wiki.append_log_with_limit(&format!(
                 "## [{date}] regenerate-source | {filename_c} → {} page(s)",
                 written_pages.len()
-            ));
+            ), log_max_lines);
             Ok::<_, crate::error::ZeniiError>(written_pages)
         })
         .await
@@ -1102,14 +1137,70 @@ pub async fn upload_wiki_source(
     // Clean up temp file (best effort)
     let _ = tokio::fs::remove_file(&tmp_path).await;
 
-    // Feed into standard ingest pipeline via the existing handler body
-    let body = IngestRequest {
+    // ── Save original bytes and converted markdown separately ────────────────
+    // Preserves the immutable original so re-ingestion always converts from the
+    // true binary, not a previously-converted markdown copy (H5 fix).
+    {
+        let wiki = Arc::clone(&state.wiki).lock_owned().await;
+        let filename_c = filename.clone();
+        let bytes_c = bytes.clone();
+        let content_c = content.clone();
+        if let Err(e) = tokio::task::spawn_blocking(move || {
+            wiki.save_original_source(&filename_c, &bytes_c)?;
+            wiki.save_converted_source(&filename_c, &content_c)?;
+            Ok::<_, ZeniiError>(())
+        })
+        .await
+        .unwrap_or_else(|e| Err(ZeniiError::Gateway(e.to_string())))
+        {
+            tracing::warn!(
+                "wiki: failed to persist original/converted source for '{}': {e}",
+                filename
+            );
+            // Non-fatal — continue to ingest even if extra copies could not be written
+        }
+    }
+
+    // Feed converted markdown into the standard ingest pipeline.
+    // ingest_wiki_source also calls save_source() which writes a text copy under
+    // sources/ for the LLM to read. We patch the manifest afterward to mark it "binary".
+    let ingest_body = IngestRequest {
         content,
-        filename,
+        filename: filename.clone(),
         model,
     };
 
-    ingest_wiki_source(State(state), Json(body)).await.into_response()
+    let response = ingest_wiki_source(State(Arc::clone(&state)), Json(ingest_body))
+        .await
+        .into_response();
+
+    // ── Patch source_type → "binary" in the manifest ─────────────────────────
+    // ingest_wiki_source wrote source_type: "text" (the default); correct it here.
+    {
+        let wiki = Arc::clone(&state.wiki).lock_owned().await;
+        let filename_c = filename.clone();
+        if let Err(e) = tokio::task::spawn_blocking(move || {
+            let (mut sources, pages) = wiki.read_manifest_or_bootstrap()?;
+            for record in sources.iter_mut() {
+                if record.filename == filename_c {
+                    record.source_type = "binary".to_string();
+                    break;
+                }
+            }
+            wiki.write_manifest(&sources, &pages)?;
+            Ok::<_, ZeniiError>(())
+        })
+        .await
+        .unwrap_or_else(|e| Err(ZeniiError::Gateway(e.to_string())))
+        {
+            tracing::warn!(
+                "wiki: failed to patch source_type to 'binary' for '{}': {e}",
+                filename
+            );
+        }
+    }
+
+    response
 }
 
 /// DELETE /wiki/sources/{filename} — delete a source and cascade-clean its derived pages.
@@ -1122,6 +1213,8 @@ pub async fn delete_wiki_source(
     Query(params): Query<DeleteSourceQuery>,
 ) -> impl IntoResponse {
     use crate::wiki::{PageRecord, RunRecord, WikiManager};
+
+    let log_max_lines = state.config.load().wiki_log_max_lines;
 
     // ── Step 1: Verify source, read manifest, delete exclusive + shared pages (blocking) ──
     struct DeletePrep {
@@ -1222,8 +1315,19 @@ pub async fn delete_wiki_source(
 
     // ── Step 2: Optionally rebuild shared pages via LLM (async) ─────────────
     // run_compiler returns (LlmPage, source_filename) pairs; extract pages for rebuild.
+    // Read SCHEMA.md once here (M4 fix: avoid re-reading inside run_compiler for each source).
+    let delete_schema_text = if !prep.remaining_sources.is_empty() {
+        let wiki = Arc::clone(&state.wiki).lock_owned().await;
+        tokio::task::spawn_blocking(move || {
+            std::fs::read_to_string(wiki.wiki_dir().join("SCHEMA.md")).unwrap_or_default()
+        })
+        .await
+        .unwrap_or_default()
+    } else {
+        String::new()
+    };
     let rebuilt_pages = if !prep.remaining_sources.is_empty() {
-        match run_compiler(&state, &prep.remaining_sources, params.model.as_deref()).await {
+        match run_compiler(&state, &prep.remaining_sources, params.model.as_deref(), &delete_schema_text).await {
             Ok(llm_pages_with_source) if !llm_pages_with_source.is_empty() => {
                 let rebuilt_slugs_c = prep.rebuilt_slugs.clone();
                 // Discard source tag — delete_wiki_source manages provenance separately
@@ -1339,7 +1443,8 @@ pub async fn delete_wiki_source(
 
 /// Shared compiler pipeline: call the LLM to generate wiki pages from a list of sources.
 ///
-/// Reads `INGEST_PROMPT.md` and `SCHEMA.md` at runtime (no hardcoded prompts).
+/// Accepts `schema` as a pre-read string to avoid redundant disk I/O when called in a
+/// loop over multiple sources (M4 fix: SCHEMA.md read once by caller, not per-call).
 /// Returns `Ok(pages_with_source)` where each entry is `(LlmPage, source_filename)` so
 /// callers can track which source produced each page (C6 fix: correct provenance).
 /// Returns `Err(())` when the agent or JSON parsing fails.
@@ -1347,6 +1452,7 @@ async fn run_compiler(
     state: &AppState,
     sources: &[(String, String)],
     model: Option<&str>,
+    schema: &str,
 ) -> Result<Vec<(LlmPage, String)>, ()> {
     use crate::ai::resolve_agent;
 
@@ -1354,17 +1460,13 @@ async fn run_compiler(
         return Ok(Vec::new());
     }
 
-    // Read INGEST_PROMPT.md (user-editable) and SCHEMA.md at runtime (blocking, holds mutex).
-    let (ingest_prompt, schema) = {
+    // Read INGEST_PROMPT.md (user-editable) at runtime (blocking, holds mutex).
+    // SCHEMA.md is passed in by the caller to avoid N disk reads for N sources (M4 fix).
+    let ingest_prompt = {
         let wiki = Arc::clone(&state.wiki).lock_owned().await;
-        tokio::task::spawn_blocking(move || {
-            let prompt = wiki.read_ingest_prompt().unwrap_or_default();
-            let schema = std::fs::read_to_string(wiki.wiki_dir().join("SCHEMA.md"))
-                .unwrap_or_default();
-            (prompt, schema)
-        })
-        .await
-        .unwrap_or_default()
+        tokio::task::spawn_blocking(move || wiki.read_ingest_prompt().unwrap_or_default())
+            .await
+            .unwrap_or_default()
     };
 
     let system_prompt = format!("{ingest_prompt}\n\n{schema}");
