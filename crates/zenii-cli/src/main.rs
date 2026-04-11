@@ -659,6 +659,9 @@ async fn main() {
             commands::wiki::WikiAction::Regenerate { model } => {
                 commands::wiki::regenerate(&client, model.as_deref()).await
             }
+            commands::wiki::WikiAction::Prompt { action } => {
+                commands::wiki::prompt(&client, &action).await
+            }
         },
         Commands::Onboard => commands::onboard::run(&client).await,
         Commands::Completions { shell } => {

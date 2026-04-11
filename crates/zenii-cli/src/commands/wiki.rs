@@ -55,6 +55,24 @@ pub enum WikiAction {
         #[arg(long)]
         model: Option<String>,
     },
+    /// Show or change the ingest prompt
+    Prompt {
+        #[command(subcommand)]
+        action: PromptAction,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+pub enum PromptAction {
+    /// Print the current ingest prompt
+    Show,
+    /// Set the ingest prompt to the given text
+    Set {
+        /// New prompt content
+        content: String,
+    },
+    /// Open the prompt file in $VISUAL or $EDITOR
+    Edit,
 }
 
 pub async fn list(client: &ZeniiClient) -> Result<(), String> {
@@ -301,6 +319,50 @@ pub async fn regenerate(client: &ZeniiClient, model: Option<&str>) -> Result<(),
     let result: serde_json::Value = client.post("/wiki/regenerate", &body).await?;
     let message = result.get("message").and_then(|v| v.as_str()).unwrap_or("done");
     println!("{message}");
+    Ok(())
+}
+
+pub async fn prompt(client: &ZeniiClient, action: &PromptAction) -> Result<(), String> {
+    match action {
+        PromptAction::Show => {
+            let content = client.wiki_prompt_get().await?;
+            println!("{content}");
+        }
+        PromptAction::Set { content } => {
+            client.wiki_prompt_set(content).await?;
+            println!("Prompt updated.");
+        }
+        PromptAction::Edit => {
+            let current = client.wiki_prompt_get().await?;
+            let tmp = tempfile::Builder::new()
+                .suffix(".md")
+                .tempfile()
+                .map_err(|e| e.to_string())?;
+            std::fs::write(tmp.path(), &current).map_err(|e| e.to_string())?;
+            let editor_str = std::env::var("VISUAL")
+                .or_else(|_| std::env::var("EDITOR"))
+                .unwrap_or_else(|_| "nano".to_string());
+            let mut parts = editor_str.split_whitespace();
+            let program = parts.next().ok_or_else(|| "EDITOR variable is empty".to_string())?;
+            let editor_args: Vec<&str> = parts.collect();
+            let status = tokio::process::Command::new(program)
+                .args(&editor_args)
+                .arg(tmp.path())
+                .status()
+                .await
+                .map_err(|e| format!("Failed to launch editor '{program}': {e}"))?;
+            if !status.success() {
+                return Err(format!("Editor exited with status {status}"));
+            }
+            let new_content = std::fs::read_to_string(tmp.path()).map_err(|e| e.to_string())?;
+            if new_content == current {
+                println!("No changes.");
+                return Ok(());
+            }
+            client.wiki_prompt_set(&new_content).await?;
+            println!("Prompt updated.");
+        }
+    }
     Ok(())
 }
 

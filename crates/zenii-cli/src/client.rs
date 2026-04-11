@@ -163,6 +163,25 @@ impl ZeniiClient {
         }
         Ok(())
     }
+
+    pub async fn wiki_prompt_get(&self) -> Result<String, String> {
+        #[derive(serde::Deserialize)]
+        struct Resp {
+            content: String,
+        }
+        let resp: Resp = self.get("/wiki/prompt").await?;
+        Ok(resp.content)
+    }
+
+    pub async fn wiki_prompt_set(&self, content: &str) -> Result<(), String> {
+        #[derive(serde::Serialize)]
+        struct Body<'a> {
+            content: &'a str,
+        }
+        self.put::<_, serde_json::Value>("/wiki/prompt", &Body { content })
+            .await?;
+        Ok(())
+    }
 }
 
 #[cfg(test)]
