@@ -226,6 +226,13 @@ pub struct AppConfig {
     // Wiki
     /// Override path for the wiki directory. Default: {data_dir}/wiki/
     pub wiki_dir: Option<String>,
+    /// Maximum size of a single wiki page file in kibibytes. Requests that produce
+    /// pages larger than this are logged as a warning (advisory — not hard-blocked,
+    /// since page content comes from the LLM). Default: 512 KiB.
+    pub wiki_max_page_size_kb: u64,
+    /// Maximum size of a single source upload in mebibytes. Requests that exceed
+    /// this limit are rejected with HTTP 400. Default: 50 MiB.
+    pub wiki_max_source_size_mb: u64,
     /// Binary name or path for document-to-markdown conversion (default: "markitdown").
     /// Install with: pip install markitdown[all]
     /// Override to use a different binary, e.g. "pandoc" or "/usr/local/bin/markitdown".
@@ -475,6 +482,8 @@ impl Default for AppConfig {
 
             // Wiki
             wiki_dir: None,
+            wiki_max_page_size_kb: 512,
+            wiki_max_source_size_mb: 50,
             doc_converter_bin: "markitdown".into(),
             wiki_graph_pre_ticks: 40,
             wiki_graph_initial_alpha: 0.5,

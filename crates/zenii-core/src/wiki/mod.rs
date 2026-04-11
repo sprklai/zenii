@@ -118,6 +118,34 @@ pub struct FixedIssue {
 
 const PAGE_SUBDIRS: &[&str] = &["concepts", "entities", "topics", "comparisons", "queries"];
 
+// ── Validation helpers ────────────────────────────────────────────────────────
+
+/// Reject filenames that could escape the sources/ directory via path traversal.
+fn validate_filename(filename: &str) -> Result<(), ZeniiError> {
+    if filename.is_empty()
+        || filename.contains("..")
+        || filename.contains('/')
+        || filename.contains('\\')
+    {
+        return Err(ZeniiError::Validation("invalid filename".into()));
+    }
+    Ok(())
+}
+
+/// Reject slugs that are empty, ambiguous, or contain path-unsafe characters.
+/// Allows alphanumeric characters, hyphens, and underscores, up to 64 chars.
+fn validate_slug(slug: &str) -> Result<(), ZeniiError> {
+    if slug.is_empty()
+        || slug == "."
+        || slug == ".."
+        || !slug.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_')
+        || slug.len() > 64
+    {
+        return Err(ZeniiError::Validation(format!("invalid slug: {slug}")));
+    }
+    Ok(())
+}
+
 // ── WikiManager ──────────────────────────────────────────────────────────────
 
 #[derive(Clone)]
@@ -256,6 +284,7 @@ impl WikiManager {
             .trim_end_matches(".md")
             .to_lowercase()
             .replace(' ', "-");
+        validate_slug(&slug)?;
         let page_path = self
             .wiki_dir
             .join("pages")
@@ -274,6 +303,7 @@ impl WikiManager {
         slug: &str,
         content: &str,
     ) -> Result<WikiPage, ZeniiError> {
+        validate_slug(slug)?;
         if !PAGE_SUBDIRS.contains(&page_type) {
             return Err(ZeniiError::Validation(format!(
                 "invalid page type '{page_type}'; must be one of: {}",
@@ -291,6 +321,7 @@ impl WikiManager {
 
     /// Save raw source content to wiki/sources/{filename}.
     pub fn save_source(&self, filename: &str, content: &str) -> Result<(), ZeniiError> {
+        validate_filename(filename)?;
         let sources_dir = self.wiki_dir.join("sources");
         std::fs::create_dir_all(&sources_dir)?;
         std::fs::write(sources_dir.join(filename), content)?;
@@ -693,6 +724,7 @@ impl WikiManager {
 
     /// Read the raw content of a source file.
     pub fn read_source(&self, filename: &str) -> Result<String, ZeniiError> {
+        validate_filename(filename)?;
         let path = self.wiki_dir.join("sources").join(filename);
         if !path.exists() {
             return Err(ZeniiError::Validation(format!("source '{filename}' not found")));
@@ -702,6 +734,7 @@ impl WikiManager {
 
     /// Delete a raw source file from `wiki/sources/`.
     pub fn delete_source_file(&self, filename: &str) -> Result<(), ZeniiError> {
+        validate_filename(filename)?;
         let path = self.wiki_dir.join("sources").join(filename);
         if path.exists() {
             std::fs::remove_file(&path)?;
@@ -2121,5 +2154,130 @@ No outbound links here.
             managed_by: "source_ingest".into(),
         };
         assert!(mgr.remove_source_from_page(&record, "a.md").is_ok());
+    }
+
+    // ── Security / validation tests ──────────────────────────────────────────
+
+    // W63: validate_filename rejects empty string
+    #[test]
+    fn validate_filename_rejects_empty() {
+        assert!(validate_filename("").is_err());
+    }
+
+    // W64: validate_filename rejects path traversal with ".."
+    #[test]
+    fn validate_filename_rejects_dotdot() {
+        assert!(validate_filename("../../etc/cron.d/evil").is_err());
+        assert!(validate_filename("..").is_err());
+        assert!(validate_filename("foo/../../bar").is_err());
+    }
+
+    // W65: validate_filename rejects forward slash
+    #[test]
+    fn validate_filename_rejects_slash() {
+        assert!(validate_filename("subdir/file.md").is_err());
+    }
+
+    // W66: validate_filename rejects backslash
+    #[test]
+    fn validate_filename_rejects_backslash() {
+        assert!(validate_filename("subdir\\file.md").is_err());
+    }
+
+    // W67: validate_filename accepts a normal filename
+    #[test]
+    fn validate_filename_accepts_normal() {
+        assert!(validate_filename("my-source.md").is_ok());
+        assert!(validate_filename("report_2026.pdf").is_ok());
+        assert!(validate_filename("data.txt").is_ok());
+    }
+
+    // W68: validate_slug rejects empty string
+    #[test]
+    fn validate_slug_rejects_empty() {
+        assert!(validate_slug("").is_err());
+    }
+
+    // W69: validate_slug rejects "." and ".."
+    #[test]
+    fn validate_slug_rejects_dot_and_dotdot() {
+        assert!(validate_slug(".").is_err());
+        assert!(validate_slug("..").is_err());
+    }
+
+    // W70: validate_slug rejects slugs with path-unsafe characters
+    #[test]
+    fn validate_slug_rejects_path_chars() {
+        assert!(validate_slug("foo/bar").is_err());
+        assert!(validate_slug("foo\\bar").is_err());
+        assert!(validate_slug("foo bar").is_err());
+        assert!(validate_slug("foo.bar").is_err());
+    }
+
+    // W71: validate_slug rejects slugs longer than 64 characters
+    #[test]
+    fn validate_slug_rejects_too_long() {
+        let long = "a".repeat(65);
+        assert!(validate_slug(&long).is_err());
+    }
+
+    // W72: validate_slug accepts valid slugs with alphanumeric, hyphens, underscores
+    #[test]
+    fn validate_slug_accepts_valid() {
+        assert!(validate_slug("my-concept").is_ok());
+        assert!(validate_slug("rust_2024").is_ok());
+        assert!(validate_slug("ABCdef123").is_ok());
+        // Exactly 64 characters is valid
+        let max = "a".repeat(64);
+        assert!(validate_slug(&max).is_ok());
+    }
+
+    // W73: save_source rejects path traversal filename
+    #[test]
+    fn save_source_rejects_path_traversal() {
+        let dir = TempDir::new().unwrap();
+        let mgr = WikiManager::new(dir.path().to_path_buf()).unwrap();
+        let err = mgr.save_source("../../evil.md", "content").unwrap_err();
+        assert!(
+            matches!(err, ZeniiError::Validation(_)),
+            "expected Validation error, got {err:?}"
+        );
+    }
+
+    // W74: read_source rejects path traversal filename
+    #[test]
+    fn read_source_rejects_path_traversal() {
+        let dir = TempDir::new().unwrap();
+        let mgr = WikiManager::new(dir.path().to_path_buf()).unwrap();
+        let err = mgr.read_source("../../evil.md").unwrap_err();
+        assert!(matches!(err, ZeniiError::Validation(_)));
+    }
+
+    // W75: delete_source_file rejects path traversal filename
+    #[test]
+    fn delete_source_file_rejects_path_traversal() {
+        let dir = TempDir::new().unwrap();
+        let mgr = WikiManager::new(dir.path().to_path_buf()).unwrap();
+        let err = mgr.delete_source_file("../../../cron").unwrap_err();
+        assert!(matches!(err, ZeniiError::Validation(_)));
+    }
+
+    // W76: write_page rejects invalid slug
+    #[test]
+    fn write_page_rejects_invalid_slug() {
+        let dir = TempDir::new().unwrap();
+        let mgr = WikiManager::new(dir.path().to_path_buf()).unwrap();
+        let err = mgr.write_page("concepts", "../escape", "content").unwrap_err();
+        assert!(matches!(err, ZeniiError::Validation(_)));
+    }
+
+    // W77: ingest rejects filename that produces an invalid slug
+    #[test]
+    fn ingest_rejects_invalid_slug_from_filename() {
+        let dir = TempDir::new().unwrap();
+        let mgr = WikiManager::new(dir.path().to_path_buf()).unwrap();
+        // Filename that results in slug "." after stripping extension
+        let err = mgr.ingest("...md.md", "content").unwrap_err();
+        assert!(matches!(err, ZeniiError::Validation(_)));
     }
 }

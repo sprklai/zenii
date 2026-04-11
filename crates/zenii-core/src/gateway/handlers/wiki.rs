@@ -211,6 +211,24 @@ pub async fn ingest_wiki_source(
 ) -> impl IntoResponse {
     use crate::wiki::{PageRecord, RunRecord, SourceRecord, WikiManager};
 
+    // ── Size guard: reject source content that exceeds the configured limit ──
+    {
+        let max_bytes = state.config.load().wiki_max_source_size_mb * 1024 * 1024;
+        if body.content.len() as u64 > max_bytes {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({
+                    "error": format!(
+                        "source content too large ({} bytes); limit is {} MiB",
+                        body.content.len(),
+                        state.config.load().wiki_max_source_size_mb
+                    )
+                })),
+            )
+                .into_response();
+        }
+    }
+
     // ── Step 1: Save the raw source (blocking I/O, holds mutex) ─────────────
     {
         let wiki = Arc::clone(&state.wiki).lock_owned().await;
@@ -1030,6 +1048,24 @@ pub async fn upload_wiki_source(
                 .into_response();
         }
     };
+
+    // ── Size guard: reject uploads that exceed the configured source size limit ──
+    {
+        let max_bytes = state.config.load().wiki_max_source_size_mb * 1024 * 1024;
+        if bytes.len() as u64 > max_bytes {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({
+                    "error": format!(
+                        "uploaded file too large ({} bytes); limit is {} MiB",
+                        bytes.len(),
+                        state.config.load().wiki_max_source_size_mb
+                    )
+                })),
+            )
+                .into_response();
+        }
+    }
 
     let filename = filename.unwrap_or_else(|| "upload.bin".to_string());
 
