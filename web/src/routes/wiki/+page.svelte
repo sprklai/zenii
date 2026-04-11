@@ -589,7 +589,7 @@
 	ondragleave={handlePageDragLeave}
 	ondrop={handlePageDrop}
 	role="region"
-	aria-label="Wiki"
+	aria-label="Wiki knowledge base viewer"
 >
 	<!-- Header toolbar -->
 	<div class="flex shrink-0 items-center justify-between border-b px-4 py-3">
@@ -651,7 +651,7 @@
 					{/if}
 				</Button>
 				{#if lintPopOpen}
-					<div class="absolute right-0 top-full z-50 mt-1.5 w-[22rem] rounded-lg border bg-popover shadow-lg" onclick={(e) => e.stopPropagation()}>
+					<div class="absolute right-0 top-full z-50 mt-1.5 w-[22rem] rounded-lg border bg-popover shadow-lg" role="none" onclick={(e) => e.stopPropagation()} onkeydown={(e) => e.stopPropagation()}>
 						<div class="flex items-center justify-between border-b px-3 py-2">
 							<span class="text-sm font-semibold">{m.wiki_lint_button()}</span>
 							<div class="flex items-center gap-2">
@@ -760,7 +760,7 @@
 					{/if}
 				</Button>
 				{#if sourcesPopOpen}
-					<div class="absolute right-0 top-full z-50 mt-1.5 w-[22rem] rounded-lg border bg-popover shadow-lg" onclick={(e) => e.stopPropagation()}>
+					<div class="absolute right-0 top-full z-50 mt-1.5 w-[22rem] rounded-lg border bg-popover shadow-lg" role="none" onclick={(e) => e.stopPropagation()} onkeydown={(e) => e.stopPropagation()}>
 						<div class="flex items-center justify-between border-b px-3 py-2">
 							<span class="text-sm font-semibold">{m.wiki_sources_button()}</span>
 							<button class="rounded p-0.5 text-muted-foreground hover:bg-muted" onclick={() => closeAllPopovers()}><X class="h-3.5 w-3.5" /></button>
@@ -866,7 +866,7 @@
 					<Settings class="h-3.5 w-3.5" />
 				</Button>
 				{#if gearOpen}
-					<div class="absolute right-0 top-full z-50 mt-1.5 w-52 rounded-lg border bg-popover py-1 shadow-lg" onclick={(e) => e.stopPropagation()}>
+					<div class="absolute right-0 top-full z-50 mt-1.5 w-52 rounded-lg border bg-popover py-1 shadow-lg" role="none" onclick={(e) => e.stopPropagation()} onkeydown={(e) => e.stopPropagation()}>
 						<button
 							class="flex w-full items-center gap-2.5 px-3 py-2 text-sm text-foreground hover:bg-muted"
 							onclick={() => { closeAllPopovers(); handleSync(); }}
@@ -1218,7 +1218,7 @@
 			<div
 				class="flex cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-muted-foreground/30 p-6 transition-colors hover:border-muted-foreground/50"
 				onclick={() => fileInput?.click()}
-				onkeydown={(e) => e.key === 'Enter' && fileInput?.click()}
+				onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInput?.click(); } }}
 				ondragover={handleDropZoneDragOver}
 				ondrop={handleDropZoneDrop}
 				role="button"

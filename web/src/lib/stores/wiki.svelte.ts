@@ -135,9 +135,10 @@ function createWikiStore() {
       const seq = ++loadSeq;
       loading = true;
       try {
-        const data = await apiGet<WikiPage[]>("/wiki");
+        // L4: GET /wiki now returns paginated response { pages, total, limit, offset }
+        const data = await apiGet<{ pages: WikiPage[]; total: number; limit: number; offset: number }>("/wiki?limit=200&offset=0");
         if (seq !== loadSeq) return;
-        pages = data;
+        pages = data.pages;
       } finally {
         if (seq === loadSeq) loading = false;
       }
