@@ -331,7 +331,14 @@ pub async fn ingest_wiki_source(
         let prompt_hash_c = prompt_hash.clone();
         let schema_hash_c = schema_hash.clone();
         tokio::task::spawn_blocking(move || {
-            let (mut sources, mut page_records) = wiki.read_manifest().unwrap_or_default();
+            let manifest = wiki.read_manifest_or_bootstrap();
+            let (mut sources, mut page_records) = match manifest {
+                Ok(v) => v,
+                Err(e) => {
+                    tracing::warn!("manifest read failed after ingest, skipping manifest update: {e}");
+                    return;
+                }
+            };
             sources.retain(|s| s.filename != filename);
             sources.push(SourceRecord {
                 filename: filename.clone(),
@@ -401,7 +408,7 @@ pub async fn ingest_wiki_source(
     let fallback_result = tokio::task::spawn_blocking(move || {
         let page = wiki.ingest(&filename, &content)?;
         let date = chrono::Utc::now().format("%Y-%m-%d").to_string();
-        let (mut sources, page_records) = wiki.read_manifest().unwrap_or_default();
+        let (mut sources, page_records) = wiki.read_manifest_or_bootstrap()?;
         sources.retain(|s| s.filename != filename);
         sources.push(crate::wiki::SourceRecord {
             filename: filename.clone(),
@@ -470,7 +477,7 @@ pub async fn list_wiki_sources(State(state): State<Arc<AppState>>) -> impl IntoR
     let wiki = Arc::clone(&state.wiki).lock_owned().await;
     let result = tokio::task::spawn_blocking(move || {
         let sources = wiki.list_sources()?;
-        let (_, page_records) = wiki.read_manifest().unwrap_or_default();
+        let (_, page_records) = wiki.read_manifest_or_bootstrap()?;
         let items: Vec<SourceListItem> = sources
             .into_iter()
             .map(|s| {
@@ -537,8 +544,8 @@ pub async fn regenerate_wiki(
     }
     let prep = {
         let wiki = Arc::clone(&state.wiki).lock_owned().await;
-        tokio::task::spawn_blocking(move || {
-            let (manifest_sources, manifest_pages) = wiki.read_manifest().unwrap_or_default();
+        tokio::task::spawn_blocking(move || -> Result<PrepResult, crate::error::ZeniiError> {
+            let (manifest_sources, manifest_pages) = wiki.read_manifest_or_bootstrap()?;
             let sources_list: Vec<(String, String)> = if manifest_sources.is_empty() {
                 wiki.list_sources()
                     .unwrap_or_default()
@@ -556,12 +563,16 @@ pub async fn regenerate_wiki(
                     })
                     .collect()
             };
-            PrepResult { sources_list, manifest_pages }
+            Ok(PrepResult { sources_list, manifest_pages })
         })
         .await
-        .unwrap_or_else(|_| PrepResult {
-            sources_list: Vec::new(),
-            manifest_pages: Vec::new(),
+        .unwrap_or_else(|e| {
+            tracing::warn!("wiki regenerate prep task panicked: {e}");
+            Err(crate::error::ZeniiError::Gateway("prep task panicked".into()))
+        })
+        .unwrap_or_else(|e| {
+            tracing::warn!("wiki regenerate manifest read failed: {e}");
+            PrepResult { sources_list: Vec::new(), manifest_pages: Vec::new() }
         })
     };
 
@@ -785,7 +796,7 @@ pub async fn regenerate_wiki_source(
         let filename_c = filename.clone();
         tokio::task::spawn_blocking(move || {
             let source_content = wiki.read_source(&filename_c)?;
-            let (manifest_sources, manifest_pages) = wiki.read_manifest().unwrap_or_default();
+            let (manifest_sources, manifest_pages) = wiki.read_manifest_or_bootstrap()?;
             let source_pages: Vec<PageRecord> = manifest_pages
                 .iter()
                 .filter(|p| p.sources.contains(&filename_c) && p.managed_by == "source_ingest")
@@ -1128,7 +1139,7 @@ pub async fn delete_wiki_source(
             wiki.read_source(&filename_c)
                 .map_err(|_| crate::error::ZeniiError::NotFound(filename_c.clone()))?;
 
-            let (manifest_sources, manifest_pages) = wiki.read_manifest().unwrap_or_default();
+            let (manifest_sources, manifest_pages) = wiki.read_manifest_or_bootstrap()?;
             let affected: Vec<&PageRecord> = manifest_pages
                 .iter()
                 .filter(|r| r.managed_by == "source_ingest" && r.sources.contains(&filename_c))
@@ -1409,9 +1420,17 @@ async fn run_compiler(
             .trim_end_matches("```")
             .trim();
 
-        if let Ok(pages) = serde_json::from_str::<Vec<LlmPage>>(raw) {
-            // Tag each page with the source filename that produced it
-            all_pages.extend(pages.into_iter().map(|p| (p, filename.clone())));
+        match serde_json::from_str::<Vec<LlmPage>>(raw) {
+            Ok(pages) => {
+                // Tag each page with the source filename that produced it
+                all_pages.extend(pages.into_iter().map(|p| (p, filename.clone())));
+            }
+            Err(e) => {
+                tracing::warn!(
+                    "LLM JSON parse failed: {e}\nRaw response (first 500 chars): {}",
+                    &raw[..500.min(raw.len())]
+                );
+            }
         }
     }
 

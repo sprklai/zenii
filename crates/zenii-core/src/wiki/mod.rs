@@ -227,8 +227,28 @@ impl WikiManager {
         memory: &dyn crate::memory::traits::Memory,
     ) -> Result<usize, ZeniiError> {
         let pages = self.list_pages()?;
+        let current_slugs: std::collections::HashSet<String> =
+            pages.iter().map(|p| p.slug.clone()).collect();
+
+        // Remove stale wiki:* keys that no longer correspond to any page.
+        // We use a generous limit; if there are more than 200 wiki pages the
+        // excess stale entries will be cleaned up on the next sync.
+        let existing = memory.recall("wiki:", 200, 0).await?;
+        for entry in existing {
+            let slug = entry.key.strip_prefix("wiki:").unwrap_or("").to_string();
+            if !current_slugs.contains(&slug)
+                && let Err(e) = memory.forget(&entry.key).await
+            {
+                tracing::warn!(
+                    "wiki: failed to forget stale memory key '{}': {e}",
+                    entry.key
+                );
+            }
+        }
+
+        // Upsert current pages.
         let mut count = 0;
-        for page in pages {
+        for page in &pages {
             let content = if !page.tldr.trim().is_empty() {
                 page.tldr.clone()
             } else if !page.title.trim().is_empty() {
@@ -608,6 +628,22 @@ impl WikiManager {
         Ok((sources, pages))
     }
 
+    /// Read the manifest, bootstrapping to empty state only when manifest files are
+    /// genuinely absent (fresh wiki). Propagates real errors (corrupt JSON, permission
+    /// denied, etc.) so callers can surface them as HTTP 500 instead of silently
+    /// overwriting state with empty data.
+    pub fn read_manifest_or_bootstrap(
+        &self,
+    ) -> Result<(Vec<SourceRecord>, Vec<PageRecord>), ZeniiError> {
+        match self.read_manifest() {
+            Ok(v) => Ok(v),
+            Err(ZeniiError::Io(e)) if e.kind() == std::io::ErrorKind::NotFound => {
+                Ok((vec![], vec![]))
+            }
+            Err(e) => Err(e),
+        }
+    }
+
     /// Persist the manifest to `.meta/sources.json` and `.meta/pages.json`.
     pub fn write_manifest(
         &self,
@@ -863,10 +899,15 @@ impl WikiManager {
         let mut count = 0;
         for record in pages {
             let path = self.wiki_dir.join(&record.path);
-            if path.exists() {
-                std::fs::remove_file(&path)?;
-                count += 1;
+            if !path.exists() {
+                tracing::warn!(
+                    "wiki: manifest references missing page file: {}",
+                    path.display()
+                );
+                continue;
             }
+            std::fs::remove_file(&path)?;
+            count += 1;
         }
         Ok(count)
     }
