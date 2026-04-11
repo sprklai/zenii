@@ -31,6 +31,7 @@
 	import CheckCircle2 from '@lucide/svelte/icons/check-circle-2';
 	import AlertTriangle from '@lucide/svelte/icons/alert-triangle';
 	import ChevronDown from '@lucide/svelte/icons/chevron-down';
+	import Settings from '@lucide/svelte/icons/settings';
 
 	const CATEGORIES = ['all', 'concepts', 'entities', 'topics', 'comparisons', 'queries'] as const;
 	// Add new accepted types here — drives both the file input and the drop zone hint
@@ -237,16 +238,45 @@
 		}
 	}
 
+	// ── Popovers / modals ────────────────────────────────────────────────────────
+
+	let lintPopOpen = $state(false);
+	let sourcesPopOpen = $state(false);
+	let gearOpen = $state(false);
+	let promptOpen = $state(false);
+	let promptContent = $state('');
+	let promptLoading = $state(false);
+	let promptSaving = $state(false);
+	let deleteWikiOpen = $state(false);
+	let deleteConfirmText = $state('');
+	let deletingWiki = $state(false);
+	let deleteAllSourcesOpen = $state(false);
+	let deletingAllSources = $state(false);
+
+	function handleDocumentClick(e: MouseEvent) {
+		const target = e.target as HTMLElement;
+		if (!target.closest('[data-popover-anchor]') && !target.closest('[role="dialog"]')) {
+			lintPopOpen = false;
+			sourcesPopOpen = false;
+			gearOpen = false;
+		}
+	}
+
 	// ── Sources panel ────────────────────────────────────────────────────────────
 
-	let showSourcesPanel = $state(false);
 	let confirmDeleteFilename = $state<string | null>(null);
 	let confirmDeleteOpen = $state(false);
 	let regenerateConfirmOpen = $state(false);
 
 	async function handleToggleSources() {
-		showSourcesPanel = !showSourcesPanel;
-		if (showSourcesPanel && wikiStore.sources.length === 0) {
+		if (sourcesPopOpen) {
+			sourcesPopOpen = false;
+			return;
+		}
+		sourcesPopOpen = true;
+		lintPopOpen = false;
+		gearOpen = false;
+		if (wikiStore.sources.length === 0) {
 			await wikiStore.fetchSources();
 		}
 	}
@@ -270,6 +300,18 @@
 		}
 	}
 
+	async function handleOpenPrompt() {
+		if (promptLoading) return;
+		gearOpen = false;
+		promptLoading = true;
+		try {
+			promptContent = await wikiStore.fetchPrompt();
+		} finally {
+			promptLoading = false;
+		}
+		promptOpen = true;
+	}
+
 	async function handleRegenerate() {
 		regenerateConfirmOpen = false;
 		try {
@@ -286,10 +328,24 @@
 
 	// ── Lint ────────────────────────────────────────────────────────────────────
 
-	let showLintPanel = $state(false);
-
 	async function handleLint() {
-		showLintPanel = true;
+		if (lintPopOpen) {
+			lintPopOpen = false;
+			return;
+		}
+		lintPopOpen = true;
+		sourcesPopOpen = false;
+		gearOpen = false;
+		if (!wikiStore.lintIssues) {
+			try {
+				await wikiStore.lint();
+			} catch {
+				toast.error(m.wiki_lint_error());
+			}
+		}
+	}
+
+	async function handleRelint() {
 		try {
 			await wikiStore.lint();
 		} catch {
@@ -319,6 +375,8 @@
 	}
 </script>
 
+<svelte:document onclick={handleDocumentClick} />
+
 <div
 	class="flex h-full flex-col gap-0 overflow-hidden {pageDragOver ? 'outline outline-2 outline-primary/50' : ''}"
 	ondragover={handlePageDragOver}
@@ -339,6 +397,7 @@
 			{/if}
 		</div>
 		<div class="flex items-center gap-2">
+			<!-- Graph toggle -->
 			<Button
 				variant={showGraph ? 'default' : 'outline'}
 				size="sm"
@@ -348,6 +407,8 @@
 				<GitFork class="h-3.5 w-3.5" />
 				{m.wiki_graph_toggle()}
 			</Button>
+
+			<!-- Ask -->
 			<Button
 				variant="outline"
 				size="sm"
@@ -357,195 +418,199 @@
 				<MessageCircleQuestion class="h-3.5 w-3.5" />
 				{m.wiki_query_button()}
 			</Button>
-			<Button
-				variant={showLintPanel ? 'default' : 'outline'}
-				size="sm"
-				class="gap-1.5"
-				onclick={handleLint}
-				disabled={wikiStore.linting}
-			>
-				{#if wikiStore.linting}
-					<Loader2 class="h-3.5 w-3.5 animate-spin" />
-					{m.wiki_lint_running()}
-				{:else}
-					<ShieldCheck class="h-3.5 w-3.5" />
-					{m.wiki_lint_button()}
+
+			<!-- Lint popover -->
+			<div class="relative" data-popover-anchor>
+				<Button
+					variant={lintPopOpen ? 'default' : 'outline'}
+					size="sm"
+					class="gap-1.5"
+					onclick={(e) => { e.stopPropagation(); handleLint(); }}
+					disabled={wikiStore.linting}
+				>
+					{#if wikiStore.linting}
+						<Loader2 class="h-3.5 w-3.5 animate-spin" />
+						{m.wiki_lint_running()}
+					{:else}
+						<ShieldCheck class="h-3.5 w-3.5" />
+						{m.wiki_lint_button()}
+						{#if wikiStore.lintIssues !== null && wikiStore.lintIssues.length > 0}
+							<span class="rounded-full bg-yellow-500/20 px-1.5 py-0 text-[10px] font-bold text-yellow-600 dark:text-yellow-400">
+								{wikiStore.lintIssues.length}
+							</span>
+						{:else if wikiStore.lintIssues !== null && wikiStore.lintIssues.length === 0}
+							<CheckCircle2 class="h-3 w-3 text-green-500" />
+						{/if}
+						<ChevronDown class="h-3 w-3" />
+					{/if}
+				</Button>
+				{#if lintPopOpen}
+					<div class="absolute right-0 top-full z-50 mt-1.5 w-80 rounded-lg border bg-popover shadow-lg" onclick={(e) => e.stopPropagation()}>
+						<div class="flex items-center justify-between border-b px-3 py-2">
+							<span class="text-sm font-semibold">{m.wiki_lint_button()}</span>
+							<div class="flex items-center gap-2">
+								{#if wikiStore.lintIssues !== null}
+									<span class="text-xs text-muted-foreground">
+										{wikiStore.lintIssues.length === 0 ? m.wiki_lint_no_issues() : m.wiki_lint_issue_count({ count: wikiStore.lintIssues.length.toString(), suffix: wikiStore.lintIssues.length === 1 ? '' : 's' })}
+									</span>
+								{/if}
+								<button class="rounded p-0.5 text-muted-foreground hover:bg-muted" onclick={() => (lintPopOpen = false)}><X class="h-3.5 w-3.5" /></button>
+							</div>
+						</div>
+						{#if wikiStore.lintIssues !== null && wikiStore.lintIssues.length > 0}
+							<div class="max-h-52 overflow-y-auto p-2 space-y-1.5">
+								{#each wikiStore.lintIssues as issue}
+									<div class="rounded-md border bg-background p-2 text-xs">
+										<div class="flex items-center gap-1.5">
+											<AlertTriangle class="h-3.5 w-3.5 shrink-0 text-yellow-500" />
+											<span class="font-mono font-medium text-yellow-600 dark:text-yellow-400">{issue.kind}</span>
+											<button
+												class="font-medium text-primary hover:underline"
+												onclick={() => { handleSelectPage(issue.page_slug); lintPopOpen = false; }}
+											>{issue.page_slug}</button>
+										</div>
+										<p class="mt-1 text-muted-foreground">{issue.detail}</p>
+										{#if issue.fix}
+											<p class="mt-0.5 text-muted-foreground/70"><span class="font-medium">{m.wiki_lint_fix_label()}:</span> {issue.fix}</p>
+										{/if}
+									</div>
+								{/each}
+							</div>
+						{:else if wikiStore.lintIssues === null}
+							<p class="p-3 text-center text-sm text-muted-foreground">Run lint to check for issues</p>
+						{/if}
+						<div class="border-t p-2">
+							<Button size="sm" class="w-full gap-1.5" onclick={handleRelint} disabled={wikiStore.linting}>
+								{#if wikiStore.linting}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<RefreshCw class="h-3.5 w-3.5" />{/if}
+								{m.wiki_lint_running()}
+							</Button>
+						</div>
+					</div>
 				{/if}
-			</Button>
-			<Button
-				variant="outline"
-				size="sm"
-				class="gap-1.5"
-				onclick={() => (ingestOpen = true)}
-			>
+			</div>
+
+			<!-- Sources popover -->
+			<div class="relative" data-popover-anchor>
+				<Button
+					variant={sourcesPopOpen ? 'default' : 'outline'}
+					size="sm"
+					class="gap-1.5"
+					onclick={(e) => { e.stopPropagation(); handleToggleSources(); }}
+				>
+					<ChevronDown class="h-3.5 w-3.5 transition-transform {sourcesPopOpen ? 'rotate-180' : ''}" />
+					{m.wiki_sources_button()}
+					{#if wikiStore.sources.length > 0}
+						<span class="rounded-full bg-primary/20 px-1.5 py-0 text-[10px] font-medium text-primary">
+							{wikiStore.sources.length}
+						</span>
+					{/if}
+				</Button>
+				{#if sourcesPopOpen}
+					<div class="absolute right-0 top-full z-50 mt-1.5 w-80 rounded-lg border bg-popover shadow-lg" onclick={(e) => e.stopPropagation()}>
+						<div class="flex items-center justify-between border-b px-3 py-2">
+							<span class="text-sm font-semibold">{m.wiki_sources_button()}</span>
+							<button class="rounded p-0.5 text-muted-foreground hover:bg-muted" onclick={() => (sourcesPopOpen = false)}><X class="h-3.5 w-3.5" /></button>
+						</div>
+						<div class="max-h-52 overflow-y-auto p-2">
+							{#if wikiStore.sourcesLoading}
+								<div class="space-y-1.5">
+									{#each Array(3) as _}<Skeleton class="h-8 w-full" />{/each}
+								</div>
+							{:else if wikiStore.sources.length === 0}
+								<p class="py-2 text-center text-sm text-muted-foreground">{m.wiki_sources_empty()}</p>
+							{:else}
+								<div class="space-y-1">
+									{#each wikiStore.sources as source (source.filename)}
+										<div class="flex items-center justify-between rounded-md border bg-background px-2.5 py-1.5 text-xs">
+											<div class="flex min-w-0 flex-1 items-center gap-2">
+												<span class="truncate font-medium">{source.filename}</span>
+												<span class="shrink-0 font-mono text-[10px] text-muted-foreground">{source.hash.slice(0, 8)}</span>
+												<span class="shrink-0 rounded px-1 py-0 text-[10px] {source.active ? 'bg-green-500/10 text-green-600 dark:text-green-400' : 'bg-muted text-muted-foreground'}">
+													{source.active ? m.wiki_source_status_active() : m.wiki_source_status_inactive()}
+												</span>
+											</div>
+											<button
+												class="ml-2 shrink-0 rounded p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+												onclick={() => handleDeleteSourceClick(source.filename)}
+											><Trash2 class="h-3.5 w-3.5" /></button>
+										</div>
+									{/each}
+								</div>
+							{/if}
+						</div>
+						<div class="space-y-1.5 border-t p-2">
+							<div class="flex gap-1.5">
+								<Button variant="outline" size="sm" class="h-7 flex-1 gap-1 text-xs" onclick={handleOpenFolder}><FolderOpen class="h-3 w-3" /> {m.wiki_open_folder()}</Button>
+								<Button variant="outline" size="sm" class="h-7 flex-1 gap-1 text-xs" onclick={() => (regenerateConfirmOpen = true)} disabled={wikiStore.regenerating || wikiStore.sources.length === 0}>
+									{#if wikiStore.regenerating}<Loader2 class="h-3 w-3 animate-spin" />{:else}<RefreshCw class="h-3 w-3" />{/if}
+									{m.wiki_regenerate_button()}
+								</Button>
+							</div>
+							<Button
+								variant="outline"
+								size="sm"
+								class="h-7 w-full gap-1 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive border-destructive/30"
+								onclick={() => { deleteAllSourcesOpen = true; sourcesPopOpen = false; }}
+								disabled={wikiStore.sources.length === 0}
+							>
+								<Trash2 class="h-3 w-3" />
+								{m.wiki_sources_delete_all_button()}
+							</Button>
+						</div>
+					</div>
+				{/if}
+			</div>
+
+			<!-- Ingest -->
+			<Button variant="outline" size="sm" class="gap-1.5" onclick={() => (ingestOpen = true)}>
 				<FileUp class="h-3.5 w-3.5" />
 				{m.wiki_ingest_button()}
 			</Button>
-			<Button
-				variant="outline"
-				size="sm"
-				class="gap-1.5"
-				onclick={handleSync}
-				disabled={wikiStore.syncing}
-			>
-				{#if wikiStore.syncing}
-					<Loader2 class="h-3.5 w-3.5 animate-spin" />
-					{m.wiki_syncing()}
-				{:else}
-					<RefreshCw class="h-3.5 w-3.5" />
-					{m.wiki_sync_button()}
+
+			<!-- Gear / Settings -->
+			<div class="relative" data-popover-anchor>
+				<Button
+					variant={gearOpen ? 'default' : 'outline'}
+					size="sm"
+					class="px-2"
+					onclick={(e) => { e.stopPropagation(); gearOpen = !gearOpen; lintPopOpen = false; sourcesPopOpen = false; }}
+					aria-label="Wiki settings"
+				>
+					<Settings class="h-3.5 w-3.5" />
+				</Button>
+				{#if gearOpen}
+					<div class="absolute right-0 top-full z-50 mt-1.5 w-52 rounded-lg border bg-popover py-1 shadow-lg" onclick={(e) => e.stopPropagation()}>
+						<button
+							class="flex w-full items-center gap-2.5 px-3 py-2 text-sm text-foreground hover:bg-muted"
+							onclick={() => { gearOpen = false; handleSync(); }}
+							disabled={wikiStore.syncing}
+						>
+							<RefreshCw class="h-3.5 w-3.5 text-muted-foreground {wikiStore.syncing ? 'animate-spin' : ''}" />
+							{m.wiki_gear_sync()}
+						</button>
+						<div class="my-1 h-px bg-border"></div>
+						<p class="px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Configuration</p>
+						<button
+							class="flex w-full items-center gap-2.5 px-3 py-2 text-sm text-foreground hover:bg-muted"
+							onclick={handleOpenPrompt}
+						>
+							<Tag class="h-3.5 w-3.5 text-muted-foreground" />
+							{m.wiki_gear_change_prompt()}
+						</button>
+						<div class="my-1 h-px bg-border"></div>
+						<p class="px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Danger zone</p>
+						<button
+							class="flex w-full items-center gap-2.5 px-3 py-2 text-sm text-destructive hover:bg-destructive/10"
+							onclick={() => { gearOpen = false; deleteWikiOpen = true; deleteConfirmText = ''; }}
+						>
+							<Trash2 class="h-3.5 w-3.5" />
+							{m.wiki_gear_delete_all()}
+						</button>
+					</div>
 				{/if}
-			</Button>
-			<Button
-				variant="outline"
-				size="sm"
-				class="gap-1.5"
-				onclick={handleOpenFolder}
-			>
-				<FolderOpen class="h-3.5 w-3.5" />
-				{m.wiki_open_folder()}
-			</Button>
-			<Button
-				variant={showSourcesPanel ? 'default' : 'outline'}
-				size="sm"
-				class="gap-1.5"
-				onclick={handleToggleSources}
-			>
-				<ChevronDown class="h-3.5 w-3.5 transition-transform {showSourcesPanel ? 'rotate-180' : ''}" />
-				{m.wiki_sources_button()}
-				{#if wikiStore.sources.length > 0}
-					<span class="ml-0.5 rounded-full bg-primary/20 px-1.5 py-0 text-[10px] font-medium text-primary">
-						{wikiStore.sources.length}
-					</span>
-				{/if}
-			</Button>
+			</div>
 		</div>
 	</div>
-
-	<!-- Lint panel -->
-	{#if showLintPanel}
-		<div class="shrink-0 border-b bg-muted/30">
-			<div class="flex items-center justify-between px-4 py-2">
-				<div class="flex items-center gap-2">
-					<ShieldCheck class="h-4 w-4 text-muted-foreground" />
-					<span class="text-sm font-medium">
-						{#if wikiStore.linting}
-							{m.wiki_lint_running()}
-						{:else if wikiStore.lintIssues !== null && wikiStore.lintIssues.length === 0}
-							<span class="flex items-center gap-1 text-green-600 dark:text-green-400">
-								<CheckCircle2 class="h-4 w-4" />
-								{m.wiki_lint_no_issues()}
-							</span>
-						{:else if wikiStore.lintIssues !== null}
-							{m.wiki_lint_issue_count({ count: wikiStore.lintIssues.length.toString(), suffix: wikiStore.lintIssues.length === 1 ? '' : 's' })}
-						{:else}
-							{m.wiki_lint_button()}
-						{/if}
-					</span>
-				</div>
-				<button
-					class="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-					onclick={() => { showLintPanel = false; }}
-					aria-label="Close lint panel"
-				>
-					<X class="h-3.5 w-3.5" />
-				</button>
-			</div>
-			{#if wikiStore.lintIssues !== null && wikiStore.lintIssues.length > 0}
-				<div class="max-h-48 overflow-y-auto px-4 pb-3">
-					<div class="space-y-1.5">
-						{#each wikiStore.lintIssues as issue}
-							<div class="rounded-md border bg-background p-2.5 text-xs">
-								<div class="flex items-center gap-1.5">
-									<AlertTriangle class="h-3.5 w-3.5 shrink-0 text-yellow-500" />
-									<span class="font-mono font-medium text-yellow-600 dark:text-yellow-400">{issue.kind}</span>
-									<button
-										class="font-medium text-primary hover:underline"
-										onclick={() => handleSelectPage(issue.page_slug)}
-									>
-										{issue.page_slug}
-									</button>
-								</div>
-								<p class="mt-1 text-muted-foreground">{issue.detail}</p>
-								{#if issue.fix}
-									<p class="mt-0.5 text-muted-foreground/70">
-										<span class="font-medium">{m.wiki_lint_fix_label()}:</span> {issue.fix}
-									</p>
-								{/if}
-							</div>
-						{/each}
-					</div>
-				</div>
-			{/if}
-		</div>
-	{/if}
-
-	<!-- Sources panel -->
-	{#if showSourcesPanel}
-		<div class="shrink-0 border-b bg-muted/30">
-			<div class="flex items-center justify-between px-4 py-2">
-				<span class="text-sm font-medium">{m.wiki_sources_button()}</span>
-				<div class="flex items-center gap-2">
-					<Button
-						variant="outline"
-						size="sm"
-						class="h-7 gap-1.5 text-xs"
-						onclick={() => (regenerateConfirmOpen = true)}
-						disabled={wikiStore.regenerating || wikiStore.sources.length === 0}
-					>
-						{#if wikiStore.regenerating}
-							<Loader2 class="h-3 w-3 animate-spin" />
-							{m.wiki_regenerating()}
-						{:else}
-							<RefreshCw class="h-3 w-3" />
-							{m.wiki_regenerate_button()}
-						{/if}
-					</Button>
-					<button
-						class="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-						onclick={() => (showSourcesPanel = false)}
-						aria-label="Close sources panel"
-					>
-						<X class="h-3.5 w-3.5" />
-					</button>
-				</div>
-			</div>
-			<div class="max-h-48 overflow-y-auto px-4 pb-3">
-				{#if wikiStore.sourcesLoading}
-					<div class="space-y-1.5">
-						{#each Array(3) as _}
-							<Skeleton class="h-8 w-full" />
-						{/each}
-					</div>
-				{:else if wikiStore.sources.length === 0}
-					<p class="py-2 text-center text-sm text-muted-foreground">{m.wiki_sources_empty()}</p>
-				{:else}
-					<div class="space-y-1">
-						{#each wikiStore.sources as source (source.filename)}
-							<div class="flex items-center justify-between rounded-md border bg-background px-3 py-2 text-xs">
-								<div class="flex min-w-0 flex-1 items-center gap-3">
-									<span class="truncate font-medium">{source.filename}</span>
-									<span class="shrink-0 font-mono text-[10px] text-muted-foreground">
-										{source.hash.slice(0, 12)}
-									</span>
-									<span class="shrink-0 rounded px-1 py-0 text-[10px] {source.active ? 'bg-green-500/10 text-green-600 dark:text-green-400' : 'bg-muted text-muted-foreground'}">
-										{source.active ? m.wiki_source_status_active() : m.wiki_source_status_inactive()}
-									</span>
-								</div>
-								<button
-									class="ml-2 shrink-0 rounded p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-									onclick={() => handleDeleteSourceClick(source.filename)}
-									aria-label="Delete {source.filename}"
-								>
-									<Trash2 class="h-3.5 w-3.5" />
-								</button>
-							</div>
-						{/each}
-					</div>
-				{/if}
-			</div>
-		</div>
-	{/if}
 
 	<!-- Main content -->
 	<div class="flex min-h-0 flex-1">
