@@ -1,4 +1,4 @@
-import { apiDelete, apiGet, apiPost, apiPut } from "$lib/api/client";
+import { api, apiDelete, apiGet, apiPost, apiPut } from "$lib/api/client";
 
 export interface WikiPage {
   slug: string;
@@ -68,6 +68,17 @@ export interface RegenerateResult {
   message: string;
 }
 
+// M13: sequence counters — one per operation that overwrites shared state
+let loadSeq = 0;
+let searchSeq = 0;
+let loadGraphSeq = 0;
+let getPageSeq = 0;
+
+// M3: abort controllers for long-running operations
+let ingestController: AbortController | null = null;
+let queryController: AbortController | null = null;
+let regenerateController: AbortController | null = null;
+
 function createWikiStore() {
   let pages = $state<WikiPage[]>([]);
   let loading = $state(false);
@@ -121,28 +132,37 @@ function createWikiStore() {
     },
 
     async load() {
+      const seq = ++loadSeq;
       loading = true;
       try {
-        pages = await apiGet<WikiPage[]>("/wiki");
+        const data = await apiGet<WikiPage[]>("/wiki");
+        if (seq !== loadSeq) return;
+        pages = data;
       } finally {
-        loading = false;
+        if (seq === loadSeq) loading = false;
       }
     },
 
     async search(q: string) {
+      const seq = ++searchSeq;
       loading = true;
       try {
-        pages = await apiGet<WikiPage[]>(
+        const data = await apiGet<WikiPage[]>(
           `/wiki/search?q=${encodeURIComponent(q)}`,
         );
+        if (seq !== searchSeq) return;
+        pages = data;
       } finally {
-        loading = false;
+        if (seq === searchSeq) loading = false;
       }
     },
 
     async getPage(slug: string): Promise<WikiPage | null> {
+      const seq = ++getPageSeq;
       try {
-        return await apiGet<WikiPage>(`/wiki/${encodeURIComponent(slug)}`);
+        const data = await apiGet<WikiPage>(`/wiki/${encodeURIComponent(slug)}`);
+        if (seq !== getPageSeq) return null;
+        return data;
       } catch {
         return null;
       }
@@ -159,13 +179,15 @@ function createWikiStore() {
     },
 
     async loadGraph(): Promise<WikiGraph> {
+      const seq = ++loadGraphSeq;
       graphLoading = true;
       try {
         const g = await apiGet<WikiGraph>("/wiki/graph");
+        if (seq !== loadGraphSeq) return g;
         graph = g;
         return g;
       } finally {
-        graphLoading = false;
+        if (seq === loadGraphSeq) graphLoading = false;
       }
     },
 
@@ -173,12 +195,24 @@ function createWikiStore() {
       filename: string,
       content: string,
     ): Promise<{ slug: string; page_count: number; message: string }> {
-      const res = await apiPost<{
-        pages: WikiPage[];
-        primary_slug: string;
-        message: string;
-      }>("/wiki/ingest", { filename, content }, { timeout: 120_000 });
-      return { slug: res.primary_slug, page_count: res.pages.length, message: res.message };
+      ingestController?.abort();
+      ingestController = new AbortController();
+      try {
+        const res = await api<{
+          pages: WikiPage[];
+          primary_slug: string;
+          message: string;
+        }>("/wiki/ingest", {
+          method: "POST",
+          body: JSON.stringify({ filename, content }),
+          signal: ingestController.signal,
+          timeout: 120_000,
+        });
+        return { slug: res.primary_slug, page_count: res.pages.length, message: res.message };
+      } catch (e) {
+        if (e instanceof Error && e.name === "AbortError") throw e;
+        throw e;
+      }
     },
 
     async query(
@@ -186,13 +220,19 @@ function createWikiStore() {
       save?: boolean,
       model?: string,
     ): Promise<QueryResult> {
+      queryController?.abort();
+      queryController = new AbortController();
       querying = true;
       try {
-        return await apiPost<QueryResult>(
-          "/wiki/query",
-          { question, save, model },
-          { timeout: 120_000 },
-        );
+        return await api<QueryResult>("/wiki/query", {
+          method: "POST",
+          body: JSON.stringify({ question, save, model }),
+          signal: queryController.signal,
+          timeout: 120_000,
+        });
+      } catch (e) {
+        if (e instanceof Error && e.name === "AbortError") throw e;
+        throw e;
       } finally {
         querying = false;
       }
@@ -234,17 +274,23 @@ function createWikiStore() {
     },
 
     async regenerate(model?: string): Promise<RegenerateResult> {
+      regenerateController?.abort();
+      regenerateController = new AbortController();
       regenerating = true;
       try {
-        const result = await apiPost<RegenerateResult>(
-          "/wiki/regenerate",
-          model ? { model } : {},
-          { timeout: 300_000 },
-        );
+        const result = await api<RegenerateResult>("/wiki/regenerate", {
+          method: "POST",
+          body: JSON.stringify(model ? { model } : {}),
+          signal: regenerateController.signal,
+          timeout: 300_000,
+        });
         // Refresh everything after regeneration
         await this.load();
         await this.fetchSources();
         return result;
+      } catch (e) {
+        if (e instanceof Error && e.name === "AbortError") throw e;
+        throw e;
       } finally {
         regenerating = false;
       }

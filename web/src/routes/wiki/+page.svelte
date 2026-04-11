@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, onDestroy } from 'svelte';
 	import { toast } from 'svelte-sonner';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
@@ -75,6 +75,12 @@
 	onMount(() => {
 		wikiStore.load();
 		wikiStore.loadGraph();
+	});
+
+	onDestroy(() => {
+		clearTimeout(searchTimeout);
+		clearTimeout(sourceSearchTimeout);
+		clearTimeout(lintSearchTimeout);
 	});
 
 	function handleSearch() {

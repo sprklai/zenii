@@ -323,17 +323,17 @@
 		panning = true;
 		panStart = { x: e.clientX, y: e.clientY, tx, ty };
 
+		const controller = new AbortController();
 		function onMove(me: PointerEvent) {
 			tx = panStart.tx + (me.clientX - panStart.x);
 			ty = panStart.ty + (me.clientY - panStart.y);
 		}
 		function onUp() {
 			panning = false;
-			window.removeEventListener('pointermove', onMove);
-			window.removeEventListener('pointerup', onUp);
+			controller.abort();
 		}
-		window.addEventListener('pointermove', onMove);
-		window.addEventListener('pointerup', onUp);
+		window.addEventListener('pointermove', onMove, { signal: controller.signal });
+		window.addEventListener('pointerup', onUp, { signal: controller.signal });
 	}
 
 	function handleNodePointerDown(e: PointerEvent, node: SimNode) {
