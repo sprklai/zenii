@@ -1038,7 +1038,7 @@
   "wiki_delete_confirm_button": "Delete all",
   "wiki_delete_success": "Deleted {count} wiki pages",
   "wiki_sources_delete_all_button": "Delete all sources",
-  "wiki_sources_delete_all_confirm": "Delete all {count} source files? This cannot be undone. Wiki pages are not affected.",
+  "wiki_sources_delete_all_confirm": "Delete all {count} source files? This will also delete all wiki pages derived from these sources. This cannot be undone.",
   "wiki_sources_delete_all_success": "Deleted {count} source files",
 
   "dashboard_card_wiki_title": "Knowledge Wiki",

@@ -249,6 +249,9 @@ function createWikiStore() {
     async deleteAllSources(): Promise<number> {
       const res = await apiDelete<{ deleted: number }>('/wiki/sources');
       sources = [];
+      pages = [];
+      graph = null;
+      await this.load();
       return res.deleted;
     },
 

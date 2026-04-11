@@ -168,6 +168,9 @@ pub(crate) mod tests {
                 pool.clone(),
             ))),
             wiki,
+            converter: std::sync::Arc::new(
+                crate::wiki::convert::MarkItDownConverter::new("markitdown"),
+            ),
         });
         (dir, state)
     }

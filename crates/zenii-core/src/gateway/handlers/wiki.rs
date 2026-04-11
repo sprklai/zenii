@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use axum::Json;
-use axum::extract::{Path, Query, State};
+use axum::extract::{Multipart, Path, Query, State};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use serde::{Deserialize, Serialize};
@@ -550,6 +550,101 @@ pub async fn regenerate_wiki(
         })),
     )
         .into_response()
+}
+
+/// POST /wiki/upload — upload a binary or text file for wiki ingestion.
+///
+/// Accepts multipart/form-data with fields:
+/// - `file` (required): raw file bytes + filename
+/// - `model` (optional): AI model override
+///
+/// Binary formats (PDF, DOCX, PPTX, XLSX, images, etc.) are converted to markdown
+/// using the configured `DocumentConverter` (default: markitdown subprocess).
+/// Text and markdown files are read directly as UTF-8.
+///
+/// After conversion, the content is fed into the standard wiki ingest pipeline.
+pub async fn upload_wiki_source(
+    State(state): State<Arc<AppState>>,
+    mut multipart: Multipart,
+) -> impl IntoResponse {
+    use crate::wiki::convert::convert_file;
+
+    let mut file_bytes: Option<Vec<u8>> = None;
+    let mut filename: Option<String> = None;
+    let mut model: Option<String> = None;
+
+    // Extract multipart fields
+    while let Ok(Some(field)) = multipart.next_field().await {
+        match field.name() {
+            Some("file") => {
+                if let Some(name) = field.file_name() {
+                    filename = Some(name.to_string());
+                }
+                match field.bytes().await {
+                    Ok(bytes) => file_bytes = Some(bytes.to_vec()),
+                    Err(e) => {
+                        return (
+                            StatusCode::BAD_REQUEST,
+                            Json(serde_json::json!({"error": format!("failed to read file field: {e}")})),
+                        )
+                            .into_response();
+                    }
+                }
+            }
+            Some("model") => {
+                if let Ok(val) = field.text().await
+                    && !val.is_empty()
+                {
+                    model = Some(val);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    let bytes = match file_bytes {
+        Some(b) => b,
+        None => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({"error": "missing 'file' field in multipart form"})),
+            )
+                .into_response();
+        }
+    };
+
+    let filename = filename.unwrap_or_else(|| "upload.bin".to_string());
+
+    // Write bytes to a temp file for conversion
+    let tmp_path = std::env::temp_dir().join(&filename);
+    if let Err(e) = tokio::fs::write(&tmp_path, &bytes).await {
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({"error": format!("failed to write temp file: {e}")})),
+        )
+            .into_response();
+    }
+
+    // Convert to markdown (binary → subprocess, text → UTF-8 read)
+    let content = match convert_file(&tmp_path, state.converter.as_ref()).await {
+        Ok(text) => text,
+        Err(e) => {
+            let _ = tokio::fs::remove_file(&tmp_path).await;
+            return ZeniiError::Conversion(e.to_string()).into_response();
+        }
+    };
+
+    // Clean up temp file (best effort)
+    let _ = tokio::fs::remove_file(&tmp_path).await;
+
+    // Feed into standard ingest pipeline via the existing handler body
+    let body = IngestRequest {
+        content,
+        filename,
+        model,
+    };
+
+    ingest_wiki_source(State(state), Json(body)).await.into_response()
 }
 
 /// DELETE /wiki/sources/{filename} — delete a source and cascade-clean its derived pages.

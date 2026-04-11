@@ -366,6 +366,7 @@ mod tests {
             embedding_model_available: base_state.embedding_model_available.clone(),
             approval_broker: base_state.approval_broker.clone(),
             wiki: base_state.wiki.clone(),
+            converter: base_state.converter.clone(),
         });
 
         let app = crate::gateway::routes::build_router(state);

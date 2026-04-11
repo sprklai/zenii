@@ -5,6 +5,8 @@ use sha2::{Digest, Sha256};
 
 use crate::error::ZeniiError;
 
+pub mod convert;
+
 // Embedded SCHEMA.md template — seeded into new wiki dirs on first boot.
 const SCHEMA_TEMPLATE: &str = include_str!("../../../../wiki/SCHEMA.md");
 // Embedded INGEST_PROMPT.md template — seeded once, then user-editable.
@@ -941,7 +943,6 @@ fn extract_wikilinks(body: &str) -> Vec<String> {
 mod tests {
     use super::*;
     use std::fs;
-    use std::path::Path;
     use tempfile::TempDir;
 
     fn sample_page_content() -> &'static str {
@@ -964,10 +965,21 @@ References [[another-page]] for related info.
 "#
     }
 
-    fn write_page(dir: &Path, subdir: &str, slug: &str, content: &str) {
-        let page_dir = dir.join("pages").join(subdir);
-        fs::create_dir_all(&page_dir).unwrap();
-        fs::write(page_dir.join(format!("{slug}.md")), content).unwrap();
+    fn entity_page_content() -> &'static str {
+        "---\ntitle: \"Test Entity\"\ntype: entity\ntags: [person]\nsources: [source.md]\nupdated: 2026-01-01\n---\n\n## TLDR\nThis is a test entity.\n\n## Body\nAn entity page.\n"
+    }
+
+    /// Save a source file to wiki/sources/, then write the typed page via the WikiManager API.
+    /// Mirrors the real production workflow: source always exists before any page derived from it.
+    fn seed_page(mgr: &WikiManager, page_type: &str, slug: &str, content: &str) {
+        mgr.save_source(&format!("{slug}.md"), content).unwrap();
+        mgr.write_page(page_type, slug, content).unwrap();
+    }
+
+    /// Save a source file to wiki/sources/, then run the ingest fallback (creates a topic page).
+    fn seed_via_ingest(mgr: &WikiManager, filename: &str, content: &str) -> WikiPage {
+        mgr.save_source(filename, content).unwrap();
+        mgr.ingest(filename, content).unwrap()
     }
 
     // W1: WikiManager::new creates required subdirectory structure
@@ -991,9 +1003,9 @@ References [[another-page]] for related info.
     #[test]
     fn list_pages_finds_markdown_files() {
         let dir = TempDir::new().unwrap();
-        write_page(dir.path(), "concepts", "page-one", sample_page_content());
-        write_page(dir.path(), "concepts", "page-two", sample_page_content());
         let mgr = WikiManager::new(dir.path().to_path_buf()).unwrap();
+        seed_page(&mgr, "concepts", "page-one", sample_page_content());
+        seed_page(&mgr, "concepts", "page-two", sample_page_content());
         let pages = mgr.list_pages().unwrap();
         assert_eq!(pages.len(), 2);
     }
@@ -1002,12 +1014,11 @@ References [[another-page]] for related info.
     #[test]
     fn list_pages_skips_non_markdown() {
         let dir = TempDir::new().unwrap();
-        write_page(dir.path(), "concepts", "real-page", sample_page_content());
-        // Write a .txt sibling that should be ignored
-        let concept_dir = dir.path().join("pages/concepts");
-        fs::create_dir_all(&concept_dir).unwrap();
-        fs::write(concept_dir.join("notes.txt"), "ignore me").unwrap();
         let mgr = WikiManager::new(dir.path().to_path_buf()).unwrap();
+        seed_page(&mgr, "concepts", "real-page", sample_page_content());
+        // Write a .txt sibling in pages/concepts/ — should be ignored by list_pages()
+        let concept_dir = dir.path().join("pages/concepts");
+        fs::write(concept_dir.join("notes.txt"), "ignore me").unwrap();
         let pages = mgr.list_pages().unwrap();
         assert_eq!(pages.len(), 1);
     }
@@ -1016,8 +1027,8 @@ References [[another-page]] for related info.
     #[test]
     fn get_page_returns_some_for_existing_slug() {
         let dir = TempDir::new().unwrap();
-        write_page(dir.path(), "concepts", "test-page", sample_page_content());
         let mgr = WikiManager::new(dir.path().to_path_buf()).unwrap();
+        seed_page(&mgr, "concepts", "test-page", sample_page_content());
         let page = mgr.get_page("test-page").unwrap();
         assert!(page.is_some());
         assert_eq!(page.unwrap().title, "Test Concept");
@@ -1036,8 +1047,8 @@ References [[another-page]] for related info.
     #[test]
     fn search_pages_matches_title() {
         let dir = TempDir::new().unwrap();
-        write_page(dir.path(), "concepts", "my-concept", sample_page_content());
         let mgr = WikiManager::new(dir.path().to_path_buf()).unwrap();
+        seed_page(&mgr, "concepts", "my-concept", sample_page_content());
         let results = mgr.search_pages("concept").unwrap();
         assert!(!results.is_empty());
         assert!(results.iter().any(|p| p.slug == "my-concept"));
@@ -1061,8 +1072,8 @@ Short summary.
 ## Body
 This page contains rare_unique_word somewhere in the body.
 "#;
-        write_page(dir.path(), "topics", "body-page", content);
         let mgr = WikiManager::new(dir.path().to_path_buf()).unwrap();
+        seed_page(&mgr, "topics", "body-page", content);
         let results = mgr.search_pages("rare_unique_word").unwrap();
         assert!(!results.is_empty());
     }
@@ -1071,9 +1082,9 @@ This page contains rare_unique_word somewhere in the body.
     #[test]
     fn search_pages_empty_query_returns_all() {
         let dir = TempDir::new().unwrap();
-        write_page(dir.path(), "concepts", "page-alpha", sample_page_content());
-        write_page(dir.path(), "concepts", "page-beta", sample_page_content());
         let mgr = WikiManager::new(dir.path().to_path_buf()).unwrap();
+        seed_page(&mgr, "concepts", "page-alpha", sample_page_content());
+        seed_page(&mgr, "concepts", "page-beta", sample_page_content());
         let results = mgr.search_pages("").unwrap();
         assert_eq!(results.len(), 2);
     }
@@ -1082,8 +1093,8 @@ This page contains rare_unique_word somewhere in the body.
     #[test]
     fn parse_frontmatter_extracts_fields() {
         let dir = TempDir::new().unwrap();
-        write_page(dir.path(), "concepts", "fm-test", sample_page_content());
         let mgr = WikiManager::new(dir.path().to_path_buf()).unwrap();
+        seed_page(&mgr, "concepts", "fm-test", sample_page_content());
         let page = mgr.get_page("fm-test").unwrap().unwrap();
         assert_eq!(page.title, "Test Concept");
         assert_eq!(page.page_type, "concept");
@@ -1106,8 +1117,8 @@ Bare minimum.
 ## Body
 No tags, no type, no sources.
 "#;
-        write_page(dir.path(), "topics", "minimal-page", minimal);
         let mgr = WikiManager::new(dir.path().to_path_buf()).unwrap();
+        seed_page(&mgr, "topics", "minimal-page", minimal);
         let page = mgr.get_page("minimal-page").unwrap().unwrap();
         assert_eq!(page.page_type, "topic");
         assert!(page.tags.is_empty());
@@ -1120,10 +1131,10 @@ No tags, no type, no sources.
         use crate::memory::in_memory_store::InMemoryStore;
 
         let dir = TempDir::new().unwrap();
-        write_page(dir.path(), "concepts", "page-1", sample_page_content());
-        write_page(dir.path(), "concepts", "page-2", sample_page_content());
-        write_page(dir.path(), "concepts", "page-3", sample_page_content());
         let mgr = WikiManager::new(dir.path().to_path_buf()).unwrap();
+        seed_page(&mgr, "concepts", "page-1", sample_page_content());
+        seed_page(&mgr, "concepts", "page-2", sample_page_content());
+        seed_page(&mgr, "concepts", "page-3", sample_page_content());
         let store = InMemoryStore::new();
         let count = mgr.sync_to_memory(&store).await.unwrap();
         assert_eq!(count, 3);
@@ -1133,9 +1144,9 @@ No tags, no type, no sources.
     #[test]
     fn graph_nodes_match_pages() {
         let dir = TempDir::new().unwrap();
-        write_page(dir.path(), "concepts", "node-a", sample_page_content());
-        write_page(dir.path(), "concepts", "node-b", sample_page_content());
         let mgr = WikiManager::new(dir.path().to_path_buf()).unwrap();
+        seed_page(&mgr, "concepts", "node-a", sample_page_content());
+        seed_page(&mgr, "concepts", "node-b", sample_page_content());
         let graph = mgr.graph().unwrap();
         assert_eq!(graph.nodes.len(), 2);
     }
@@ -1172,9 +1183,9 @@ The target page.
 ## Body
 No outbound links here.
 "#;
-        write_page(dir.path(), "concepts", "page-a", page_a);
-        write_page(dir.path(), "concepts", "page-b", page_b);
         let mgr = WikiManager::new(dir.path().to_path_buf()).unwrap();
+        seed_page(&mgr, "concepts", "page-a", page_a);
+        seed_page(&mgr, "concepts", "page-b", page_b);
         let graph = mgr.graph().unwrap();
         let has_edge = graph
             .edges
@@ -1188,9 +1199,9 @@ No outbound links here.
     fn ingest_title_falls_back_to_filename() {
         let dir = TempDir::new().unwrap();
         let mgr = WikiManager::new(dir.path().to_path_buf()).unwrap();
-        let page = mgr
-            .ingest("GitHub Stars Growth Tips.md", "No frontmatter here.\n")
-            .unwrap();
+        let content = "No frontmatter here.\n";
+        mgr.save_source("GitHub Stars Growth Tips.md", content).unwrap();
+        let page = mgr.ingest("GitHub Stars Growth Tips.md", content).unwrap();
         assert_eq!(page.title, "GitHub Stars Growth Tips");
     }
 
@@ -1200,6 +1211,7 @@ No outbound links here.
         let dir = TempDir::new().unwrap();
         let mgr = WikiManager::new(dir.path().to_path_buf()).unwrap();
         let content = "# Actual Heading Title\n\nSome body text.\n";
+        mgr.save_source("some-filename.md", content).unwrap();
         let page = mgr.ingest("some-filename.md", content).unwrap();
         assert_eq!(page.title, "Actual Heading Title");
     }
@@ -1210,6 +1222,7 @@ No outbound links here.
         let dir = TempDir::new().unwrap();
         let mgr = WikiManager::new(dir.path().to_path_buf()).unwrap();
         let content = "---\ntitle: \"Frontmatter Wins\"\n---\n\n# Heading Title\n\nBody.\n";
+        mgr.save_source("some-filename.md", content).unwrap();
         let page = mgr.ingest("some-filename.md", content).unwrap();
         assert_eq!(page.title, "Frontmatter Wins");
     }
@@ -1218,13 +1231,8 @@ No outbound links here.
     #[test]
     fn parse_page_title_falls_back_to_humanized_slug() {
         let dir = TempDir::new().unwrap();
-        write_page(
-            dir.path(),
-            "topics",
-            "my-doc-slug",
-            "No frontmatter, no heading.\n",
-        );
         let mgr = WikiManager::new(dir.path().to_path_buf()).unwrap();
+        seed_page(&mgr, "topics", "my-doc-slug", "No frontmatter, no heading.\n");
         let page = mgr.get_page("my-doc-slug").unwrap().unwrap();
         assert_eq!(page.title, "My Doc Slug");
     }
@@ -1256,9 +1264,9 @@ No outbound links here.
     #[test]
     fn update_index_writes_entries_for_all_pages() {
         let dir = TempDir::new().unwrap();
-        write_page(dir.path(), "concepts", "page-a", sample_page_content());
-        write_page(dir.path(), "topics", "page-b", sample_page_content());
         let mgr = WikiManager::new(dir.path().to_path_buf()).unwrap();
+        seed_page(&mgr, "concepts", "page-a", sample_page_content());
+        seed_page(&mgr, "topics", "page-b", sample_page_content());
         mgr.update_index().unwrap();
         let index = fs::read_to_string(dir.path().join("index.md")).unwrap();
         assert!(index.contains("[[page-a]]"), "index must mention page-a");
@@ -1332,17 +1340,13 @@ No outbound links here.
         assert!(dir.path().join("log.md").exists(), "log.md must be created");
     }
 
-    fn entity_page_content() -> &'static str {
-        "---\ntitle: \"Test Entity\"\ntype: entity\ntags: [person]\nsources: [source.md]\nupdated: 2026-01-01\n---\n\n## TLDR\nThis is a test entity.\n\n## Body\nAn entity page.\n"
-    }
-
     // W29: update_index() writes typed sections in SCHEMA order (Concepts before Entities)
     #[test]
     fn update_index_writes_typed_sections_in_order() {
         let dir = TempDir::new().unwrap();
-        write_page(dir.path(), "concepts", "my-concept", sample_page_content());
-        write_page(dir.path(), "entities", "some-entity", entity_page_content());
         let mgr = WikiManager::new(dir.path().to_path_buf()).unwrap();
+        seed_page(&mgr, "concepts", "my-concept", sample_page_content());
+        seed_page(&mgr, "entities", "some-entity", entity_page_content());
         mgr.update_index().unwrap();
         let index = fs::read_to_string(dir.path().join("index.md")).unwrap();
         assert!(index.contains("## Concepts"), "must have ## Concepts section");
@@ -1356,8 +1360,8 @@ No outbound links here.
     #[test]
     fn update_index_omits_empty_sections() {
         let dir = TempDir::new().unwrap();
-        write_page(dir.path(), "concepts", "only-concept", sample_page_content());
         let mgr = WikiManager::new(dir.path().to_path_buf()).unwrap();
+        seed_page(&mgr, "concepts", "only-concept", sample_page_content());
         mgr.update_index().unwrap();
         let index = fs::read_to_string(dir.path().join("index.md")).unwrap();
         assert!(index.contains("## Concepts"), "Concepts section must be present");
@@ -1368,8 +1372,8 @@ No outbound links here.
     #[test]
     fn update_index_entries_have_no_type_annotation() {
         let dir = TempDir::new().unwrap();
-        write_page(dir.path(), "concepts", "test-concept", sample_page_content());
         let mgr = WikiManager::new(dir.path().to_path_buf()).unwrap();
+        seed_page(&mgr, "concepts", "test-concept", sample_page_content());
         mgr.update_index().unwrap();
         let index = fs::read_to_string(dir.path().join("index.md")).unwrap();
         assert!(
@@ -1383,8 +1387,8 @@ No outbound links here.
     fn lint_detects_broken_wikilinks() {
         let dir = TempDir::new().unwrap();
         let content = "---\ntitle: \"Page With Broken Link\"\ntype: concept\ntags: []\nsources: []\nupdated: 2026-01-01\n---\n\n## TLDR\nLinks to nothing.\n\n## Body\nSee [[nonexistent-page]] for details.\n";
-        write_page(dir.path(), "concepts", "page-with-broken-link", content);
         let mgr = WikiManager::new(dir.path().to_path_buf()).unwrap();
+        seed_page(&mgr, "concepts", "page-with-broken-link", content);
         let issues = mgr.lint().unwrap();
         assert!(
             issues.iter().any(|i| i.kind == "broken_wikilink"),
@@ -1396,11 +1400,11 @@ No outbound links here.
     #[test]
     fn lint_detects_orphan_pages() {
         let dir = TempDir::new().unwrap();
-        write_page(dir.path(), "concepts", "page-a", sample_page_content());
-        write_page(dir.path(), "concepts", "page-b", sample_page_content());
+        let mgr = WikiManager::new(dir.path().to_path_buf()).unwrap();
+        seed_page(&mgr, "concepts", "page-a", sample_page_content());
+        seed_page(&mgr, "concepts", "page-b", sample_page_content());
         // sample_page_content has [[another-page]] which doesn't exist — orphan check is
         // about inbound links; both pages have 0 inbound links from each other
-        let mgr = WikiManager::new(dir.path().to_path_buf()).unwrap();
         let issues = mgr.lint().unwrap();
         assert!(
             issues.iter().any(|i| i.kind == "orphan_page"),
@@ -1412,9 +1416,9 @@ No outbound links here.
     #[test]
     fn lint_detects_missing_index_entries() {
         let dir = TempDir::new().unwrap();
-        write_page(dir.path(), "concepts", "unlisted-page", sample_page_content());
-        // index.md is the stub created by new() — does not list unlisted-page
         let mgr = WikiManager::new(dir.path().to_path_buf()).unwrap();
+        seed_page(&mgr, "concepts", "unlisted-page", sample_page_content());
+        // index.md is the stub created by new() — does not list unlisted-page
         let issues = mgr.lint().unwrap();
         assert!(
             issues.iter().any(|i| i.kind == "missing_index_entry"),
@@ -1427,8 +1431,8 @@ No outbound links here.
     fn lint_detects_missing_updated_field() {
         let dir = TempDir::new().unwrap();
         let content = "---\ntitle: \"No Date\"\ntype: concept\ntags: []\nsources: []\n---\n\n## TLDR\nNo date.\n\n## Body\nContent.\n";
-        write_page(dir.path(), "concepts", "no-date-page", content);
         let mgr = WikiManager::new(dir.path().to_path_buf()).unwrap();
+        seed_page(&mgr, "concepts", "no-date-page", content);
         let issues = mgr.lint().unwrap();
         assert!(
             issues.iter().any(|i| i.kind == "missing_updated"),
@@ -1442,9 +1446,9 @@ No outbound links here.
         let dir = TempDir::new().unwrap();
         let page_a = "---\ntitle: \"Page A\"\ntype: concept\ntags: []\nsources: []\nupdated: 2026-01-01\n---\n\n## TLDR\nA.\n\n## Body\nSee [[page-b]].\n";
         let page_b = "---\ntitle: \"Page B\"\ntype: concept\ntags: []\nsources: []\nupdated: 2026-01-01\n---\n\n## TLDR\nB.\n\n## Body\nSee [[page-a]].\n";
-        write_page(dir.path(), "concepts", "page-a", page_a);
-        write_page(dir.path(), "concepts", "page-b", page_b);
         let mgr = WikiManager::new(dir.path().to_path_buf()).unwrap();
+        seed_page(&mgr, "concepts", "page-a", page_a);
+        seed_page(&mgr, "concepts", "page-b", page_b);
         mgr.update_index().unwrap();
         let issues = mgr.lint().unwrap();
         assert!(
@@ -1489,22 +1493,19 @@ No outbound links here.
     fn test_delete_all_pages_removes_md_files() {
         let dir = tempfile::tempdir().unwrap();
         let wm = WikiManager::new(dir.path().to_path_buf()).unwrap();
-        // Write a page file
-        let page_path = dir.path().join("pages").join("concepts").join("test.md");
-        std::fs::create_dir_all(page_path.parent().unwrap()).unwrap();
-        std::fs::write(&page_path, "# Test\npage_type: concept\n").unwrap();
+        seed_page(&wm, "concepts", "test", "# Test\npage_type: concept\n");
         let count = wm.delete_all_pages().unwrap();
         assert_eq!(count, 1);
-        assert!(!page_path.exists());
+        assert!(!dir.path().join("pages/concepts/test.md").exists());
     }
 
     #[test]
     fn test_delete_all_pages_resets_index() {
         let dir = tempfile::tempdir().unwrap();
         let wm = WikiManager::new(dir.path().to_path_buf()).unwrap();
-        std::fs::write(dir.path().join("index.md"), "# Wiki Index\n- [[foo]]\n").unwrap();
+        fs::write(dir.path().join("index.md"), "# Wiki Index\n- [[foo]]\n").unwrap();
         wm.delete_all_pages().unwrap();
-        let index = std::fs::read_to_string(dir.path().join("index.md")).unwrap();
+        let index = fs::read_to_string(dir.path().join("index.md")).unwrap();
         assert!(index.contains("No pages yet"));
     }
 
@@ -1512,20 +1513,18 @@ No outbound links here.
     fn test_delete_all_sources_removes_files_and_clears_manifest() {
         let dir = tempfile::tempdir().unwrap();
         let wm = WikiManager::new(dir.path().to_path_buf()).unwrap();
-        // Create two source files
-        let src_dir = dir.path().join("sources");
-        std::fs::write(src_dir.join("a.md"), "content a").unwrap();
-        std::fs::write(src_dir.join("b.txt"), "content b").unwrap();
+        wm.save_source("a.md", "content a").unwrap();
+        wm.save_source("b.txt", "content b").unwrap();
         // Write a manifest with those sources
         wm.write_manifest(
             &[
-                crate::wiki::SourceRecord {
+                SourceRecord {
                     filename: "a.md".into(),
                     hash: "aaa".into(),
                     active: true,
                     last_run_id: None,
                 },
-                crate::wiki::SourceRecord {
+                SourceRecord {
                     filename: "b.txt".into(),
                     hash: "bbb".into(),
                     active: true,
@@ -1537,10 +1536,393 @@ No outbound links here.
         .unwrap();
         let count = wm.delete_all_sources().unwrap();
         assert_eq!(count, 2);
-        assert!(!src_dir.join("a.md").exists());
-        assert!(!src_dir.join("b.txt").exists());
-        // Manifest sources should now be empty
+        assert!(!dir.path().join("sources/a.md").exists());
+        assert!(!dir.path().join("sources/b.txt").exists());
         let (sources, _) = wm.read_manifest().unwrap();
         assert!(sources.is_empty());
+    }
+
+    // ── New tests (W37+) ─────────────────────────────────────────────────────
+
+    // W37: read_source returns the exact content that was saved
+    #[test]
+    fn read_source_returns_saved_content() {
+        let dir = TempDir::new().unwrap();
+        let mgr = WikiManager::new(dir.path().to_path_buf()).unwrap();
+        mgr.save_source("my-source.md", "Hello, wiki!\n").unwrap();
+        let content = mgr.read_source("my-source.md").unwrap();
+        assert_eq!(content, "Hello, wiki!\n");
+    }
+
+    // W38: read_source returns Validation error for a file that does not exist
+    #[test]
+    fn read_source_errors_for_missing_file() {
+        let dir = TempDir::new().unwrap();
+        let mgr = WikiManager::new(dir.path().to_path_buf()).unwrap();
+        let err = mgr.read_source("no-such.md").unwrap_err();
+        assert!(matches!(err, crate::error::ZeniiError::Validation(_)));
+    }
+
+    // W39: list_sources falls back to filesystem scan when no manifest exists
+    #[test]
+    fn list_sources_empty_manifest_falls_back_to_filesystem() {
+        let dir = TempDir::new().unwrap();
+        let mgr = WikiManager::new(dir.path().to_path_buf()).unwrap();
+        mgr.save_source("raw.md", "some content").unwrap();
+        // No manifest written — should scan filesystem
+        let sources = mgr.list_sources().unwrap();
+        assert_eq!(sources.len(), 1);
+        assert_eq!(sources[0].filename, "raw.md");
+    }
+
+    // W40: list_sources returns manifest data (not filesystem) when manifest is present
+    #[test]
+    fn list_sources_prefers_manifest_when_present() {
+        let dir = TempDir::new().unwrap();
+        let mgr = WikiManager::new(dir.path().to_path_buf()).unwrap();
+        mgr.save_source("raw.md", "content").unwrap();
+        mgr.write_manifest(
+            &[SourceRecord {
+                filename: "raw.md".into(),
+                hash: "custom-hash-abc".into(),
+                active: true,
+                last_run_id: Some("run-001".into()),
+            }],
+            &[],
+        )
+        .unwrap();
+        let sources = mgr.list_sources().unwrap();
+        assert_eq!(sources.len(), 1);
+        // Manifest value, not a recomputed SHA-256
+        assert_eq!(sources[0].hash, "custom-hash-abc");
+        assert_eq!(sources[0].last_run_id.as_deref(), Some("run-001"));
+    }
+
+    // W41: delete_source_file removes the file and subsequent read_source errors
+    #[test]
+    fn delete_source_file_removes_the_file() {
+        let dir = TempDir::new().unwrap();
+        let mgr = WikiManager::new(dir.path().to_path_buf()).unwrap();
+        mgr.save_source("to-delete.md", "bye").unwrap();
+        mgr.delete_source_file("to-delete.md").unwrap();
+        assert!(!dir.path().join("sources/to-delete.md").exists());
+        assert!(mgr.read_source("to-delete.md").is_err());
+    }
+
+    // W42: delete_source_file is a no-op (Ok(())) for a file that does not exist
+    #[test]
+    fn delete_source_file_noop_for_missing() {
+        let dir = TempDir::new().unwrap();
+        let mgr = WikiManager::new(dir.path().to_path_buf()).unwrap();
+        assert!(mgr.delete_source_file("ghost.md").is_ok());
+    }
+
+    // W43: read_manifest returns empty vecs on a fresh wiki (no .meta/*.json)
+    #[test]
+    fn read_manifest_returns_empty_when_no_files() {
+        let dir = TempDir::new().unwrap();
+        let mgr = WikiManager::new(dir.path().to_path_buf()).unwrap();
+        let (sources, pages) = mgr.read_manifest().unwrap();
+        assert!(sources.is_empty(), "sources must be empty");
+        assert!(pages.is_empty(), "pages must be empty");
+    }
+
+    // W44: write_manifest then read_manifest round-trips sources and pages correctly
+    #[test]
+    fn write_manifest_then_read_manifest_roundtrips() {
+        let dir = TempDir::new().unwrap();
+        let mgr = WikiManager::new(dir.path().to_path_buf()).unwrap();
+        let sources = vec![
+            SourceRecord {
+                filename: "doc-a.md".into(),
+                hash: "hash-a".into(),
+                active: true,
+                last_run_id: Some("run-1".into()),
+            },
+            SourceRecord {
+                filename: "doc-b.md".into(),
+                hash: "hash-b".into(),
+                active: false,
+                last_run_id: None,
+            },
+        ];
+        let pages = vec![PageRecord {
+            slug: "my-concept".into(),
+            page_type: "concept".into(),
+            path: "pages/concepts/my-concept.md".into(),
+            sources: vec!["doc-a.md".into()],
+            last_run_id: "run-1".into(),
+            managed_by: "source_ingest".into(),
+        }];
+        mgr.write_manifest(&sources, &pages).unwrap();
+        let (read_sources, read_pages) = mgr.read_manifest().unwrap();
+        assert_eq!(read_sources.len(), 2);
+        assert_eq!(read_sources[0].filename, "doc-a.md");
+        assert_eq!(read_sources[1].filename, "doc-b.md");
+        assert_eq!(read_pages.len(), 1);
+        assert_eq!(read_pages[0].slug, "my-concept");
+        assert_eq!(read_pages[0].managed_by, "source_ingest");
+    }
+
+    // W45: append_run creates .meta/runs.jsonl on first call
+    #[test]
+    fn append_run_creates_runs_jsonl() {
+        let dir = TempDir::new().unwrap();
+        let mgr = WikiManager::new(dir.path().to_path_buf()).unwrap();
+        let run = RunRecord {
+            run_id: "run-20260411-abc".into(),
+            timestamp: "2026-04-11T00:00:00Z".into(),
+            model: None,
+            prompt_hash: "ph".into(),
+            schema_hash: "sh".into(),
+            sources: vec!["a.md".into()],
+            status: "success".into(),
+            pages_written: vec!["my-page".into()],
+        };
+        mgr.append_run(&run).unwrap();
+        assert!(dir.path().join(".meta/runs.jsonl").exists());
+    }
+
+    // W46: append_run appends without overwriting; two calls produce two JSONL lines
+    #[test]
+    fn append_run_appends_not_overwrites() {
+        let dir = TempDir::new().unwrap();
+        let mgr = WikiManager::new(dir.path().to_path_buf()).unwrap();
+        let make_run = |id: &str| RunRecord {
+            run_id: id.to_string(),
+            timestamp: "2026-04-11T00:00:00Z".into(),
+            model: None,
+            prompt_hash: "ph".into(),
+            schema_hash: "sh".into(),
+            sources: vec![],
+            status: "success".into(),
+            pages_written: vec![],
+        };
+        mgr.append_run(&make_run("run-001")).unwrap();
+        mgr.append_run(&make_run("run-002")).unwrap();
+        let content = fs::read_to_string(dir.path().join(".meta/runs.jsonl")).unwrap();
+        let lines: Vec<&str> = content.lines().collect();
+        assert_eq!(lines.len(), 2, "must have exactly 2 JSONL lines");
+        assert!(lines[0].contains("run-001"));
+        assert!(lines[1].contains("run-002"));
+    }
+
+    // W47: hash_content produces the same output for identical input (deterministic)
+    #[test]
+    fn hash_content_is_deterministic() {
+        let h1 = WikiManager::hash_content("hello world");
+        let h2 = WikiManager::hash_content("hello world");
+        assert_eq!(h1, h2);
+        assert_eq!(h1.len(), 64, "SHA-256 hex must be 64 characters");
+    }
+
+    // W48: hash_content produces different hashes for different inputs
+    #[test]
+    fn hash_content_differs_for_different_input() {
+        let h1 = WikiManager::hash_content("foo");
+        let h2 = WikiManager::hash_content("bar");
+        assert_ne!(h1, h2);
+    }
+
+    // W49: new_run_id starts with the "run-" prefix
+    #[test]
+    fn new_run_id_starts_with_run_prefix() {
+        let id = WikiManager::new_run_id();
+        assert!(id.starts_with("run-"), "run ID must start with 'run-': {id}");
+    }
+
+    // W50: new_run_id embeds today's date in YYYYMMDD format
+    #[test]
+    fn new_run_id_contains_date() {
+        let id = WikiManager::new_run_id();
+        let today = chrono::Utc::now().format("%Y%m%d").to_string();
+        assert!(id.contains(&today), "run ID must embed today's date: {id}");
+    }
+
+    // W51: read_index returns empty string when index.md does not exist
+    #[test]
+    fn read_index_returns_empty_when_no_file() {
+        let dir = TempDir::new().unwrap();
+        let mgr = WikiManager::new(dir.path().to_path_buf()).unwrap();
+        fs::remove_file(dir.path().join("index.md")).unwrap();
+        let content = mgr.read_index().unwrap();
+        assert!(content.is_empty(), "must return empty string when index.md absent");
+    }
+
+    // W52: read_index returns the current index.md content after update_index()
+    #[test]
+    fn read_index_returns_content_when_file_exists() {
+        let dir = TempDir::new().unwrap();
+        let mgr = WikiManager::new(dir.path().to_path_buf()).unwrap();
+        seed_page(&mgr, "concepts", "alpha", sample_page_content());
+        mgr.update_index().unwrap();
+        let content = mgr.read_index().unwrap();
+        assert!(content.contains("[[alpha]]"), "index must reference seeded page");
+    }
+
+    // W53: begin_staged_build creates .rebuild/ with all PAGE_SUBDIRS
+    #[test]
+    fn begin_staged_build_creates_rebuild_dir() {
+        let dir = TempDir::new().unwrap();
+        let mgr = WikiManager::new(dir.path().to_path_buf()).unwrap();
+        let rebuild_dir = mgr.begin_staged_build().unwrap();
+        assert!(rebuild_dir.exists(), ".rebuild/ must be created");
+        for subdir in &["concepts", "entities", "topics", "comparisons", "queries"] {
+            assert!(
+                rebuild_dir.join(subdir).is_dir(),
+                ".rebuild/{subdir} must exist"
+            );
+        }
+    }
+
+    // W54: write_staged_page creates the file in staging, not in live pages/
+    #[test]
+    fn write_staged_page_creates_file_in_staging() {
+        let dir = TempDir::new().unwrap();
+        let mgr = WikiManager::new(dir.path().to_path_buf()).unwrap();
+        let rebuild_dir = mgr.begin_staged_build().unwrap();
+        mgr.write_staged_page(&rebuild_dir, "concepts", "my-slug", sample_page_content())
+            .unwrap();
+        assert!(
+            rebuild_dir.join("concepts/my-slug.md").exists(),
+            "staged file must exist in .rebuild/"
+        );
+        assert!(
+            !dir.path().join("pages/concepts/my-slug.md").exists(),
+            "staged file must NOT appear in live pages/ yet"
+        );
+    }
+
+    // W55: write_staged_page rejects an invalid page type with Validation error
+    #[test]
+    fn write_staged_page_rejects_invalid_type() {
+        let dir = TempDir::new().unwrap();
+        let mgr = WikiManager::new(dir.path().to_path_buf()).unwrap();
+        let rebuild_dir = mgr.begin_staged_build().unwrap();
+        let err = mgr
+            .write_staged_page(&rebuild_dir, "invalid", "my-slug", "content")
+            .unwrap_err();
+        assert!(matches!(err, crate::error::ZeniiError::Validation(_)));
+    }
+
+    // W56: commit_staged_build moves pages from staging to live pages/ and removes .rebuild/
+    #[test]
+    fn commit_staged_build_moves_pages_to_live() {
+        let dir = TempDir::new().unwrap();
+        let mgr = WikiManager::new(dir.path().to_path_buf()).unwrap();
+        let rebuild_dir = mgr.begin_staged_build().unwrap();
+        mgr.write_staged_page(&rebuild_dir, "concepts", "committed-page", sample_page_content())
+            .unwrap();
+        mgr.commit_staged_build(&rebuild_dir).unwrap();
+        assert!(
+            dir.path().join("pages/concepts/committed-page.md").exists(),
+            "committed page must appear in live pages/"
+        );
+        assert!(!rebuild_dir.exists(), ".rebuild/ must be removed after commit");
+    }
+
+    // W57: commit_staged_build returns the (page_type, slug) pairs that were committed
+    #[test]
+    fn commit_staged_build_returns_committed_pairs() {
+        let dir = TempDir::new().unwrap();
+        let mgr = WikiManager::new(dir.path().to_path_buf()).unwrap();
+        let rebuild_dir = mgr.begin_staged_build().unwrap();
+        mgr.write_staged_page(&rebuild_dir, "concepts", "my-slug", sample_page_content())
+            .unwrap();
+        let committed = mgr.commit_staged_build(&rebuild_dir).unwrap();
+        assert_eq!(committed.len(), 1);
+        assert_eq!(committed[0].0, "concepts");
+        assert_eq!(committed[0].1, "my-slug");
+    }
+
+    // W58: abort_staged_build removes the .rebuild/ workspace without touching live pages/
+    #[test]
+    fn abort_staged_build_removes_rebuild_dir() {
+        let dir = TempDir::new().unwrap();
+        let mgr = WikiManager::new(dir.path().to_path_buf()).unwrap();
+        let rebuild_dir = mgr.begin_staged_build().unwrap();
+        mgr.write_staged_page(&rebuild_dir, "topics", "staged-only", "content").unwrap();
+        mgr.abort_staged_build(&rebuild_dir);
+        assert!(!rebuild_dir.exists(), ".rebuild/ must be cleaned up after abort");
+        assert!(
+            !dir.path().join("pages/topics/staged-only.md").exists(),
+            "aborted pages must NOT appear in live pages/"
+        );
+    }
+
+    // W59: delete_page_files removes the file for a given PageRecord
+    #[test]
+    fn delete_page_files_removes_pages_in_records() {
+        let dir = TempDir::new().unwrap();
+        let mgr = WikiManager::new(dir.path().to_path_buf()).unwrap();
+        seed_page(&mgr, "concepts", "removable", sample_page_content());
+        let records = vec![PageRecord {
+            slug: "removable".into(),
+            page_type: "concept".into(),
+            path: "pages/concepts/removable.md".into(),
+            sources: vec![],
+            last_run_id: "run-1".into(),
+            managed_by: "source_ingest".into(),
+        }];
+        let count = mgr.delete_page_files(&records).unwrap();
+        assert_eq!(count, 1);
+        assert!(!dir.path().join("pages/concepts/removable.md").exists());
+    }
+
+    // W60: delete_page_files is a no-op for PageRecords whose files don't exist
+    #[test]
+    fn delete_page_files_skips_missing_paths() {
+        let dir = TempDir::new().unwrap();
+        let mgr = WikiManager::new(dir.path().to_path_buf()).unwrap();
+        let records = vec![PageRecord {
+            slug: "ghost".into(),
+            page_type: "concept".into(),
+            path: "pages/concepts/ghost.md".into(),
+            sources: vec![],
+            last_run_id: "run-1".into(),
+            managed_by: "source_ingest".into(),
+        }];
+        let count = mgr.delete_page_files(&records).unwrap();
+        assert_eq!(count, 0, "non-existent files must return count 0");
+    }
+
+    // W61: remove_source_from_page strips the named source from the frontmatter sources array
+    #[test]
+    fn remove_source_from_page_strips_source_entry() {
+        let dir = TempDir::new().unwrap();
+        let mgr = WikiManager::new(dir.path().to_path_buf()).unwrap();
+        let content = "---\ntitle: \"Shared Page\"\ntype: concept\ntags: []\nsources: [a.md, b.md]\nupdated: 2026-01-01\n---\n\n## TLDR\nShared.\n\n## Body\nContent.\n";
+        mgr.save_source("a.md", "source a").unwrap();
+        mgr.save_source("b.md", "source b").unwrap();
+        mgr.write_page("concepts", "shared-page", content).unwrap();
+        let record = PageRecord {
+            slug: "shared-page".into(),
+            page_type: "concept".into(),
+            path: "pages/concepts/shared-page.md".into(),
+            sources: vec!["a.md".into(), "b.md".into()],
+            last_run_id: "run-1".into(),
+            managed_by: "source_ingest".into(),
+        };
+        mgr.remove_source_from_page(&record, "a.md").unwrap();
+        let updated =
+            fs::read_to_string(dir.path().join("pages/concepts/shared-page.md")).unwrap();
+        assert!(!updated.contains("a.md"), "a.md must be removed from frontmatter");
+        assert!(updated.contains("b.md"), "b.md must remain in frontmatter");
+    }
+
+    // W62: remove_source_from_page is a no-op when the page file does not exist
+    #[test]
+    fn remove_source_from_page_noop_for_missing_file() {
+        let dir = TempDir::new().unwrap();
+        let mgr = WikiManager::new(dir.path().to_path_buf()).unwrap();
+        let record = PageRecord {
+            slug: "ghost".into(),
+            page_type: "concept".into(),
+            path: "pages/concepts/ghost.md".into(),
+            sources: vec!["a.md".into()],
+            last_run_id: "run-1".into(),
+            managed_by: "source_ingest".into(),
+        };
+        assert!(mgr.remove_source_from_page(&record, "a.md").is_ok());
     }
 }

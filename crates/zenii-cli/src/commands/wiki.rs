@@ -156,17 +156,14 @@ pub async fn ingest(client: &ZeniiClient, file: &str, model: Option<&str>) -> Re
         .and_then(|n| n.to_str())
         .ok_or_else(|| format!("invalid file path: {file}"))?
         .to_string();
-    let content = std::fs::read_to_string(path)
-        .map_err(|e| format!("failed to read '{file}': {e}"))?;
+    // Read as raw bytes — works for both text and binary formats.
+    // The daemon's DocumentConverter handles conversion based on file extension.
+    let bytes = std::fs::read(path).map_err(|e| format!("failed to read '{file}': {e}"))?;
 
     println!("Ingesting '{filename}'… (this may take 30–120s with LLM)");
 
-    let mut body = serde_json::json!({ "filename": filename, "content": content });
-    if let Some(m) = model {
-        body["model"] = serde_json::Value::String(m.to_string());
-    }
-
-    let result: serde_json::Value = client.post("/wiki/ingest", &body).await?;
+    let result: serde_json::Value =
+        client.upload_file("/wiki/upload", bytes, filename, model).await?;
 
     let primary_slug = result
         .get("primary_slug")

@@ -62,6 +62,7 @@ pub fn build_router(state: Arc<AppState>) -> Router {
         .route("/wiki", get(handlers::wiki::list_wiki_pages))
         .route("/wiki/search", get(handlers::wiki::search_wiki_pages))
         .route("/wiki/ingest", post(handlers::wiki::ingest_wiki_source))
+        .route("/wiki/upload", post(handlers::wiki::upload_wiki_source))
         .route("/wiki/sync", post(handlers::wiki::sync_wiki_to_memory))
         .route("/wiki/graph", get(handlers::wiki::get_wiki_graph))
         .route("/wiki/query", post(handlers::wiki::query_wiki))

@@ -90,6 +90,7 @@ pub struct Services {
     pub embedding_model_available: Arc<AtomicBool>,
     pub approval_broker: Option<Arc<crate::security::approval::ApprovalBroker>>,
     pub wiki: Arc<crate::wiki::WikiManager>,
+    pub converter: Arc<dyn crate::wiki::convert::DocumentConverter>,
 }
 
 /// Initialize all services from config.
@@ -403,6 +404,9 @@ pub async fn init_services(config: AppConfig) -> Result<Services> {
         .unwrap_or_else(|| data_dir.join("wiki"));
     let wiki = Arc::new(crate::wiki::WikiManager::new(wiki_dir.clone())?);
     info!("Wiki initialized at {}", wiki_dir.display());
+    let converter: Arc<dyn crate::wiki::convert::DocumentConverter> = Arc::new(
+        crate::wiki::convert::MarkItDownConverter::new(&config.doc_converter_bin),
+    );
 
     info!("User learner initialized");
 
@@ -899,6 +903,7 @@ pub async fn init_services(config: AppConfig) -> Result<Services> {
             pool,
         ))),
         wiki,
+        converter,
     })
 }
 
@@ -958,6 +963,7 @@ impl From<Services> for AppState {
             embedding_model_available: s.embedding_model_available,
             approval_broker: s.approval_broker,
             wiki: s.wiki,
+            converter: s.converter,
         }
     }
 }

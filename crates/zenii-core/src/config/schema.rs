@@ -226,6 +226,10 @@ pub struct AppConfig {
     // Wiki
     /// Override path for the wiki directory. Default: {data_dir}/wiki/
     pub wiki_dir: Option<String>,
+    /// Binary name or path for document-to-markdown conversion (default: "markitdown").
+    /// Install with: pip install markitdown[all]
+    /// Override to use a different binary, e.g. "pandoc" or "/usr/local/bin/markitdown".
+    pub doc_converter_bin: String,
 
     // MCP (Model Context Protocol)
     /// Prefix prepended to tool names when exposed via MCP (e.g., "zenii_")
@@ -445,6 +449,7 @@ impl Default for AppConfig {
 
             // Wiki
             wiki_dir: None,
+            doc_converter_bin: "markitdown".into(),
 
             // MCP
             mcp_server_tool_prefix: "zenii_".into(),

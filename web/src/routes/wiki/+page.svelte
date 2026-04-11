@@ -54,9 +54,18 @@
 	let ingesting = $state(false);
 	let fileInput: HTMLInputElement | undefined = $state();
 
+	const CATEGORY_TYPE: Record<string, string> = {
+		concepts: 'concept',
+		entities: 'entity',
+		topics: 'topic',
+		comparisons: 'comparison',
+		queries: 'query'
+	};
+
 	let filteredPages = $derived.by(() => {
 		if (activeCategory === 'all') return wikiStore.pages;
-		return wikiStore.pages.filter((p) => p.page_type === activeCategory.slice(0, -1)); // remove trailing 's' for type matching
+		const type = CATEGORY_TYPE[activeCategory] ?? activeCategory.slice(0, -1);
+		return wikiStore.pages.filter((p) => p.page_type === type);
 	});
 
 	let currentTheme = $derived(themeStore.isDark ? 'github-dark-default' : 'github-light-default');

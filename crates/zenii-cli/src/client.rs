@@ -164,6 +164,38 @@ impl ZeniiClient {
         Ok(())
     }
 
+    /// Upload a binary or text file to `POST /wiki/upload` using multipart/form-data.
+    ///
+    /// The daemon handles format detection and conversion (binary → markitdown subprocess,
+    /// text → UTF-8 read). No binary/text detection needed on the client side.
+    pub async fn upload_file<T: serde::de::DeserializeOwned>(
+        &self,
+        path: &str,
+        bytes: Vec<u8>,
+        filename: String,
+        model: Option<&str>,
+    ) -> Result<T, String> {
+        let mut form = reqwest::multipart::Form::new().part(
+            "file",
+            reqwest::multipart::Part::bytes(bytes).file_name(filename),
+        );
+        if let Some(m) = model {
+            form = form.text("model", m.to_string());
+        }
+        let url = format!("{}{path}", self.base_url);
+        let mut req = self.http.post(&url).multipart(form);
+        if let Some(ref val) = self.auth_header_value() {
+            req = req.header("authorization", val);
+        }
+        let resp = req.send().await.map_err(|e| e.to_string())?;
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let body = resp.text().await.unwrap_or_default();
+            return Err(Self::format_error(status, &body));
+        }
+        resp.json().await.map_err(|e| e.to_string())
+    }
+
     pub async fn wiki_prompt_get(&self) -> Result<String, String> {
         #[derive(serde::Deserialize)]
         struct Resp {

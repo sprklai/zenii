@@ -120,6 +120,9 @@ pub enum ZeniiError {
     #[error("MCP error: {0}")]
     Mcp(String),
 
+    #[error("document conversion: {0}")]
+    Conversion(String),
+
     #[error("{0}")]
     Other(String),
 }
