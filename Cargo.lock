@@ -10562,6 +10562,7 @@ dependencies = [
  "reqwest 0.13.2",
  "serde",
  "serde_json",
+ "tempfile",
  "tokio",
  "tokio-tungstenite 0.28.0",
  "tracing",
