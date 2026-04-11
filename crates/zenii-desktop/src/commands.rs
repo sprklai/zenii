@@ -181,6 +181,25 @@ pub fn open_data_dir() -> Result<(), String> {
     opener::open(data_dir.to_string_lossy().as_ref()).map_err(|e| e.to_string())
 }
 
+/// Open the wiki sources directory in the OS file manager.
+///
+/// Resolves the wiki dir from config (respects `wiki_dir` override), then
+/// opens the `sources/` sub-directory so the user can drop in raw documents.
+#[tauri::command]
+pub fn open_wiki_dir() -> Result<(), String> {
+    let config_path = zenii_core::config::default_config_path();
+    let config = zenii_core::config::load_config(&config_path).map_err(|e| e.to_string())?;
+    let data_dir = resolve_data_dir();
+    let wiki_dir = config
+        .wiki_dir
+        .as_deref()
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| data_dir.join("wiki"));
+    let sources_dir = wiki_dir.join("sources");
+    std::fs::create_dir_all(&sources_dir).map_err(|e| e.to_string())?;
+    opener::open(sources_dir.to_string_lossy().as_ref()).map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 pub async fn get_boot_status(
     state: tauri::State<'_, Arc<tokio::sync::Mutex<GatewayState>>>,

@@ -12,7 +12,7 @@
 	import { wikiStore, type WikiPage, type LintIssue, type FixedIssue, type QueryResult } from '$lib/stores/wiki.svelte';
 	import { themeStore } from '$lib/stores/theme.svelte';
 	import { shikiThemes } from '$lib/components/ai-elements/code/shiki';
-	import { isTauri, openPath, openConfigFile } from '$lib/tauri';
+	import { isTauri, openPath, openConfigFile, openWikiDir } from '$lib/tauri';
 	import { configStore } from '$lib/stores/config.svelte';
 	import * as m from '$lib/paraglide/messages';
 	import Search from '@lucide/svelte/icons/search';
@@ -257,6 +257,19 @@
 	// ── Open Folder ─────────────────────────────────────────────────────────────
 
 	async function handleOpenFolder() {
+		// In Tauri: use the open_wiki_dir command which resolves wiki_dir from
+		// config on the Rust side — this works for custom wiki_dir paths that
+		// would be outside the default capability scope.
+		if (isTauri) {
+			try {
+				await openWikiDir();
+			} catch (e) {
+				console.error('[wiki] openWikiDir failed:', e);
+				toast.error('Could not open wiki folder');
+			}
+			return;
+		}
+		// Browser fallback: fetch path from daemon then use opener.
 		let path: string;
 		try {
 			path = await wikiStore.fetchWikiDir();
