@@ -12,7 +12,7 @@
 	import { wikiStore, type WikiPage, type LintIssue, type QueryResult } from '$lib/stores/wiki.svelte';
 	import { themeStore } from '$lib/stores/theme.svelte';
 	import { shikiThemes } from '$lib/components/ai-elements/code/shiki';
-	import { isTauri, openPath } from '$lib/tauri';
+	import { isTauri, openPath, openConfigFile } from '$lib/tauri';
 	import * as m from '$lib/paraglide/messages';
 	import Search from '@lucide/svelte/icons/search';
 	import BookOpen from '@lucide/svelte/icons/book-open';
@@ -32,6 +32,7 @@
 	import AlertTriangle from '@lucide/svelte/icons/alert-triangle';
 	import ChevronDown from '@lucide/svelte/icons/chevron-down';
 	import Settings from '@lucide/svelte/icons/settings';
+	import ExternalLink from '@lucide/svelte/icons/external-link';
 
 	const CATEGORIES = ['all', 'concepts', 'entities', 'topics', 'comparisons', 'queries'] as const;
 	// Add new accepted types here — drives both the file input and the drop zone hint
@@ -309,6 +310,15 @@
 		} catch (e) {
 			toast.error(m.wiki_sources_delete_error());
 			console.error('[wiki] delete source failed:', e);
+		}
+	}
+
+	async function handleOpenConfig() {
+		gearOpen = false;
+		try {
+			await openConfigFile();
+		} catch (e) {
+			toast.error('Failed to open config', { description: e instanceof Error ? e.message : String(e) });
 		}
 	}
 
@@ -653,6 +663,15 @@
 							<Tag class="h-3.5 w-3.5 text-muted-foreground" />
 							{m.wiki_gear_change_prompt()}
 						</button>
+						{#if isTauri}
+							<button
+								class="flex w-full items-center gap-2.5 px-3 py-2 text-sm text-foreground hover:bg-muted"
+								onclick={handleOpenConfig}
+							>
+								<ExternalLink class="h-3.5 w-3.5 text-muted-foreground" />
+								{m.settings_config_open_in_editor_tooltip()}
+							</button>
+						{/if}
 						<div class="my-1 h-px bg-border"></div>
 						<p class="px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Danger zone</p>
 						<button
