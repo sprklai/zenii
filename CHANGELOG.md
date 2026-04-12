@@ -7,6 +7,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.10] - 2026-04-12
+
+### Added
+- feat(wiki): stable graph layout with localStorage persistence and loading overlay
+- feat(wiki): G4 binary upload — store original+converted separately, route binaries from UI
+- feat(wiki): enrich ingest prompt with thinking protocol, body contracts, and new page fields
+- feat(wiki): per-source regen, lint auto-fix, cascade delete, dropdown search/filter
+- feat(wiki): add open-config-in-editor button to wiki gear menu
+- feat(wiki): add Change Prompt, Delete All Wiki, and Delete All Sources modals
+- feat(wiki): replace inline panels with popovers and add gear menu
+- feat(wiki): add savePrompt, deleteAllSources, deleteAllPages to wiki store
+- feat(wiki): add prompt and delete-all gateway handlers
+- feat(wiki): add delete_all_sources, set_prompt, delete_all_pages to WikiManager
+- feat(wiki): add default INGEST_PROMPT.md to repo
+- feat(wiki-cli): add wiki prompt show/set/edit subcommand
+- feat(i18n): translate wiki and workflow-builder keys across all locales
+- feat: wiki query/lint/regenerate/sources features and dashboard breakdown
+- feat: enhance wiki with AI multi-page ingestion and wiki UI components
+
+### Fixed
+- fix(wiki): auto-remove duplicate page slugs with priority-based dedup
+- fix(wiki): robust LLM response parsing with multi-strategy extractor
+- fix(wiki): eliminate graph centering delay by hiding until simulation converges
+- fix(wiki): open up graph layout with stronger repulsion and wider clusters
+- fix(wiki): deduplicate graph nodes, auto-center graph, hide misleading lint fix button
+- fix(wiki): deduplicate pages and open external links in system browser
+- fix(wiki): resolve 7 codex audit findings across backend and frontend
+- fix(wiki): surface real LLM errors in regenerate 500 responses
+- fix(wiki): improve ingest feedback and refresh graph/sources after ingest
+- fix(wiki): G10 housekeeping — pagination, a11y, query slugs, sort, parse_page, log rotation
+- fix(wiki): G9 perf — schema caching, simulation rebuild guard, subprocess timeout, bundle splitting
+- fix(wiki): G8 frontend UX — file size check, modal state, dedup loads, error recovery, loading guard
+- fix(wiki): G7 memory sync cleanup, config load on route, open_wiki_dir command
+- fix(wiki): G6 frontend — AbortController cleanup, onDestroy timeouts, request sequence tokens
+- fix(wiki): G5 error handling — LLM parse logging, manifest bootstrap distinction, missing file warnings
+- fix(wiki): G3 security — path traversal guard, slug validation, content size limits
+- fix(wiki): G2 regenerate safety — atomic swap, duplicate slug dedup, correct provenance
+- fix(wiki): G1 concurrency — WikiManager Mutex, spawn_blocking wrappers, atomic appends
+- fix(wiki): write merged config before opening editor so wiki_graph_* fields appear
+- fix(wiki): cascade delete pages on delete-all-sources, fix regeneration and query save bugs
+- fix: green badge for active channels, wiki graph on load, auto-hide labels
+- fix: auto-center wiki graph on open and fix sidebar scroll
+
+### Changed
+- refactor(wiki): move WikiGraph magic numbers into AppConfig, fix source listing
+- refactor: replace SvelteFlow with d3-force for wiki graph visualization
+- chore: complete meso→zenii rebranding across all remaining files
+- docs(wiki): document binary ingestion support, expand handler tests, fix WebKitGTK drag-drop
+
 ## [0.1.9] - 2026-04-09
 
 ### Added
