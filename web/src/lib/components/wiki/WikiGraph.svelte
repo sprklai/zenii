@@ -148,6 +148,7 @@
 
 	let simulation: Simulation<SimNode, SimLink> | null = null;
 	let observer: ResizeObserver | null = null;
+	let graphReady = $state(false);
 
 	// ── topology guard (L5 fix) ───────────────────────────────────────────────
 	// Build a stable key from node IDs and edge pairs. The simulation is only
@@ -221,6 +222,7 @@
 	}
 
 	function buildSimulation(w: number, h: number) {
+		graphReady = false;
 		// Guard: deduplicate by id in case backend returns duplicate slugs
 		const uniqueNodes = [...new Map(nodes.map((n) => [n.id, n])).values()];
 		// Initialize nodes near their type's cluster center (not all at canvas center)
@@ -267,6 +269,7 @@
 				// fitView() called right after buildSimulation() only sees pre-tick
 				// positions; this ensures the final bounding box is used.
 				fitView();
+				graphReady = true;
 			});
 
 		// More pre-ticks for better initial cluster separation before user sees layout
@@ -298,7 +301,6 @@
 				height = newH;
 				lastTopoKey = topoKey;
 				buildSimulation(width, height);
-				fitView();
 			} else {
 				// Subsequent resize: re-center forces, keep user's pan/zoom
 				width = newW;
@@ -321,7 +323,6 @@
 		simulation?.stop();
 		simulation = null;
 		buildSimulation(width, height);
-		fitView();
 	});
 
 	onDestroy(() => {
@@ -437,7 +438,10 @@
 		<!-- transparent hit area covering the full SVG -->
 		<rect width={width} height={height} fill="transparent" />
 
-		<g transform="translate({tx},{ty}) scale({scale})">
+		<g
+			transform="translate({tx},{ty}) scale({scale})"
+			style="opacity: {graphReady ? 1 : 0}; transition: opacity 0.2s ease;"
+		>
 			<!-- edges -->
 			{#each simLinks as link, i (i)}
 				{@const s = link.source as SimNode}
