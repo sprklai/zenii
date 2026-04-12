@@ -130,15 +130,49 @@ const PAGE_SUBDIRS: &[&str] = &["concepts", "entities", "topics", "comparisons",
 // ── Validation helpers ────────────────────────────────────────────────────────
 
 /// Reject filenames that could escape the sources/ directory via path traversal.
+/// Blocks path separators and the literal ".." component; mid-name dots (e.g. "foo..bar") are fine.
 fn validate_filename(filename: &str) -> Result<(), ZeniiError> {
     if filename.is_empty()
-        || filename.contains("..")
+        || filename == ".."
         || filename.contains('/')
         || filename.contains('\\')
     {
         return Err(ZeniiError::Validation("invalid filename".into()));
     }
     Ok(())
+}
+
+/// Convert an arbitrary string (e.g. a filename stem) to a valid slug.
+/// Lowercases, replaces any non-[a-z0-9_] character with `-`, collapses
+/// consecutive dashes, trims leading/trailing dashes, and truncates to 64 chars.
+/// Returns an empty string if the input produces no alphanumeric content.
+fn sanitize_to_slug(input: &str) -> String {
+    let lower = input.to_lowercase();
+    // Replace any char that isn't alphanumeric, hyphen, or underscore with a dash
+    let replaced: String = lower
+        .chars()
+        .map(|c| if c.is_alphanumeric() || c == '_' { c } else { '-' })
+        .collect();
+    // Collapse consecutive dashes, then trim
+    let mut slug = String::with_capacity(replaced.len());
+    let mut prev_dash = true; // start true so leading dashes are trimmed
+    for c in replaced.chars() {
+        if c == '-' {
+            if !prev_dash {
+                slug.push('-');
+                prev_dash = true;
+            }
+        } else {
+            slug.push(c);
+            prev_dash = false;
+        }
+    }
+    // Trim trailing dash
+    if slug.ends_with('-') {
+        slug.pop();
+    }
+    // Truncate to 64 chars
+    slug.chars().take(64).collect()
 }
 
 /// Reject slugs that are empty, ambiguous, or contain path-unsafe characters.
@@ -315,12 +349,12 @@ impl WikiManager {
     /// Write content as a new wiki page (used by ingest handler).
     /// Converts filename to a slug, writes to pages/topics/{slug}.md.
     pub fn ingest(&self, filename: &str, content: &str) -> Result<WikiPage, ZeniiError> {
-        // Strip any file extension and convert to slug
+        // Strip any file extension and sanitize to a valid slug
         let name_without_ext = Path::new(filename)
             .file_stem()
             .and_then(|s| s.to_str())
             .unwrap_or(filename);
-        let slug = name_without_ext.to_lowercase().replace(' ', "-");
+        let slug = sanitize_to_slug(name_without_ext);
         validate_slug(&slug)?;
         let page_path = self
             .wiki_dir
@@ -821,6 +855,19 @@ impl WikiManager {
         if path.exists() {
             std::fs::remove_file(&path)?;
         }
+        // Also clean up binary copies if present (I4 fix)
+        let original = self.wiki_dir.join("sources").join("original").join(filename);
+        if original.exists() {
+            if let Err(e) = std::fs::remove_file(&original) {
+                tracing::warn!("wiki: failed to remove original source copy '{}': {e}", original.display());
+            }
+        }
+        let converted = self.wiki_dir.join("sources").join("converted").join(filename);
+        if converted.exists() {
+            if let Err(e) = std::fs::remove_file(&converted) {
+                tracing::warn!("wiki: failed to remove converted source copy '{}': {e}", converted.display());
+            }
+        }
         Ok(())
     }
 
@@ -838,6 +885,18 @@ impl WikiManager {
                 if ft.is_file() {
                     std::fs::remove_file(entry.path())?;
                     count += 1;
+                }
+            }
+        }
+        // Also clean up binary subdirectories (I4 fix)
+        for subdir in &["original", "converted"] {
+            let subdir_path = sources_dir.join(subdir);
+            if subdir_path.exists() {
+                for entry in std::fs::read_dir(&subdir_path)? {
+                    let entry = entry?;
+                    if entry.file_type()?.is_file() {
+                        std::fs::remove_file(entry.path())?;
+                    }
                 }
             }
         }
@@ -2390,13 +2449,13 @@ No outbound links here.
         assert!(matches!(err, ZeniiError::Validation(_)));
     }
 
-    // W77: ingest rejects filename that produces an invalid slug
+    // W77: ingest rejects filename whose stem sanitizes to an empty slug
     #[test]
     fn ingest_rejects_invalid_slug_from_filename() {
         let dir = TempDir::new().unwrap();
         let mgr = WikiManager::new(dir.path().to_path_buf()).unwrap();
-        // Filename that results in slug "." after stripping extension
-        let err = mgr.ingest("...md.md", "content").unwrap_err();
+        // "!!!!!.md" → stem "!!!!!" → all chars replaced with '-' → "" after trim → empty slug
+        let err = mgr.ingest("!!!!!.md", "content").unwrap_err();
         assert!(matches!(err, ZeniiError::Validation(_)));
     }
 }

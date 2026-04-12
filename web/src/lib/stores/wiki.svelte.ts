@@ -320,6 +320,10 @@ function createWikiStore() {
         sources = prevSources;
         throw e;
       }
+      // Refresh graph if it was previously loaded (I6 fix)
+      if (graph !== null) {
+        try { await this.loadGraph(); } catch { /* non-fatal */ }
+      }
       return result;
     },
 
@@ -337,6 +341,10 @@ function createWikiStore() {
         // M8: self-refreshes pages and sources — callers must NOT call load()/fetchSources() again
         await this.load();
         await this.fetchSources();
+        // Refresh graph if it was previously loaded (I6 fix)
+        if (graph !== null) {
+          try { await this.loadGraph(); } catch { /* non-fatal */ }
+        }
         return result;
       } catch (e) {
         if (e instanceof Error && e.name === "AbortError") throw e;
@@ -357,6 +365,10 @@ function createWikiStore() {
         // M8: self-refreshes pages and sources — callers must NOT call load()/fetchSources() again
         await this.load();
         await this.fetchSources();
+        // Refresh graph if it was previously loaded (I6 fix)
+        if (graph !== null) {
+          try { await this.loadGraph(); } catch { /* non-fatal */ }
+        }
       } finally {
         regenerating = false;
       }

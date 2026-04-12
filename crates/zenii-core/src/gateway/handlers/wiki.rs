@@ -1140,8 +1140,9 @@ pub async fn upload_wiki_source(
 
     let filename = filename.unwrap_or_else(|| "upload.bin".to_string());
 
-    // Write bytes to a temp file for conversion
-    let tmp_path = std::env::temp_dir().join(&filename);
+    // Write bytes to a temp file for conversion (I2 fix: UUID prefix avoids concurrent-upload races)
+    let tmp_name = format!("{}-{}", uuid::Uuid::new_v4(), filename);
+    let tmp_path = std::env::temp_dir().join(&tmp_name);
     if let Err(e) = tokio::fs::write(&tmp_path, &bytes).await {
         return (
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -1282,10 +1283,6 @@ pub async fn delete_wiki_source(
                     tracing::warn!("failed to remove source from page '{}': {e}", r.slug);
                 }
             }
-            if let Err(e) = wiki.delete_source_file(&filename_c) {
-                tracing::warn!("failed to delete source file '{filename_c}': {e}");
-            }
-
             let remaining_sources: Vec<(String, String)> = shared
                 .iter()
                 .flat_map(|r| r.sources.iter().filter(|s| *s != &filename_c))
@@ -1422,6 +1419,10 @@ pub async fn delete_wiki_source(
             if let Err(e) = wiki.write_manifest(&new_sources, &new_pages) {
                 tracing::warn!("manifest write failed after delete-source: {e}");
             }
+            // Delete source file after manifest is safely updated (I1 fix: safe ordering)
+            if let Err(e) = wiki.delete_source_file(&filename_c) {
+                tracing::warn!("failed to delete source file '{}': {e}", filename_c);
+            }
             let _ = wiki.append_run(&RunRecord {
                 run_id,
                 timestamp: chrono::Utc::now().to_rfc3339(),
@@ -1534,7 +1535,7 @@ async fn run_compiler(
 
         let agent = resolve_agent(model, state, None, Some(&system_prompt), "wiki")
             .await
-            .map_err(|e| e.to_string())?;
+        .map_err(|e| e.to_string())?;
 
         let response = agent.prompt(&user_prompt).await.map_err(|e| e.to_string())?;
 
@@ -1953,14 +1954,20 @@ pub async fn delete_wiki_pages(State(state): State<Arc<AppState>>) -> impl IntoR
     let wiki = Arc::clone(&state.wiki).lock_owned().await;
     let result = tokio::task::spawn_blocking(move || wiki.delete_all_pages()).await;
     match result {
-        Ok(Ok(deleted)) => (
-            StatusCode::OK,
-            Json(DeletePagesResponse {
-                message: format!("Deleted {deleted} wiki pages"),
-                deleted,
-            }),
-        )
-            .into_response(),
+        Ok(Ok(deleted)) => {
+            // Sync memory to remove stale wiki:* keys (I7 fix)
+            if let Err(e) = state.wiki.lock().await.sync_to_memory(state.memory.as_ref()).await {
+                tracing::warn!("wiki memory sync failed after delete-pages: {e}");
+            }
+            (
+                StatusCode::OK,
+                Json(DeletePagesResponse {
+                    message: format!("Deleted {deleted} wiki pages"),
+                    deleted,
+                }),
+            )
+                .into_response()
+        }
         Ok(Err(e)) => (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(serde_json::json!({"error": e.to_string()})),

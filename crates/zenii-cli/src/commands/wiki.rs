@@ -76,11 +76,13 @@ pub enum PromptAction {
 }
 
 pub async fn list(client: &ZeniiClient) -> Result<(), String> {
-    let pages: Vec<serde_json::Value> = client.get("/wiki").await?;
+    let data: serde_json::Value = client.get("/wiki?limit=200&offset=0").await?;
+    let empty = vec![];
+    let pages = data["pages"].as_array().unwrap_or(&empty);
     if pages.is_empty() {
         println!("No wiki pages found.");
     } else {
-        for page in &pages {
+        for page in pages {
             let slug = page.get("slug").and_then(|v| v.as_str()).unwrap_or("?");
             let title = page
                 .get("title")

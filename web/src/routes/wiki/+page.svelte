@@ -40,13 +40,31 @@
 	// Add new accepted types here — drives both the file input and the drop zone hint.
 	// Text types go to /wiki/ingest (JSON body); binary types go to /wiki/upload (multipart).
 	const INGEST_ACCEPT =
-		'.md,.txt,.html,.org,.rst,' +
+		'.md,.txt,.html,.htm,.org,.rst,' +
 		'application/pdf,.pdf,' +
 		'application/vnd.openxmlformats-officedocument.wordprocessingml.document,.docx,' +
-		'application/vnd.ms-powerpoint,.pptx,' +
-		'image/jpeg,.jpg,.jpeg,image/png,.png,image/gif,.gif,image/webp,.webp';
-	const BINARY_EXTENSIONS = new Set(['pdf', 'docx', 'pptx', 'jpg', 'jpeg', 'png', 'gif', 'webp']);
-	const BINARY_MIME_PREFIXES = ['application/pdf', 'application/vnd.openxmlformats', 'application/vnd.ms-powerpoint', 'image/'];
+		'application/msword,.doc,' +
+		'application/vnd.ms-powerpoint,.ppt,' +
+		'application/vnd.openxmlformats-officedocument.presentationml.presentation,.pptx,' +
+		'application/vnd.ms-excel,.xls,' +
+		'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,.xlsx,' +
+		'application/zip,.zip,' +
+		'application/epub+zip,.epub,' +
+		'image/jpeg,.jpg,.jpeg,image/png,.png,image/gif,.gif,image/webp,.webp,image/bmp,.bmp,image/tiff,.tiff';
+	const BINARY_EXTENSIONS = new Set([
+		'pdf', 'docx', 'doc', 'pptx', 'ppt', 'xlsx', 'xls',
+		'jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'tiff',
+		'zip', 'epub'
+	]);
+	const BINARY_MIME_PREFIXES = [
+		'application/pdf',
+		'application/vnd.openxmlformats',
+		'application/vnd.ms-',
+		'application/msword',
+		'application/zip',
+		'application/epub',
+		'image/'
+	];
 
 	function isBinaryFile(file: File): boolean {
 		const ext = file.name.split('.').pop()?.toLowerCase() ?? '';
