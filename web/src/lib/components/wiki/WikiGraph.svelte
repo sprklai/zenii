@@ -221,8 +221,10 @@
 	}
 
 	function buildSimulation(w: number, h: number) {
+		// Guard: deduplicate by id in case backend returns duplicate slugs
+		const uniqueNodes = [...new Map(nodes.map((n) => [n.id, n])).values()];
 		// Initialize nodes near their type's cluster center (not all at canvas center)
-		const sNodes: SimNode[] = nodes.map((n) => {
+		const sNodes: SimNode[] = uniqueNodes.map((n) => {
 			const center = clusterCenter(w, h, n.page_type);
 			return {
 				...n,
@@ -259,6 +261,12 @@
 				// Increment reactive counter so template effects re-run and read
 				// the current x/y values that d3 mutated in-place on the nodes.
 				_tick++;
+			})
+			.on('end', () => {
+				// Auto-center once the simulation has converged to its final layout.
+				// fitView() called right after buildSimulation() only sees pre-tick
+				// positions; this ensures the final bounding box is used.
+				fitView();
 			});
 
 		// More pre-ticks for better initial cluster separation before user sees layout

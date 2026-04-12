@@ -90,6 +90,57 @@
 	let ingesting = $state(false);
 	let fileInput: HTMLInputElement | undefined = $state();
 
+	type DuplicateStatus =
+		| { kind: 'exact' }                          // same name + same hash → content unchanged
+		| { kind: 'updated' }                        // same name, different hash → will overwrite
+		| { kind: 'renamed'; existingName: string }  // same hash, different name → possible rename
+		| null;                                      // not a duplicate
+
+	// undefined = still checking, null = no duplicate, object = duplicate found
+	let fileDuplicates = $state<Map<string, DuplicateStatus | undefined>>(new Map());
+	let fileSkipped = $state<Set<string>>(new Set());
+	const filesToIngest = $derived(ingestFiles.filter((f) => !fileSkipped.has(f.name)));
+
+	async function hashTextContent(text: string): Promise<string> {
+		const bytes = new TextEncoder().encode(text);
+		const digest = await crypto.subtle.digest('SHA-256', bytes);
+		return Array.from(new Uint8Array(digest))
+			.map((b) => b.toString(16).padStart(2, '0'))
+			.join('');
+	}
+
+	async function checkFileDuplicate(file: File): Promise<DuplicateStatus> {
+		const sources = wikiStore.sources;
+		const nameMatch = sources.find((s) => s.filename === file.name);
+
+		// For text files under size limit, compute SHA-256 and compare hashes
+		if (!isBinaryFile(file) && file.size <= MAX_TEXT_SIZE) {
+			try {
+				const text = await file.text();
+				const hash = await hashTextContent(text);
+				const hashMatch = sources.find((s) => s.hash === hash);
+				if (nameMatch) {
+					return nameMatch.hash === hash ? { kind: 'exact' } : { kind: 'updated' };
+				}
+				if (hashMatch) {
+					return { kind: 'renamed', existingName: hashMatch.filename };
+				}
+				return null;
+			} catch {
+				// fall through to name-only check
+			}
+		}
+
+		return nameMatch ? { kind: 'updated' } : null;
+	}
+
+	function toggleSkip(filename: string) {
+		const next = new Set(fileSkipped);
+		if (next.has(filename)) next.delete(filename);
+		else next.add(filename);
+		fileSkipped = next;
+	}
+
 	const CATEGORY_TYPE: Record<string, string> = {
 		concepts: 'concept',
 		entities: 'entity',
@@ -169,10 +220,32 @@
 		const existing = new Set(ingestFiles.map((f) => f.name));
 		const incoming = Array.from(files).filter((f) => !existing.has(f.name));
 		ingestFiles = [...ingestFiles, ...incoming];
+		// Start duplicate checks async; show "checking" until resolved
+		for (const file of incoming) {
+			fileDuplicates = new Map(fileDuplicates).set(file.name, undefined);
+			checkFileDuplicate(file).then((status) => {
+				fileDuplicates = new Map(fileDuplicates).set(file.name, status);
+				// Auto-skip exact unchanged duplicates
+				if (status?.kind === 'exact') {
+					const next = new Set(fileSkipped);
+					next.add(file.name);
+					fileSkipped = next;
+				}
+			});
+		}
 	}
 
 	function removeIngestFile(index: number) {
+		const removed = ingestFiles[index];
 		ingestFiles = ingestFiles.filter((_, i) => i !== index);
+		if (removed) {
+			const newDups = new Map(fileDuplicates);
+			newDups.delete(removed.name);
+			fileDuplicates = newDups;
+			const newSkipped = new Set(fileSkipped);
+			newSkipped.delete(removed.name);
+			fileSkipped = newSkipped;
+		}
 	}
 
 	function handleFileSelect(e: Event) {
@@ -220,6 +293,8 @@
 		if (!ingesting) {
 			ingestFiles = [];
 			ingestProgress = null;
+			fileDuplicates = new Map();
+			fileSkipped = new Set();
 		}
 	}
 
@@ -227,12 +302,13 @@
 	const MAX_TEXT_SIZE = 10 * 1024 * 1024; // 10MB
 
 	async function handleIngest() {
-		if (ingestFiles.length === 0) return;
+		const filesToIngest = ingestFiles.filter((f) => !fileSkipped.has(f.name));
+		if (filesToIngest.length === 0) return;
 		ingesting = true;
 		let succeeded = 0;
-		for (let i = 0; i < ingestFiles.length; i++) {
-			ingestProgress = { current: i + 1, total: ingestFiles.length };
-			const file = ingestFiles[i];
+		for (let i = 0; i < filesToIngest.length; i++) {
+			ingestProgress = { current: i + 1, total: filesToIngest.length };
+			const file = filesToIngest[i];
 			// H4: reject files over 10MB before reading to avoid OOM/hang
 			if (file.size > MAX_TEXT_SIZE) {
 				toast.error(`${file.name}: file too large (max 10MB)`);
@@ -734,7 +810,7 @@
 													onclick={() => { handleSelectPage(issue.page_slug); lintPopOpen = false; }}
 												>{issue.page_slug}</button>
 											</div>
-											{#if sourceForSlug(issue.page_slug)}
+											{#if sourceForSlug(issue.page_slug) && ['broken_wikilink', 'missing_updated'].includes(issue.kind)}
 												<button
 													class="shrink-0 rounded p-0.5 text-muted-foreground hover:bg-primary/10 hover:text-primary disabled:opacity-40"
 													onclick={() => handleRegenerateFromIssue(issue)}
@@ -1272,12 +1348,37 @@
 
 			<!-- Selected file list -->
 			{#if ingestFiles.length > 0}
-				<div class="max-h-40 overflow-y-auto rounded-md border">
+				<div class="max-h-48 overflow-y-auto rounded-md border">
 					{#each ingestFiles as file, i (file.name)}
-						<div class="flex items-center justify-between px-3 py-1.5 text-sm {i > 0 ? 'border-t' : ''}">
-							<span class="truncate text-xs">{file.name}</span>
+						{@const dupStatus = fileDuplicates.get(file.name)}
+						{@const isSkipped = fileSkipped.has(file.name)}
+						<div class="flex items-center gap-1.5 px-3 py-1.5 {i > 0 ? 'border-t' : ''} {isSkipped ? 'opacity-50' : ''}">
+							<span class="min-w-0 flex-1 truncate text-xs {isSkipped ? 'line-through text-muted-foreground' : ''}">{file.name}</span>
+							{#if dupStatus === undefined}
+								<!-- still checking -->
+								<span class="shrink-0 text-xs text-muted-foreground">{m.wiki_dup_checking()}</span>
+							{:else if dupStatus !== null}
+								<!-- duplicate found -->
+								<span class="flex shrink-0 items-center gap-1">
+									<AlertTriangle class="h-3 w-3 text-amber-500" />
+									<span class="text-xs text-amber-600 dark:text-amber-400">
+										{#if dupStatus.kind === 'exact'}
+											{m.wiki_dup_exact()}
+										{:else if dupStatus.kind === 'updated'}
+											{m.wiki_dup_updated()}
+										{:else}
+											{m.wiki_dup_renamed({ name: dupStatus.existingName })}
+										{/if}
+									</span>
+									<button
+										class="rounded px-1.5 py-0.5 text-xs {isSkipped ? 'bg-muted text-muted-foreground hover:bg-muted/80' : 'bg-amber-500/15 text-amber-700 hover:bg-amber-500/25 dark:text-amber-400'}"
+										onclick={() => toggleSkip(file.name)}
+										disabled={ingesting}
+									>{isSkipped ? m.wiki_dup_include() : m.wiki_dup_skip()}</button>
+								</span>
+							{/if}
 							<button
-								class="ml-2 shrink-0 rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+								class="shrink-0 rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
 								onclick={() => removeIngestFile(i)}
 								disabled={ingesting}
 								aria-label="Remove {file.name}"
@@ -1292,16 +1393,18 @@
 			<Button
 				class="w-full gap-1.5"
 				onclick={handleIngest}
-				disabled={ingesting || ingestFiles.length === 0}
+				disabled={ingesting || filesToIngest.length === 0}
 			>
 				{#if ingesting && ingestProgress}
 					<Loader2 class="h-4 w-4 animate-spin" />
 					{m.wiki_ingest_progress({ current: ingestProgress.current.toString(), total: ingestProgress.total.toString() })}
 				{:else if ingestFiles.length === 0}
 					{m.wiki_ingest_no_files()}
+				{:else if filesToIngest.length === 0}
+					{m.wiki_ingest_all_skipped()}
 				{:else}
 					<FileUp class="h-4 w-4" />
-					{m.wiki_ingest_file_count({ count: ingestFiles.length.toString(), suffix: ingestFiles.length > 1 ? 's' : '' })}
+					{m.wiki_ingest_file_count({ count: filesToIngest.length.toString(), suffix: filesToIngest.length > 1 ? 's' : '' })}
 				{/if}
 			</Button>
 		</div>
