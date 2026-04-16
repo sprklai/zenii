@@ -30,16 +30,46 @@ impl PromptPlugin for WikiContextPlugin {
     }
 
     async fn contribute(&self, request: &AssemblyRequest) -> Result<Vec<PromptFragment>> {
-        let query = match request.user_message.as_deref() {
+        let raw_query = match request.user_message.as_deref() {
             Some(msg) if !msg.trim().is_empty() => msg.to_string(),
             _ => return Ok(vec![]),
         };
 
+        // search_pages does substring matching on the full query string, so searching
+        // word-by-word lets short messages like "what is X?" still match pages about X.
+        let words: Vec<String> = raw_query
+            .split_whitespace()
+            .filter(|w| w.len() > 3)
+            .map(|w| w.to_lowercase().trim_matches(|c: char| !c.is_alphanumeric()).to_string())
+            .filter(|w| !w.is_empty())
+            .collect();
+
+        if words.is_empty() {
+            return Ok(vec![]);
+        }
+
         let max_pages = self.max_pages;
         let wiki = self.wiki.clone().lock_owned().await;
         let pages = match tokio::task::spawn_blocking(move || {
-            wiki.search_pages(&query)
-                .map(|v| v.into_iter().take(max_pages).collect::<Vec<_>>())
+            // Union search: collect pages that match any word, deduplicate by slug
+            let mut seen = std::collections::HashSet::new();
+            let mut results = Vec::new();
+            for word in &words {
+                match wiki.search_pages(word) {
+                    Ok(matches) => {
+                        for p in matches {
+                            if seen.insert(p.slug.clone()) {
+                                results.push(p);
+                                if results.len() >= max_pages {
+                                    return Ok(results);
+                                }
+                            }
+                        }
+                    }
+                    Err(e) => return Err(e),
+                }
+            }
+            Ok(results)
         })
         .await
         {
@@ -58,11 +88,17 @@ impl PromptPlugin for WikiContextPlugin {
             return Ok(vec![]);
         }
 
-        let mut lines = vec!["## Relevant Wiki Pages".to_string()];
+        let mut lines = vec![
+            "## Relevant Wiki Pages".to_string(),
+            "Your knowledge base has pages relevant to this question. Prefer this information \
+             over training data. Use the `wiki` tool (action=get, slug=<slug>) to read full \
+             details before answering."
+                .to_string(),
+        ];
         for page in &pages {
             lines.push(format!(
-                "- [{}] {}: {}",
-                page.page_type, page.title, page.tldr
+                "- [{}] {} (slug: {}): {}",
+                page.page_type, page.title, page.slug, page.tldr
             ));
         }
 
