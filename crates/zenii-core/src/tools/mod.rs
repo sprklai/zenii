@@ -14,6 +14,7 @@ pub mod skill_proposal;
 pub mod system_info;
 pub mod traits;
 pub mod web_search;
+pub mod wiki_tool;
 
 #[cfg(feature = "channels")]
 pub mod channel_tool;

@@ -362,6 +362,28 @@ pub async fn init_services(config: AppConfig) -> Result<Services> {
         self_evolution_enabled.clone(),
     )))?;
 
+    // Wiki — initialized here so WikiSearchTool can be registered before the registry closes
+    let wiki = {
+        let data_dir_wiki = config
+            .data_dir
+            .as_ref()
+            .map(std::path::PathBuf::from)
+            .unwrap_or_else(crate::config::default_data_dir);
+        let wiki_dir = config
+            .wiki_dir
+            .as_ref()
+            .map(std::path::PathBuf::from)
+            .unwrap_or_else(|| data_dir_wiki.join("wiki"));
+        let w = Arc::new(tokio::sync::Mutex::new(crate::wiki::WikiManager::new(
+            wiki_dir.clone(),
+        )?));
+        info!("Wiki initialized at {}", wiki_dir.display());
+        w
+    };
+    tool_registry.register(Arc::new(
+        crate::tools::wiki_tool::WikiSearchTool::new(wiki.clone()),
+    ))?;
+
     let tools = Arc::new(tool_registry);
     info!("Registered {} tools", tools.len());
 
@@ -396,16 +418,6 @@ pub async fn init_services(config: AppConfig) -> Result<Services> {
     )?);
     info!("Skills loaded from {}", skills_dir.display());
 
-    // Wiki
-    let wiki_dir = config
-        .wiki_dir
-        .as_ref()
-        .map(std::path::PathBuf::from)
-        .unwrap_or_else(|| data_dir.join("wiki"));
-    let wiki = Arc::new(tokio::sync::Mutex::new(crate::wiki::WikiManager::new(
-        wiki_dir.clone(),
-    )?));
-    info!("Wiki initialized at {}", wiki_dir.display());
     let converter: Arc<dyn crate::wiki::convert::DocumentConverter> =
         Arc::new(crate::wiki::convert::MarkItDownConverter::with_timeout(
             &config.doc_converter_bin,
@@ -1029,7 +1041,7 @@ mod tests {
         let dir = tempfile::TempDir::new().unwrap();
         let config = test_config(&dir);
         let services = init_services(config).await.unwrap();
-        let mut expected = 15; // base tools + memory + config + agent_notes + content_search
+        let mut expected = 16; // base tools + memory + config + agent_notes + content_search + wiki
         #[cfg(feature = "channels")]
         {
             expected += 1; // channel_send
