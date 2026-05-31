@@ -1,6 +1,7 @@
 use std::path::Path;
 
 pub mod adapter;
+pub mod heal;
 pub mod installer;
 pub mod manifest;
 pub mod process;
