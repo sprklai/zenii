@@ -805,6 +805,29 @@ package = "git+https://github.com/u/{name}@v1"
         assert!(!cache.join("stray-entry").exists());
     }
 
+    // PAR.6 — a runner-based external agent lands in ToolRegistry, the single propagation
+    // point every consumer (main agent, delegation sub-agents, workflows, CLI, TUI, gateway
+    // `GET /tools`) reads. Resolvable by name + listed ⇒ usable everywhere.
+    #[tokio::test]
+    async fn runner_tool_registered_and_resolvable() {
+        let (plugins_dir, _s, registry, tools, skills) = setup_test_env();
+        let src = TempDir::new().unwrap();
+        let path = create_runner_plugin(&src, "rt-visible", None);
+        let dep = Arc::new(SpyDep::default());
+        let installer = PluginInstaller::new(registry, tools.clone(), skills, 60, 3)
+            .with_runtime(mock_runtime(true, false, plugins_dir.path()), dep);
+        installer.install_from_local(&path).await.unwrap();
+
+        assert!(
+            tools.get("rt-visible-tool").is_some(),
+            "runner tool resolvable by name (delegation/workflow lookup)"
+        );
+        assert!(
+            tools.list().iter().any(|t| t.name == "rt-visible-tool"),
+            "runner tool listed (GET /tools discovery)"
+        );
+    }
+
     // 9.0.17 — Install from local path
     #[tokio::test]
     async fn install_from_local_path() {
