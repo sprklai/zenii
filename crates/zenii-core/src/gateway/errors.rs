@@ -113,6 +113,7 @@ pub fn error_code_for(err: &ZeniiError) -> &'static str {
         ZeniiError::ApprovalDenied(_) => "ZENII_APPROVAL_DENIED",
         ZeniiError::ApprovalTimeout(_) => "ZENII_APPROVAL_TIMEOUT",
         ZeniiError::Mcp(_) => "ZENII_MCP_ERROR",
+        ZeniiError::Runtime(_) => "ZENII_RUNTIME_ERROR",
         ZeniiError::Conversion(_) => "ZENII_CONVERSION",
         ZeniiError::Other(_) => "ZENII_INTERNAL_ERROR",
     }
@@ -160,6 +161,7 @@ fn status_code_for(err: &ZeniiError) -> StatusCode {
         ZeniiError::ApprovalDenied(_) => StatusCode::FORBIDDEN,
         ZeniiError::ApprovalTimeout(_) => StatusCode::REQUEST_TIMEOUT,
         ZeniiError::Mcp(_) => StatusCode::INTERNAL_SERVER_ERROR,
+        ZeniiError::Runtime(_) => StatusCode::SERVICE_UNAVAILABLE,
         ZeniiError::Conversion(_) => StatusCode::UNPROCESSABLE_ENTITY,
         ZeniiError::Other(_) => StatusCode::INTERNAL_SERVER_ERROR,
     }

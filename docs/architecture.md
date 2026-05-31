@@ -2271,6 +2271,23 @@ depends_on = ["fetch"]
 
 ---
 
+## Polyglot Agent Runtime (PAR)
+
+PAR lets Zenii run external code pulled from GitHub (Python via `uvx`/`uv run`, Node via `npx`, extensible) **as tools/agents**, with dependencies installed **on demand into an isolated, shared cache** — no fat sidecar that bloats with every release. It **extends** the existing plugin + MCP subsystems rather than introducing a parallel one.
+
+### Two isolation layers
+Each runner-based tool keeps the host environment untouched via (1) **runtime-version isolation** (never use the system interpreter — `uv python` / `fnm`) and (2) **dependency isolation** (per-project env + content-addressed shared cache). `uv`/`uvx` cover Python; `npx`/`bunx` cover Node; each new language is one runner adapter.
+
+### Components
+- **`runtimes/` (new)** — `RuntimeManager` (detect / resolve app-managed-over-PATH / install) + `Doctor` (status, consent-gated install, `ensure(required_runtime)`). `SystemRuntimeProbe` (PATH + `--version`) and `DefaultRuntimeInstaller` (uv via the official script into the app data dir). Config: `runtimes_dir`, `runtime_cache_dir`, `runtime_auto_install`. Gateway: `GET /runtimes/status`, `POST /runtimes/{name}/install` (consent-gated), `POST /runtimes/recheck`. CLI: `zenii runtime status|recheck|install`.
+- **Manifest extension** — `PluginToolDef` gains `runner` (`uvx`/`npx`/`bunx`/`uv-run`/`node`), `package` (git/pkg spec), `required_runtime` (e.g. `python>=3.11`), and optional `tests` (self-heal eval cases). All `#[serde(default)]` — legacy manifests unaffected. `uvx`/`npx`/`bunx` require a `package`.
+- **Process extension** — `PluginProcess` builds the runner command (`uvx --from <pkg> <entry>`, `npx -y <pkg> <entry>`, `uv run <entry>`, `node <entry>`), prefers the app-managed runner path, and injects **secrets + `ZENII_AGENT_SCRATCH` via env (never argv)**.
+- **Installer extension** — installing a runner-based tool runs the doctor (`ensure` → abort if the runtime is missing and auto-install is off), prepares deps into the isolated env via an injectable `DependencyInstaller` (`uvx` cache-prime / `uv sync` / `npm install`), then registers a runner-based adapter. `refresh` re-resolves; `prune` GCs unreferenced cache entries.
+
+Because every external agent registers as a `Tool` in `ToolRegistry`, it is automatically available to the main agent, delegation sub-agents, workflows, CLI, TUI, and `GET /tools` — no per-consumer wiring. MCP-shaped GitHub code uses the MCP client path (below); arbitrary code uses the plugin JSON-RPC path.
+
+> Files: `crates/zenii-core/src/runtimes/{mod,doctor}.rs`, `plugins/{manifest,process,installer}.rs`, `gateway/handlers/runtimes.rs`.
+
 ## MCP Integration
 
 Zenii supports the [Model Context Protocol](https://modelcontextprotocol.io/) as both a **server** (exposing tools to external AI agents) and a **client** (consuming tools from external MCP servers).

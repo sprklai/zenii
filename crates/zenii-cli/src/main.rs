@@ -96,6 +96,11 @@ enum Commands {
         #[command(subcommand)]
         action: PluginAction,
     },
+    /// Manage external-agent runtimes (uv, node, ...)
+    Runtime {
+        #[command(subcommand)]
+        action: RuntimeAction,
+    },
     /// View channel conversations and messages
     #[cfg(feature = "channels")]
     Channel {
@@ -435,6 +440,19 @@ enum EmbeddingAction {
 }
 
 #[derive(Subcommand)]
+enum RuntimeAction {
+    /// Show presence/version of external-agent runtimes
+    Status,
+    /// Re-probe all runtimes
+    Recheck,
+    /// Install a runtime (e.g. uv)
+    Install {
+        /// Runtime name (e.g. uv)
+        name: String,
+    },
+}
+
+#[derive(Subcommand)]
 enum ProviderAction {
     /// List all providers with key status
     List,
@@ -703,6 +721,11 @@ async fn main() {
                 provider_id,
                 model_id,
             } => commands::provider::set_default(&client, &provider_id, &model_id).await,
+        },
+        Commands::Runtime { action } => match action {
+            RuntimeAction::Status => commands::runtime::status(&client).await,
+            RuntimeAction::Recheck => commands::runtime::recheck(&client).await,
+            RuntimeAction::Install { name } => commands::runtime::install(&client, &name).await,
         },
     };
 

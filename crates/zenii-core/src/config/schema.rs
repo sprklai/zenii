@@ -183,6 +183,14 @@ pub struct AppConfig {
     pub plugin_auto_update: bool,
     pub official_plugins_repo: String,
 
+    // PAR: Polyglot Agent Runtime (runtimes for external agents)
+    /// Directory for app-managed runtime binaries (uv, node, ...). Defaults under data dir.
+    pub runtimes_dir: Option<String>,
+    /// Shared dependency cache dir for runners (uv/npx). Defaults under data dir.
+    pub runtime_cache_dir: Option<String>,
+    /// Install missing runtimes automatically without prompting. Default: false (instructions only).
+    pub runtime_auto_install: bool,
+
     // Phase 8.12: Notification Routing
     pub notification_routing: NotificationRouting,
 
@@ -532,6 +540,11 @@ impl Default for AppConfig {
             plugin_execute_timeout_secs: 60,
             plugin_auto_update: false,
             official_plugins_repo: "https://github.com/sprklai/zenii-plugins.git".into(),
+
+            // PAR: Polyglot Agent Runtime
+            runtimes_dir: None,
+            runtime_cache_dir: None,
+            runtime_auto_install: false,
 
             // Tool Deduplication
             tool_dedup_enabled: true,

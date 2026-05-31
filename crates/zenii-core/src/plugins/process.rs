@@ -58,7 +58,19 @@ pub struct PluginProcess {
     execute_timeout: Duration,
     restart_attempts: u32,
     max_restart_attempts: u32,
+    // PAR: runner-based execution + isolation
+    runner: Option<String>,
+    package: Option<String>,
+    /// App-managed runner binary path (preferred over a bare PATH lookup), if resolved.
+    runner_path: Option<PathBuf>,
+    /// Secrets injected into the child's environment (never passed on argv).
+    secrets: std::collections::HashMap<String, String>,
+    /// Per-agent scratch dir, exported to the child as `ZENII_AGENT_SCRATCH`.
+    scratch_dir: Option<PathBuf>,
 }
+
+/// Env var name for the per-agent scratch directory passed to runner-based plugins.
+pub const SCRATCH_ENV: &str = "ZENII_AGENT_SCRATCH";
 
 impl PluginProcess {
     pub fn new(
@@ -77,7 +89,79 @@ impl PluginProcess {
             execute_timeout: Duration::from_secs(execute_timeout_secs),
             restart_attempts: 0,
             max_restart_attempts,
+            runner: None,
+            package: None,
+            runner_path: None,
+            secrets: std::collections::HashMap::new(),
+            scratch_dir: None,
         }
+    }
+
+    /// Configure runner-based execution (uvx/npx/uv-run/node) with an optional resolved
+    /// runner binary path (preferred over a bare PATH name).
+    pub fn with_runner(
+        mut self,
+        runner: Option<String>,
+        package: Option<String>,
+        runner_path: Option<PathBuf>,
+    ) -> Self {
+        self.runner = runner;
+        self.package = package;
+        self.runner_path = runner_path;
+        self
+    }
+
+    /// Provide secrets to inject into the child's environment.
+    pub fn with_secrets(mut self, secrets: std::collections::HashMap<String, String>) -> Self {
+        self.secrets = secrets;
+        self
+    }
+
+    /// Provide a scratch directory exported to the child.
+    pub fn with_scratch_dir(mut self, scratch_dir: Option<PathBuf>) -> Self {
+        self.scratch_dir = scratch_dir;
+        self
+    }
+
+    /// Build the `(program, args)` used to spawn this plugin. Secrets are NOT included here
+    /// (they go via env — see [`Self::env_vars`]).
+    pub fn command_parts(&self) -> (PathBuf, Vec<String>) {
+        let entry = self.binary_path.to_string_lossy().to_string();
+        // Prefer the app-managed runner path over a bare PATH name.
+        let program = |default: &str| -> PathBuf {
+            self.runner_path
+                .clone()
+                .unwrap_or_else(|| PathBuf::from(default))
+        };
+        // For package-based runners, prepend the package spec when present.
+        let with_pkg = |prefix: Vec<String>| -> Vec<String> {
+            let mut args = prefix;
+            if let Some(pkg) = &self.package {
+                args.push(pkg.clone());
+            }
+            args.push(entry.clone());
+            args
+        };
+
+        match self.runner.as_deref() {
+            None => (self.binary_path.clone(), Vec::new()),
+            Some("uvx") => (program("uvx"), with_pkg(vec!["--from".to_string()])),
+            Some("npx") => (program("npx"), with_pkg(vec!["-y".to_string()])),
+            Some("bunx") => (program("bunx"), with_pkg(Vec::new())),
+            Some("uv-run") => (program("uv"), vec!["run".to_string(), entry]),
+            Some("node") => (program("node"), vec![entry]),
+            // Unknown runner is rejected at manifest validation; fall back to bare invocation.
+            Some(other) => (program(other), vec![entry]),
+        }
+    }
+
+    /// Environment variables to set on the child: secrets + scratch dir.
+    pub fn env_vars(&self) -> std::collections::HashMap<String, String> {
+        let mut env = self.secrets.clone();
+        if let Some(scratch) = &self.scratch_dir {
+            env.insert(SCRATCH_ENV.to_string(), scratch.to_string_lossy().to_string());
+        }
+        env
     }
 
     /// Spawn the plugin process.
@@ -86,13 +170,30 @@ impl PluginProcess {
             return Ok(());
         }
 
+        // Create the per-agent scratch dir before spawning, if configured.
+        if let Some(scratch) = &self.scratch_dir {
+            std::fs::create_dir_all(scratch).map_err(|e| {
+                ZeniiError::Plugin(format!(
+                    "failed to create scratch dir for plugin '{}': {e}",
+                    self.name
+                ))
+            })?;
+        }
+
+        let (program, args) = self.command_parts();
         debug!(
-            "Spawning plugin process: {} ({})",
+            "Spawning plugin process: {} ({} {})",
             self.name,
-            self.binary_path.display()
+            program.display(),
+            args.join(" ")
         );
 
-        let mut child = Command::new(&self.binary_path)
+        let mut command = Command::new(&program);
+        command.args(&args);
+        for (key, value) in self.env_vars() {
+            command.env(key, value);
+        }
+        let mut child = command
             .stdin(std::process::Stdio::piped())
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::null())
@@ -302,6 +403,112 @@ impl Drop for PluginProcess {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // --- PAR.2: runner command construction ---
+
+    fn proc_with(
+        binary: &str,
+        runner: Option<&str>,
+        package: Option<&str>,
+        runner_path: Option<&str>,
+    ) -> PluginProcess {
+        PluginProcess::new("t", PathBuf::from(binary), 60, 3).with_runner(
+            runner.map(String::from),
+            package.map(String::from),
+            runner_path.map(PathBuf::from),
+        )
+    }
+
+    #[test]
+    fn command_none_is_direct_binary() {
+        let p = proc_with("tool.sh", None, None, None);
+        let (program, args) = p.command_parts();
+        assert_eq!(program, PathBuf::from("tool.sh"));
+        assert!(args.is_empty());
+    }
+
+    #[test]
+    fn command_uvx_from_git() {
+        let p = proc_with(
+            "main.py",
+            Some("uvx"),
+            Some("git+https://github.com/u/r@v1"),
+            None,
+        );
+        let (program, args) = p.command_parts();
+        assert_eq!(program, PathBuf::from("uvx"));
+        assert_eq!(
+            args,
+            vec![
+                "--from".to_string(),
+                "git+https://github.com/u/r@v1".to_string(),
+                "main.py".to_string()
+            ]
+        );
+    }
+
+    #[test]
+    fn command_npx_package() {
+        let p = proc_with("cli.js", Some("npx"), Some("@scope/pkg@1.2"), None);
+        let (program, args) = p.command_parts();
+        assert_eq!(program, PathBuf::from("npx"));
+        assert_eq!(
+            args,
+            vec![
+                "-y".to_string(),
+                "@scope/pkg@1.2".to_string(),
+                "cli.js".to_string()
+            ]
+        );
+    }
+
+    #[test]
+    fn command_uv_run_script() {
+        let p = proc_with("main.py", Some("uv-run"), None, None);
+        let (program, args) = p.command_parts();
+        assert_eq!(program, PathBuf::from("uv"));
+        assert_eq!(args, vec!["run".to_string(), "main.py".to_string()]);
+    }
+
+    #[test]
+    fn command_node_script() {
+        let p = proc_with("server.js", Some("node"), None, None);
+        let (program, args) = p.command_parts();
+        assert_eq!(program, PathBuf::from("node"));
+        assert_eq!(args, vec!["server.js".to_string()]);
+    }
+
+    #[test]
+    fn command_uses_app_managed_runner_path() {
+        let p = proc_with("main.py", Some("uv-run"), None, Some("/data/runtimes/uv"));
+        let (program, _args) = p.command_parts();
+        assert_eq!(program, PathBuf::from("/data/runtimes/uv"));
+    }
+
+    #[test]
+    fn secrets_injected_as_env_absent_from_argv() {
+        let mut secrets = std::collections::HashMap::new();
+        secrets.insert("API_KEY".to_string(), "super-secret".to_string());
+        let p = proc_with("main.py", Some("uv-run"), None, None).with_secrets(secrets);
+
+        let (_program, args) = p.command_parts();
+        assert!(
+            !args.iter().any(|a| a.contains("super-secret")),
+            "secret leaked into argv"
+        );
+        assert_eq!(p.env_vars().get("API_KEY").map(String::as_str), Some("super-secret"));
+    }
+
+    #[test]
+    fn scratch_env_set_when_configured() {
+        let p = proc_with("main.py", Some("uv-run"), None, None)
+            .with_scratch_dir(Some(PathBuf::from("/data/plugins/x/.scratch")));
+        let env = p.env_vars();
+        assert_eq!(
+            env.get(SCRATCH_ENV).map(String::as_str),
+            Some("/data/plugins/x/.scratch")
+        );
+    }
 
     fn mock_plugin_script() -> (tempfile::TempDir, PathBuf) {
         let dir = tempfile::TempDir::new().unwrap();

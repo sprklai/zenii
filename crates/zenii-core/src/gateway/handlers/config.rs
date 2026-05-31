@@ -458,6 +458,7 @@ mod tests {
             user_learner: base_state.user_learner.clone(),
             plugin_registry: base_state.plugin_registry.clone(),
             plugin_installer: base_state.plugin_installer.clone(),
+            runtime_manager: base_state.runtime_manager.clone(),
             #[cfg(feature = "channels")]
             channel_registry: base_state.channel_registry.clone(),
             #[cfg(feature = "channels")]

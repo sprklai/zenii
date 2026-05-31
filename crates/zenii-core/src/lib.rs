@@ -9,6 +9,7 @@ pub mod memory;
 pub mod notification;
 pub mod onboarding;
 pub mod plugins;
+pub mod runtimes;
 pub mod security;
 pub mod skills;
 pub mod tools;

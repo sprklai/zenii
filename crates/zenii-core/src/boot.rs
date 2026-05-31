@@ -73,6 +73,7 @@ pub struct Services {
     pub user_learner: Arc<UserLearner>,
     pub plugin_registry: Arc<PluginRegistry>,
     pub plugin_installer: Arc<PluginInstaller>,
+    pub runtime_manager: Arc<crate::runtimes::RuntimeManager>,
     #[cfg(feature = "channels")]
     pub channel_registry: Arc<ChannelRegistry>,
     #[cfg(feature = "channels")]
@@ -854,13 +855,37 @@ pub async fn init_services(config: AppConfig) -> Result<Services> {
         }
     }
 
-    let plugin_installer = Arc::new(PluginInstaller::new(
-        plugin_registry.clone(),
-        tools.clone(),
-        skill_registry.clone(),
-        config.plugin_execute_timeout_secs,
-        config.plugin_max_restart_attempts,
+    // PAR: Polyglot Agent Runtime — runtime detection/install for external agents.
+    let runtimes_dir = config
+        .runtimes_dir
+        .as_ref()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| data_dir.join("runtimes"));
+    let runtime_cache_dir = config
+        .runtime_cache_dir
+        .as_ref()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| data_dir.join("runtime-cache"));
+    let runtime_manager = Arc::new(crate::runtimes::RuntimeManager::from_config(
+        runtimes_dir,
+        runtime_cache_dir,
+        config.runtime_auto_install,
     ));
+    info!("Runtime manager initialized");
+
+    let plugin_installer = Arc::new(
+        PluginInstaller::new(
+            plugin_registry.clone(),
+            tools.clone(),
+            skill_registry.clone(),
+            config.plugin_execute_timeout_secs,
+            config.plugin_max_restart_attempts,
+        )
+        .with_runtime(
+            runtime_manager.clone(),
+            Arc::new(crate::plugins::installer::DefaultDependencyInstaller),
+        ),
+    );
 
     info!(
         "Plugin system initialized: {} plugins",
@@ -936,6 +961,7 @@ pub async fn init_services(config: AppConfig) -> Result<Services> {
         user_learner,
         plugin_registry,
         plugin_installer,
+        runtime_manager,
         #[cfg(feature = "channels")]
         channel_registry,
         #[cfg(feature = "channels")]
@@ -998,6 +1024,7 @@ impl From<Services> for AppState {
             user_learner: s.user_learner,
             plugin_registry: s.plugin_registry,
             plugin_installer: s.plugin_installer,
+            runtime_manager: s.runtime_manager,
             #[cfg(feature = "channels")]
             channel_registry: s.channel_registry,
             #[cfg(feature = "channels")]

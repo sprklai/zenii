@@ -1104,3 +1104,34 @@ sequenceDiagram
 - `GET /workflows/{id}/runs/{run_id}` -- get run details with per-step results
 
 **Key files**: `workflows/executor.rs`, `workflows/runtime.rs`, `workflows/templates.rs`, `workflows/definition.rs`, `workflows/mod.rs`, `gateway/handlers/workflows.rs`
+
+## Polyglot Agent Runtime Flow
+
+Installing a runner-based plugin tool (external GitHub Python/Node code) detects/installs the runtime on demand, installs dependencies into an isolated cache, and registers the tool — no fat sidecar.
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant Inst as PluginInstaller
+    participant Doc as Doctor / RuntimeManager
+    participant Dep as DependencyInstaller
+    participant TR as ToolRegistry
+
+    User->>Inst: install (manifest has runner=uvx, required_runtime)
+    Inst->>Doc: ensure(required_runtime)
+    alt runtime missing and auto-install off
+        Doc-->>Inst: Err (abort with install instructions)
+    else runtime present / installed
+        Doc-->>Inst: Ok
+        Inst->>Dep: prepare(runner, package, plugin_dir, cache_dir)
+        Note over Dep: uvx cache-prime / uv sync / npm install (isolated, shared cache)
+        Dep-->>Inst: Ok
+        Inst->>Doc: resolve_runner_path(runner)
+        Doc-->>Inst: app-managed runner path
+        Inst->>TR: register runner-based PluginProcess adapter
+    end
+```
+
+At call time the adapter lazily spawns the runner command (`uvx --from <pkg> <entry>`, etc.) with secrets and `ZENII_AGENT_SCRATCH` injected via env (never argv). The registered tool is then usable by the agent, delegation, workflows, CLI, and TUI. `refresh` re-resolves deps; `prune` GCs unreferenced cache entries.
+
+**Key files**: `runtimes/{mod,doctor}.rs`, `plugins/{manifest,process,installer}.rs`, `gateway/handlers/runtimes.rs`
