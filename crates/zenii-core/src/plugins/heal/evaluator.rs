@@ -146,7 +146,7 @@ fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<()> {
 /// `+++` header when it resolves inside `work`, else the tool's entry (`default_rel`).
 pub(crate) fn apply_code_patch(work: &Path, diff: &str, default_rel: &str) -> Result<()> {
     let target = diff_target_path(diff)
-        .map(|p| work.join(p))
+        .and_then(|p| safe_join(work, &p))
         .filter(|p| p.exists())
         .unwrap_or_else(|| work.join(default_rel));
     let original = std::fs::read_to_string(&target).map_err(|e| {
@@ -160,6 +160,20 @@ pub(crate) fn apply_code_patch(work: &Path, diff: &str, default_rel: &str) -> Re
         ZeniiError::Plugin(format!("heal evaluate: write {}: {e}", target.display()))
     })?;
     Ok(())
+}
+
+/// Join `rel` under `base`, rejecting absolute paths and any parent (`..`) component so an
+/// LLM-generated patch target can never escape the plugin directory.
+fn safe_join(base: &Path, rel: &str) -> Option<PathBuf> {
+    let rel = Path::new(rel);
+    if rel.is_absolute()
+        || rel
+            .components()
+            .any(|c| matches!(c, std::path::Component::ParentDir))
+    {
+        return None;
+    }
+    Some(base.join(rel))
 }
 
 /// Extract the target path from a unified diff's `+++` header (`b/` prefix stripped).
@@ -321,6 +335,15 @@ mod tests {
     #[test]
     fn diff_target_none_when_no_header() {
         assert_eq!(diff_target_path("no header here"), None);
+    }
+
+    #[test]
+    fn safe_join_rejects_traversal_and_absolute() {
+        let base = Path::new("/tmp/work");
+        assert_eq!(safe_join(base, "src/main.py"), Some(base.join("src/main.py")));
+        assert_eq!(safe_join(base, "../../etc/passwd"), None);
+        assert_eq!(safe_join(base, "/etc/passwd"), None);
+        assert_eq!(safe_join(base, "a/../../b"), None);
     }
 
     // --- patch flattening ---
