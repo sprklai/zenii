@@ -32,7 +32,12 @@ impl Doctor {
     /// Used by the plugin installer (PAR.3).
     pub async fn ensure(&self, required: &str) -> Result<()> {
         let constraint = RuntimeConstraint::parse(required)?;
-        let report = self.manager.detect(&constraint.name);
+        let mut report = self.manager.detect(&constraint.name);
+        // Bootstrap a missing runtime when auto-install is enabled; `install` is a no-op
+        // (returns the Missing report) when it is off, preserving the manual-abort path.
+        if !report.present && self.manager.auto_install() {
+            report = self.manager.install(&constraint.name).await?;
+        }
         if !report.present {
             return Err(ZeniiError::Runtime(format!(
                 "required runtime `{}` not available. {}",
@@ -137,6 +142,56 @@ mod tests {
         ];
         let names = aggregate_required(&specs);
         assert_eq!(names, vec!["python".to_string(), "node".to_string()]);
+    }
+
+    #[tokio::test]
+    async fn ensure_auto_installs_missing_runtime_when_enabled() {
+        struct FlipInstaller {
+            flag: Arc<AtomicBool>,
+        }
+        #[async_trait]
+        impl RuntimeInstaller for FlipInstaller {
+            async fn install(&self, _name: &str, dest: &Path) -> Result<PathBuf> {
+                self.flag.store(true, Ordering::SeqCst);
+                Ok(dest.join("uv"))
+            }
+        }
+
+        let dir = tempfile::TempDir::new().unwrap();
+        let installed = Arc::new(AtomicBool::new(false));
+        let mgr = RuntimeManager::new(
+            dir.path().join("runtimes"),
+            dir.path().join("cache"),
+            true, // auto-install enabled
+            Arc::new(ToggleProbe {
+                installed: installed.clone(),
+            }),
+            Arc::new(FlipInstaller {
+                flag: installed.clone(),
+            }),
+        );
+        let doc = Doctor::new(Arc::new(mgr));
+        // Runtime is missing initially; ensure() should auto-install and then succeed.
+        doc.ensure("uv").await.unwrap();
+        assert!(installed.load(Ordering::SeqCst));
+    }
+
+    #[tokio::test]
+    async fn ensure_aborts_when_missing_and_auto_install_off() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let installed = Arc::new(AtomicBool::new(false));
+        let mgr = RuntimeManager::new(
+            dir.path().join("runtimes"),
+            dir.path().join("cache"),
+            false, // auto-install disabled
+            Arc::new(ToggleProbe {
+                installed: installed.clone(),
+            }),
+            Arc::new(NoopInstaller),
+        );
+        let doc = Doctor::new(Arc::new(mgr));
+        assert!(doc.ensure("uv").await.is_err());
+        assert!(!installed.load(Ordering::SeqCst));
     }
 
     #[test]
