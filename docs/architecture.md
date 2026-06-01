@@ -2284,9 +2284,20 @@ Each runner-based tool keeps the host environment untouched via (1) **runtime-ve
 - **Process extension** — `PluginProcess` builds the runner command (`uvx --from <pkg> <entry>`, `npx -y <pkg> <entry>`, `uv run <entry>`, `node <entry>`), prefers the app-managed runner path, and injects **secrets + `ZENII_AGENT_SCRATCH` via env (never argv)**.
 - **Installer extension** — installing a runner-based tool runs the doctor (`ensure` → abort if the runtime is missing and auto-install is off), prepares deps into the isolated env via an injectable `DependencyInstaller` (`uvx` cache-prime / `uv sync` / `npm install`), then registers a runner-based adapter. `refresh` re-resolves; `prune` GCs unreferenced cache entries.
 
+### Self-healing (GEPA + Hermes)
+When a runner-based tool that declares `tests` fails, the adapter triggers a bounded repair loop (`plugins/heal/`). The loop is **GEPA-inspired** — reflect on the execution trace, mutate a candidate, keep a Pareto frontier of candidates passing different test subsets — and **Hermes-inspired** — recall a prior fix for the same error signature before reflecting, and distill a successful fix into a skill proposal. It is decoupled from the toolchain via three seams, each with a live impl:
+
+| Seam | Live impl | Behavior |
+|------|-----------|----------|
+| `Reflector` | `AgentReflector` | Prompts the agent (via a mockable `ReflectionModel`) with the trace + prior-candidate side-info; parses a unified diff → `Patch::Code`. |
+| `Evaluator` | `RunnerEvaluator` | Copies the plugin to a temp scratch, applies the candidate (code via `diffy`, deps via uv `--with`), runs each `tests` case through the runner, returns the passing case-ids. |
+| `FixMemory` | `MemoryFixStore` | Episodic recall keyed `parheal:{signature}` over the memory store; distills successful fixes into `skill_proposals`. |
+
+Classification (`ModuleNotFoundError` → dependency repair; traceback → reflect; timeout → transient retry; missing credentials → user-actionable abort) short-circuits cheap cases. On a fix, the adapter auto-applies the validated patch to the installed plugin (deps→`--with`, code→patch entry) and retries once; bounded by `heal_max_attempts` + `heal_wall_clock_secs`. Config: `plugin_auto_repair_enabled`, `heal_max_attempts`, `heal_token_budget`, `heal_wall_clock_secs`. The trigger lives in `PluginToolAdapter::execute` — the single `Tool` entry point — so repair reaches the main agent, delegation sub-agents, and workflow steps alike.
+
 Because every external agent registers as a `Tool` in `ToolRegistry`, it is automatically available to the main agent, delegation sub-agents, workflows, CLI, TUI, and `GET /tools` — no per-consumer wiring. MCP-shaped GitHub code uses the MCP client path (below); arbitrary code uses the plugin JSON-RPC path.
 
-> Files: `crates/zenii-core/src/runtimes/{mod,doctor}.rs`, `plugins/{manifest,process,installer}.rs`, `gateway/handlers/runtimes.rs`.
+> Files: `crates/zenii-core/src/runtimes/{mod,doctor}.rs`, `plugins/{manifest,process,installer,adapter}.rs`, `plugins/heal/{mod,classify,frontier,repair,memory_store,evaluator,reflector,trigger}.rs`, `gateway/handlers/runtimes.rs`.
 
 ## MCP Integration
 

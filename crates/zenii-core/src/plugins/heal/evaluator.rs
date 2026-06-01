@@ -144,7 +144,7 @@ fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<()> {
 
 /// Apply a unified-diff code patch within `work`. The target file is taken from the diff's
 /// `+++` header when it resolves inside `work`, else the tool's entry (`default_rel`).
-fn apply_code_patch(work: &Path, diff: &str, default_rel: &str) -> Result<()> {
+pub(crate) fn apply_code_patch(work: &Path, diff: &str, default_rel: &str) -> Result<()> {
     let target = diff_target_path(diff)
         .map(|p| work.join(p))
         .filter(|p| p.exists())

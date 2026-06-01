@@ -873,19 +873,40 @@ pub async fn init_services(config: AppConfig) -> Result<Services> {
     ));
     info!("Runtime manager initialized");
 
-    let plugin_installer = Arc::new(
-        PluginInstaller::new(
-            plugin_registry.clone(),
-            tools.clone(),
-            skill_registry.clone(),
-            config.plugin_execute_timeout_secs,
-            config.plugin_max_restart_attempts,
-        )
-        .with_runtime(
-            runtime_manager.clone(),
-            Arc::new(crate::plugins::installer::DefaultDependencyInstaller),
-        ),
+    #[allow(unused_mut)]
+    let mut plugin_installer_builder = PluginInstaller::new(
+        plugin_registry.clone(),
+        tools.clone(),
+        skill_registry.clone(),
+        config.plugin_execute_timeout_secs,
+        config.plugin_max_restart_attempts,
+    )
+    .with_runtime(
+        runtime_manager.clone(),
+        Arc::new(crate::plugins::installer::DefaultDependencyInstaller),
     );
+
+    // PAR.7d: wire self-heal for runner-based tools when an AI agent is available.
+    #[cfg(feature = "ai")]
+    if let Some(agent) = &agent {
+        let model: Arc<dyn crate::plugins::heal::reflector::ReflectionModel> = agent.clone();
+        let reflector: Arc<dyn crate::plugins::heal::Reflector> =
+            Arc::new(crate::plugins::heal::reflector::AgentReflector::new(model));
+        let skill_sink = Arc::new(crate::tools::skill_proposal::SkillProposalTool::new(
+            pool.clone(),
+            self_evolution_enabled.clone(),
+        ));
+        plugin_installer_builder = plugin_installer_builder.with_self_heal(
+            reflector,
+            memory.clone(),
+            skill_sink,
+            config.plugin_auto_repair_enabled,
+            config.heal_max_attempts,
+            config.heal_wall_clock_secs,
+        );
+    }
+
+    let plugin_installer = Arc::new(plugin_installer_builder);
 
     info!(
         "Plugin system initialized: {} plugins",

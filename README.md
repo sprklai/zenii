@@ -111,6 +111,7 @@ One Rust library crate (`zenii-core`) holds all business logic. Five thin binary
 | **Channels** | Telegram · Discord · Slack — inbound routing, unified inbox, threaded conversations (feature-gated) |
 | **MCP** | Server: expose all tools to Claude Code, Cursor, Gemini CLI, Windsurf · Client: consume external MCP servers |
 | **Polyglot agents** | Run external GitHub code (Python via `uvx`, Node via `npx`) as tools — deps installed on demand into an isolated cache (no bundled sidecar), runtime auto-detected/installed via `zenii runtime` |
+| **Self-healing tools** | Runner-based agents with declared `tests` auto-repair on failure: a bounded GEPA+Hermes loop classifies the trace, reflects a fix (dep or code patch), validates it in an isolated copy, applies it, and retries |
 | **Security** | OS keyring · AES-256-GCM encryption · surface-based permission model (CLI/desktop/TUI/MCP/API) |
 
 ---

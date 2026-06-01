@@ -1134,4 +1134,37 @@ sequenceDiagram
 
 At call time the adapter lazily spawns the runner command (`uvx --from <pkg> <entry>`, etc.) with secrets and `ZENII_AGENT_SCRATCH` injected via env (never argv). The registered tool is then usable by the agent, delegation, workflows, CLI, and TUI. `refresh` re-resolves deps; `prune` GCs unreferenced cache entries.
 
-**Key files**: `runtimes/{mod,doctor}.rs`, `plugins/{manifest,process,installer}.rs`, `gateway/handlers/runtimes.rs`
+### Self-heal repair loop
+
+When a runner-based tool with declared `tests` fails, `PluginToolAdapter::execute` triggers a bounded GEPA+Hermes loop before surfacing the error.
+
+```mermaid
+sequenceDiagram
+    participant Caller as Agent / delegation / workflow
+    participant Ad as PluginToolAdapter
+    participant H as Healer
+    participant Ev as RunnerEvaluator
+    participant Rf as AgentReflector
+    participant Mem as MemoryFixStore
+
+    Caller->>Ad: execute(args)  [Tool interface]
+    Ad->>Ad: run once → failure (stderr/exit captured)
+    Ad->>H: repair(trace)  [auto_repair + tool has tests]
+    H->>Mem: recall(signature)
+    alt known fix
+        Mem-->>H: prior patch → Ev.evaluate → pass → Fixed
+    else classify + GEPA loop (≤ max_attempts, wall-clock bound)
+        H->>Rf: reflect(trace, prior)  (non-dependency)
+        Rf-->>H: Patch::Code(diff)
+        H->>Ev: evaluate(patch) in isolated scratch copy
+        Ev-->>H: passing case-ids → Pareto frontier
+        H->>Mem: record + distill_skill (on full pass)
+    end
+    H-->>Ad: HealOutcome{Fixed, patch}
+    Ad->>Ad: apply patch to installed plugin (deps→--with / code→entry), respawn
+    Ad->>Caller: retry once → success
+```
+
+Classification routes cheap cases (dependency → add `--with`; transient → retry; missing credentials → abort with instructions). Candidates always run in an isolated copy, so a bad patch never corrupts the registered plugin. Bounded by `heal_max_attempts` + `heal_wall_clock_secs`; gated by `plugin_auto_repair_enabled`.
+
+**Key files**: `runtimes/{mod,doctor}.rs`, `plugins/{manifest,process,installer,adapter}.rs`, `plugins/heal/{mod,classify,frontier,repair,memory_store,evaluator,reflector,trigger}.rs`, `gateway/handlers/runtimes.rs`

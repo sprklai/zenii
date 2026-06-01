@@ -4,14 +4,22 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 use tracing::info;
 
-use super::adapter::PluginToolAdapter;
+use std::time::Duration;
+
+use super::adapter::{PluginToolAdapter, RepairContext};
+use super::heal::evaluator::RunnerEvaluator;
+use super::heal::memory_store::MemoryFixStore;
+use super::heal::trigger::Healer;
+use super::heal::{FixMemory, HealConfig, Reflector};
 use super::manifest::{PluginManifest, PluginToolDef};
 use super::process::PluginProcess;
 use super::registry::{InstalledPlugin, PluginRegistry, PluginSource};
+use crate::memory::traits::Memory;
 use crate::runtimes::RuntimeManager;
 use crate::runtimes::doctor::Doctor;
 use crate::skills::SkillRegistry;
 use crate::tools::ToolRegistry;
+use crate::tools::skill_proposal::SkillProposalTool;
 use crate::{Result, ZeniiError};
 
 /// Prepares dependencies for a runner-based plugin tool into an isolated env / shared cache.
@@ -101,6 +109,13 @@ pub struct PluginInstaller {
     runtime_manager: Option<Arc<RuntimeManager>>,
     /// PAR: dependency preparation for runner-based tools.
     dep_installer: Arc<dyn DependencyInstaller>,
+    /// PAR.7d: self-heal wiring (absent → no auto-repair).
+    reflector: Option<Arc<dyn Reflector>>,
+    heal_memory: Option<Arc<dyn Memory>>,
+    heal_skill_sink: Option<Arc<SkillProposalTool>>,
+    auto_repair_enabled: bool,
+    heal_max_attempts: u32,
+    heal_wall_clock_secs: u64,
 }
 
 impl PluginInstaller {
@@ -119,6 +134,12 @@ impl PluginInstaller {
             max_restart_attempts,
             runtime_manager: None,
             dep_installer: Arc::new(DefaultDependencyInstaller),
+            reflector: None,
+            heal_memory: None,
+            heal_skill_sink: None,
+            auto_repair_enabled: false,
+            heal_max_attempts: 3,
+            heal_wall_clock_secs: 120,
         }
     }
 
@@ -131,6 +152,73 @@ impl PluginInstaller {
         self.runtime_manager = Some(runtime_manager);
         self.dep_installer = dep_installer;
         self
+    }
+
+    /// Wire self-heal (PAR.7d): runner tools with declared `tests` auto-repair on failure.
+    #[allow(clippy::too_many_arguments)]
+    pub fn with_self_heal(
+        mut self,
+        reflector: Arc<dyn Reflector>,
+        memory: Arc<dyn Memory>,
+        skill_sink: Arc<SkillProposalTool>,
+        auto_repair_enabled: bool,
+        max_attempts: u32,
+        wall_clock_secs: u64,
+    ) -> Self {
+        self.reflector = Some(reflector);
+        self.heal_memory = Some(memory);
+        self.heal_skill_sink = Some(skill_sink);
+        self.auto_repair_enabled = auto_repair_enabled;
+        self.heal_max_attempts = max_attempts;
+        self.heal_wall_clock_secs = wall_clock_secs;
+        self
+    }
+
+    /// Build a self-heal [`RepairContext`] for a runner tool, when auto-repair is enabled,
+    /// the tool declares test cases, and all heal dependencies are wired.
+    fn build_repair_context(
+        &self,
+        plugin: &InstalledPlugin,
+        tool_def: &PluginToolDef,
+    ) -> Option<RepairContext> {
+        if !self.auto_repair_enabled || tool_def.tests.is_empty() {
+            return None;
+        }
+        let (reflector, memory, skill_sink, runtime_manager) = match (
+            &self.reflector,
+            &self.heal_memory,
+            &self.heal_skill_sink,
+            &self.runtime_manager,
+        ) {
+            (Some(r), Some(m), Some(s), Some(rt)) => (r.clone(), m.clone(), s.clone(), rt.clone()),
+            _ => return None,
+        };
+        let evaluator = Arc::new(RunnerEvaluator::new(
+            plugin.install_path.clone(),
+            tool_def.clone(),
+            runtime_manager,
+            self.resolve_cache_dir(plugin),
+            self.execute_timeout_secs,
+            0,
+        ));
+        let memfix: Arc<Mutex<dyn FixMemory>> =
+            Arc::new(Mutex::new(MemoryFixStore::new(memory, skill_sink)));
+        let healer = Arc::new(Healer::new(
+            reflector,
+            evaluator,
+            memfix,
+            tool_def.tests.len(),
+            HealConfig {
+                max_attempts: self.heal_max_attempts,
+            },
+            Duration::from_secs(self.heal_wall_clock_secs),
+        ));
+        Some(RepairContext {
+            healer,
+            plugin_dir: plugin.install_path.clone(),
+            entry: tool_def.binary.clone(),
+            has_tests: true,
+        })
     }
 
     /// Re-resolve dependencies for an installed plugin's runner-based tools.
@@ -536,6 +624,11 @@ impl PluginInstaller {
             serde_json::json!({}),
             Arc::new(Mutex::new(process)),
         );
+        // PAR.7d: attach the self-heal trigger when configured + the tool has test cases.
+        let adapter = match self.build_repair_context(plugin, tool_def) {
+            Some(ctx) => adapter.with_repair(ctx),
+            None => adapter,
+        };
         self.tool_registry
             .register(Arc::new(adapter))
             .unwrap_or_else(|e| {
@@ -825,6 +918,103 @@ package = "git+https://github.com/u/{name}@v1"
         assert!(
             tools.list().iter().any(|t| t.name == "rt-visible-tool"),
             "runner tool listed (GET /tools discovery)"
+        );
+    }
+
+    // --- PAR.7d: self-heal injection at registration ---
+
+    use crate::memory::in_memory_store::InMemoryStore;
+    use crate::plugins::heal::{Candidate, FailureTrace, Patch};
+    use crate::plugins::manifest::{PluginPermissions, PluginToolTest};
+    use std::sync::atomic::AtomicBool;
+
+    struct NoReflector;
+    #[async_trait::async_trait]
+    impl Reflector for NoReflector {
+        async fn reflect(&self, _t: &FailureTrace, _p: &[Candidate]) -> Result<Patch> {
+            Ok(Patch::Retry)
+        }
+    }
+
+    fn installed_plugin(install_path: PathBuf) -> InstalledPlugin {
+        let manifest = PluginManifest::parse(
+            "[plugin]\nname = \"p\"\nversion = \"1.0.0\"\ndescription = \"d\"\n",
+        )
+        .unwrap();
+        InstalledPlugin {
+            manifest,
+            install_path,
+            enabled: true,
+            installed_at: "now".into(),
+            source: PluginSource::Bundled,
+        }
+    }
+
+    fn runner_tool(tests: Vec<PluginToolTest>) -> PluginToolDef {
+        PluginToolDef {
+            name: "a".into(),
+            description: "d".into(),
+            binary: "main.py".into(),
+            permissions: PluginPermissions::default(),
+            runner: Some("uv-run".into()),
+            package: None,
+            required_runtime: None,
+            tests,
+        }
+    }
+
+    fn installer_with_self_heal(enabled: bool) -> (TempDir, PluginInstaller) {
+        let (plugins_dir, _s, registry, tools, skills) = setup_test_env();
+        let pool = crate::db::init_pool(&plugins_dir.path().join("t.db")).unwrap();
+        let skill = Arc::new(SkillProposalTool::new(pool, Arc::new(AtomicBool::new(true))));
+        let memory: Arc<dyn Memory> = Arc::new(InMemoryStore::new());
+        let rt = mock_runtime(true, false, plugins_dir.path());
+        let installer = PluginInstaller::new(registry, tools, skills, 60, 0)
+            .with_runtime(rt, Arc::new(DefaultDependencyInstaller))
+            .with_self_heal(Arc::new(NoReflector), memory, skill, enabled, 3, 120);
+        (plugins_dir, installer)
+    }
+
+    fn one_test_case() -> Vec<PluginToolTest> {
+        vec![PluginToolTest {
+            input: toml::from_str("x = 1").unwrap(),
+            expect: None,
+        }]
+    }
+
+    #[test]
+    fn repair_context_built_when_configured_and_tests_present() {
+        let (_dir, installer) = installer_with_self_heal(true);
+        let pdir = TempDir::new().unwrap();
+        let plugin = installed_plugin(pdir.path().to_path_buf());
+        assert!(
+            installer
+                .build_repair_context(&plugin, &runner_tool(one_test_case()))
+                .is_some()
+        );
+    }
+
+    #[test]
+    fn repair_context_none_without_tests() {
+        let (_dir, installer) = installer_with_self_heal(true);
+        let pdir = TempDir::new().unwrap();
+        let plugin = installed_plugin(pdir.path().to_path_buf());
+        assert!(
+            installer
+                .build_repair_context(&plugin, &runner_tool(vec![]))
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn repair_context_none_when_auto_repair_disabled() {
+        let (_dir, installer) = installer_with_self_heal(false);
+        let pdir = TempDir::new().unwrap();
+        let plugin = installed_plugin(pdir.path().to_path_buf());
+        assert!(
+            installer
+                .build_repair_context(&plugin, &runner_tool(one_test_case()))
+                .is_none()
         );
     }
 

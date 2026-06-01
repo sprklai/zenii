@@ -15,6 +15,7 @@ pub mod frontier;
 pub mod memory_store;
 pub mod reflector;
 pub mod repair;
+pub mod trigger;
 
 use std::collections::BTreeSet;
 

@@ -1,4 +1,5 @@
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
@@ -69,10 +70,17 @@ pub struct PluginProcess {
     scratch_dir: Option<PathBuf>,
     /// Ephemeral extra dependencies injected via `uv --with` (self-heal dependency fixes).
     extra_deps: Vec<String>,
+    /// Captured tail of the child's stderr (for self-heal failure classification).
+    stderr_buf: Arc<tokio::sync::Mutex<String>>,
+    /// Exit code observed the last time the child was found terminated.
+    last_exit_code: Option<i32>,
 }
 
 /// Env var name for the per-agent scratch directory passed to runner-based plugins.
 pub const SCRATCH_ENV: &str = "ZENII_AGENT_SCRATCH";
+
+/// Max bytes of stderr retained for failure classification.
+const STDERR_CAP: usize = 64 * 1024;
 
 impl PluginProcess {
     pub fn new(
@@ -97,6 +105,8 @@ impl PluginProcess {
             secrets: std::collections::HashMap::new(),
             scratch_dir: None,
             extra_deps: Vec::new(),
+            stderr_buf: Arc::new(tokio::sync::Mutex::new(String::new())),
+            last_exit_code: None,
         }
     }
 
@@ -130,6 +140,26 @@ impl PluginProcess {
     pub fn with_extra_deps(mut self, extra_deps: Vec<String>) -> Self {
         self.extra_deps = extra_deps;
         self
+    }
+
+    /// Add extra dependencies at runtime (self-heal dependency fixes); deduped. Takes effect
+    /// on the next spawn.
+    pub fn add_extra_deps(&mut self, deps: Vec<String>) {
+        for d in deps {
+            if !self.extra_deps.contains(&d) {
+                self.extra_deps.push(d);
+            }
+        }
+    }
+
+    /// The captured tail of the child's stderr (for self-heal classification).
+    pub async fn last_stderr(&self) -> String {
+        self.stderr_buf.lock().await.clone()
+    }
+
+    /// The exit code observed the last time the child was found terminated, if any.
+    pub fn last_exit_code(&self) -> Option<i32> {
+        self.last_exit_code
     }
 
     /// Build the `(program, args)` used to spawn this plugin. Secrets are NOT included here
@@ -212,6 +242,10 @@ impl PluginProcess {
             args.join(" ")
         );
 
+        // Reset captured stderr for this run.
+        self.stderr_buf.lock().await.clear();
+        self.last_exit_code = None;
+
         let mut command = Command::new(&program);
         command.args(&args);
         for (key, value) in self.env_vars() {
@@ -220,7 +254,7 @@ impl PluginProcess {
         let mut child = command
             .stdin(std::process::Stdio::piped())
             .stdout(std::process::Stdio::piped())
-            .stderr(std::process::Stdio::null())
+            .stderr(std::process::Stdio::piped())
             .kill_on_drop(true)
             .spawn()
             .map_err(|e| {
@@ -234,6 +268,29 @@ impl PluginProcess {
             ZeniiError::Plugin(format!("plugin '{}' stdout not available", self.name))
         })?;
 
+        // Drain stderr into a capped buffer so self-heal can classify failures.
+        if let Some(stderr) = child.stderr.take() {
+            let buf = self.stderr_buf.clone();
+            tokio::spawn(async move {
+                let mut reader = BufReader::new(stderr);
+                let mut line = String::new();
+                loop {
+                    line.clear();
+                    match reader.read_line(&mut line).await {
+                        Ok(0) | Err(_) => break,
+                        Ok(_) => {
+                            let mut g = buf.lock().await;
+                            g.push_str(&line);
+                            if g.len() > STDERR_CAP {
+                                let cut = g.len() - STDERR_CAP;
+                                *g = g.split_off(cut);
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
         self.child = Some(child);
         self.stdin = Some(stdin);
         self.stdout_reader = Some(BufReader::new(stdout));
@@ -243,10 +300,17 @@ impl PluginProcess {
         Ok(())
     }
 
-    /// Check if the process is running.
+    /// Check if the process is running. Captures the exit code when the child has terminated.
     pub fn is_running(&mut self) -> bool {
         if let Some(ref mut child) = self.child {
-            matches!(child.try_wait(), Ok(None))
+            match child.try_wait() {
+                Ok(None) => true,
+                Ok(Some(status)) => {
+                    self.last_exit_code = status.code();
+                    false
+                }
+                Err(_) => false,
+            }
         } else {
             false
         }
@@ -685,6 +749,53 @@ done
         let result = process.execute(serde_json::json!({})).await;
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("timed out"));
+    }
+
+    // PAR.7d — stderr is captured for self-heal classification
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn stderr_is_captured_for_classification() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let script_path = dir.path().join("err-plugin.sh");
+        std::fs::write(
+            &script_path,
+            "#!/bin/bash\necho 'ModuleNotFoundError: No module named foo' >&2\nexit 1\n",
+        )
+        .unwrap();
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&script_path, std::fs::Permissions::from_mode(0o755)).unwrap();
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+
+        let mut process = PluginProcess::new("err", script_path, 5, 0);
+        process.spawn().await.unwrap();
+
+        // Poll until the drain task records stderr (process exits immediately).
+        let mut captured = String::new();
+        for _ in 0..50 {
+            captured = process.last_stderr().await;
+            if !captured.is_empty() {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        }
+        assert!(
+            captured.contains("ModuleNotFoundError"),
+            "expected stderr captured, got: {captured:?}"
+        );
+    }
+
+    #[test]
+    fn add_extra_deps_dedups() {
+        let mut p = proc_with("main.py", Some("uv-run"), None, None);
+        p.add_extra_deps(vec!["rich".to_string(), "rich".to_string()]);
+        p.add_extra_deps(vec!["httpx".to_string()]);
+        let (_program, args) = p.command_parts();
+        let withs: Vec<&String> = args.iter().filter(|a| a.as_str() != "--with").collect();
+        // entry + rich + httpx, rich only once
+        assert_eq!(args.iter().filter(|a| a.as_str() == "rich").count(), 1);
+        assert!(withs.iter().any(|a| a.as_str() == "httpx"));
     }
 
     // 9.0.10 — Process crash recovery
