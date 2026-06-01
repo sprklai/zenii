@@ -10,6 +10,7 @@
 //! is connected in PAR.6.
 
 pub mod classify;
+pub mod evaluator;
 pub mod frontier;
 pub mod memory_store;
 pub mod repair;

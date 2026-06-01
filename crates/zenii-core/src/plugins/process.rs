@@ -67,6 +67,8 @@ pub struct PluginProcess {
     secrets: std::collections::HashMap<String, String>,
     /// Per-agent scratch dir, exported to the child as `ZENII_AGENT_SCRATCH`.
     scratch_dir: Option<PathBuf>,
+    /// Ephemeral extra dependencies injected via `uv --with` (self-heal dependency fixes).
+    extra_deps: Vec<String>,
 }
 
 /// Env var name for the per-agent scratch directory passed to runner-based plugins.
@@ -94,6 +96,7 @@ impl PluginProcess {
             runner_path: None,
             secrets: std::collections::HashMap::new(),
             scratch_dir: None,
+            extra_deps: Vec::new(),
         }
     }
 
@@ -123,6 +126,12 @@ impl PluginProcess {
         self
     }
 
+    /// Inject ephemeral extra dependencies (uv `--with`) for uv-based runners.
+    pub fn with_extra_deps(mut self, extra_deps: Vec<String>) -> Self {
+        self.extra_deps = extra_deps;
+        self
+    }
+
     /// Build the `(program, args)` used to spawn this plugin. Secrets are NOT included here
     /// (they go via env — see [`Self::env_vars`]).
     pub fn command_parts(&self) -> (PathBuf, Vec<String>) {
@@ -133,22 +142,37 @@ impl PluginProcess {
                 .clone()
                 .unwrap_or_else(|| PathBuf::from(default))
         };
-        // For package-based runners, prepend the package spec when present.
-        let with_pkg = |prefix: Vec<String>| -> Vec<String> {
-            let mut args = prefix;
+        // For package-based runners, append the package spec (when present) then the entry.
+        let with_pkg = |mut args: Vec<String>| -> Vec<String> {
             if let Some(pkg) = &self.package {
                 args.push(pkg.clone());
             }
             args.push(entry.clone());
             args
         };
+        // `--with <dep>` pairs for uv-based runners (ephemeral isolated dependency fixes).
+        let with_deps = || -> Vec<String> {
+            self.extra_deps
+                .iter()
+                .flat_map(|d| ["--with".to_string(), d.clone()])
+                .collect()
+        };
 
         match self.runner.as_deref() {
             None => (self.binary_path.clone(), Vec::new()),
-            Some("uvx") => (program("uvx"), with_pkg(vec!["--from".to_string()])),
+            Some("uvx") => {
+                let mut args = with_deps();
+                args.push("--from".to_string());
+                (program("uvx"), with_pkg(args))
+            }
             Some("npx") => (program("npx"), with_pkg(vec!["-y".to_string()])),
             Some("bunx") => (program("bunx"), with_pkg(Vec::new())),
-            Some("uv-run") => (program("uv"), vec!["run".to_string(), entry]),
+            Some("uv-run") => {
+                let mut args = vec!["run".to_string()];
+                args.extend(with_deps());
+                args.push(entry);
+                (program("uv"), args)
+            }
             Some("node") => (program("node"), vec![entry]),
             // Unknown runner is rejected at manifest validation; fall back to bare invocation.
             Some(other) => (program(other), vec![entry]),
@@ -476,6 +500,42 @@ mod tests {
         let (program, args) = p.command_parts();
         assert_eq!(program, PathBuf::from("node"));
         assert_eq!(args, vec!["server.js".to_string()]);
+    }
+
+    #[test]
+    fn command_uv_run_injects_extra_deps() {
+        let p = proc_with("main.py", Some("uv-run"), None, None)
+            .with_extra_deps(vec!["rich".to_string(), "httpx".to_string()]);
+        let (program, args) = p.command_parts();
+        assert_eq!(program, PathBuf::from("uv"));
+        assert_eq!(
+            args,
+            vec![
+                "run".to_string(),
+                "--with".to_string(),
+                "rich".to_string(),
+                "--with".to_string(),
+                "httpx".to_string(),
+                "main.py".to_string()
+            ]
+        );
+    }
+
+    #[test]
+    fn command_uvx_injects_extra_deps_before_from() {
+        let p = proc_with("main.py", Some("uvx"), Some("pkg@1"), None)
+            .with_extra_deps(vec!["rich".to_string()]);
+        let (_program, args) = p.command_parts();
+        assert_eq!(
+            args,
+            vec![
+                "--with".to_string(),
+                "rich".to_string(),
+                "--from".to_string(),
+                "pkg@1".to_string(),
+                "main.py".to_string()
+            ]
+        );
     }
 
     #[test]
