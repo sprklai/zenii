@@ -110,32 +110,24 @@ pub async fn embeddings_download(
 }
 
 /// POST /embeddings/reindex — re-embed all existing memories
+///
+/// Not yet implemented. Returns 501 rather than faking success so callers are
+/// not misled. Real re-indexing (re-embedding stored memories into the vector
+/// index) is tracked as a future feature.
 #[cfg_attr(feature = "api-docs", utoipa::path(
     post, path = "/embeddings/reindex", tag = "Embeddings",
     responses(
-        (status = 200, description = "Reindex triggered", body = Object),
-        (status = 400, description = "No provider configured", body = Object),
+        (status = 501, description = "Re-indexing not yet implemented", body = Object),
     )
 ))]
-pub async fn embeddings_reindex(
-    State(state): State<Arc<AppState>>,
-) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
-    let cfg = state.config.load();
-    if cfg.embedding_provider == "none" {
-        return Err((
-            StatusCode::BAD_REQUEST,
-            Json(serde_json::json!({
-                "error": "No embedding provider configured",
-                "code": "ZENII_EMBEDDING_NO_PROVIDER"
-            })),
-        ));
-    }
-
-    // For now, return success — full re-indexing will be triggered in background
-    Ok(Json(serde_json::json!({
-        "status": "reindex_triggered",
-        "provider": cfg.embedding_provider
-    })))
+pub async fn embeddings_reindex() -> (StatusCode, Json<serde_json::Value>) {
+    (
+        StatusCode::NOT_IMPLEMENTED,
+        Json(serde_json::json!({
+            "error": "Re-indexing is not yet implemented",
+            "code": "ZENII_NOT_IMPLEMENTED"
+        })),
+    )
 }
 
 /// POST /embeddings/embed — embed a text string (for testing/debugging)
@@ -259,7 +251,7 @@ mod tests {
         assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
     }
 
-    // 18.19 — POST /embeddings/reindex returns error when no provider
+    // 18.19 — POST /embeddings/reindex is unimplemented: honest 501, never fake success
     #[tokio::test]
     async fn embeddings_reindex() {
         let (_dir, state) = test_state().await;
@@ -272,7 +264,9 @@ mod tests {
             .unwrap();
 
         let resp = app.oneshot(req).await.unwrap();
-        // Default config has embedding_provider = "none"
-        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+        assert_eq!(resp.status(), StatusCode::NOT_IMPLEMENTED);
+        let body = axum::body::to_bytes(resp.into_body(), 4096).await.unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(json["code"], "ZENII_NOT_IMPLEMENTED");
     }
 }
