@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use tokio::sync::Mutex;
@@ -33,6 +33,16 @@ pub trait DependencyInstaller: Send + Sync {
         plugin_dir: &Path,
         cache_dir: &Path,
     ) -> Result<()>;
+}
+
+/// Resolve a runner tool's entry. File-based runners (`uv-run`/`node`) take a local script and
+/// must resolve it against the install dir (the child is not spawned with that cwd); package
+/// runners (`uvx`/`npx`/`bunx`) take a package-provided command name and use it as-is.
+pub(crate) fn resolve_runner_entry(runner: &str, install_path: &Path, binary: &str) -> PathBuf {
+    match runner {
+        "uv-run" | "node" => install_path.join(binary),
+        _ => PathBuf::from(binary),
+    }
 }
 
 /// Map a runner name to its program (e.g. `uv-run` runs via the `uv` binary).
@@ -611,7 +621,7 @@ impl PluginInstaller {
             .and_then(|m| m.resolve_runner_path(runner_program_name(runner)));
         let process = PluginProcess::new(
             &tool_def.name,
-            std::path::PathBuf::from(&tool_def.binary),
+            resolve_runner_entry(runner, &plugin.install_path, &tool_def.binary),
             self.execute_timeout_secs,
             self.max_restart_attempts,
         )
@@ -1016,6 +1026,28 @@ package = "git+https://github.com/u/{name}@v1"
                 .build_repair_context(&plugin, &runner_tool(one_test_case()))
                 .is_none()
         );
+    }
+
+    // PAR.7d follow-up — runner entry resolution.
+    #[test]
+    fn runner_entry_file_based_resolves_against_install_dir() {
+        let base = Path::new("/data/plugins/x");
+        assert_eq!(
+            resolve_runner_entry("uv-run", base, "main.py"),
+            PathBuf::from("/data/plugins/x/main.py")
+        );
+        assert_eq!(
+            resolve_runner_entry("node", base, "server.js"),
+            PathBuf::from("/data/plugins/x/server.js")
+        );
+    }
+
+    #[test]
+    fn runner_entry_package_runner_stays_bare() {
+        let base = Path::new("/data/plugins/x");
+        assert_eq!(resolve_runner_entry("uvx", base, "tool-cmd"), PathBuf::from("tool-cmd"));
+        assert_eq!(resolve_runner_entry("npx", base, "cli"), PathBuf::from("cli"));
+        assert_eq!(resolve_runner_entry("bunx", base, "cli"), PathBuf::from("cli"));
     }
 
     // 9.0.17 — Install from local path
