@@ -85,22 +85,38 @@ impl DependencyInstaller for DefaultDependencyInstaller {
             }
             "uv-run" => {
                 // Sync the project's deps into an isolated env if it declares any.
-                let _ = Command::new("uv")
+                let status = Command::new("uv")
                     .env("UV_CACHE_DIR", cache_dir)
                     .current_dir(plugin_dir)
                     .arg("sync")
                     .status()
-                    .await;
+                    .await
+                    .map_err(|e| ZeniiError::Plugin(format!("uv sync failed to start: {e}")))?;
+                if !status.success() {
+                    return Err(ZeniiError::Plugin(format!(
+                        "uv sync failed for '{}' (exit {:?})",
+                        plugin_dir.display(),
+                        status.code()
+                    )));
+                }
             }
             "npx" | "bunx" | "node" => {
                 if !plugin_dir.join("package.json").exists() {
                     return Ok(());
                 }
-                let _ = Command::new("npm")
+                let status = Command::new("npm")
                     .current_dir(plugin_dir)
                     .arg("install")
                     .status()
-                    .await;
+                    .await
+                    .map_err(|e| ZeniiError::Plugin(format!("npm install failed to start: {e}")))?;
+                if !status.success() {
+                    return Err(ZeniiError::Plugin(format!(
+                        "npm install failed for '{}' (exit {:?})",
+                        plugin_dir.display(),
+                        status.code()
+                    )));
+                }
             }
             _ => {}
         }
