@@ -890,8 +890,13 @@ pub async fn init_services(config: AppConfig) -> Result<Services> {
     #[cfg(feature = "ai")]
     if let Some(agent) = &agent {
         let model: Arc<dyn crate::plugins::heal::reflector::ReflectionModel> = agent.clone();
-        let reflector: Arc<dyn crate::plugins::heal::Reflector> =
-            Arc::new(crate::plugins::heal::reflector::AgentReflector::new(model));
+        let mut agent_reflector = crate::plugins::heal::reflector::AgentReflector::new(model);
+        // `heal_token_budget` caps the prompt trace; 0 keeps the built-in default (unbounded).
+        if config.heal_token_budget > 0 {
+            agent_reflector =
+                agent_reflector.with_trace_char_limit(config.heal_token_budget as usize);
+        }
+        let reflector: Arc<dyn crate::plugins::heal::Reflector> = Arc::new(agent_reflector);
         let skill_sink = Arc::new(crate::tools::skill_proposal::SkillProposalTool::new(
             pool.clone(),
             self_evolution_enabled.clone(),
