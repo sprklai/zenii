@@ -199,6 +199,16 @@ impl PluginProcess {
             Some("bunx") => (program("bunx"), with_pkg(Vec::new())),
             Some("uv-run") => {
                 let mut args = vec!["run".to_string()];
+                // Pin the project to the entry's directory so uv resolves the synced
+                // environment from the plugin dir, not the daemon's cwd.
+                if let Some(parent) = self
+                    .binary_path
+                    .parent()
+                    .filter(|p| !p.as_os_str().is_empty())
+                {
+                    args.push("--project".to_string());
+                    args.push(parent.to_string_lossy().to_string());
+                }
                 args.extend(with_deps());
                 args.push(entry);
                 (program("uv"), args)
@@ -360,7 +370,7 @@ impl PluginProcess {
         match read_result {
             Ok(Ok(0)) => {
                 // Process closed stdout — it crashed
-                self.cleanup();
+                self.cleanup_async().await;
                 Err(ZeniiError::Plugin(format!(
                     "plugin '{}' closed unexpectedly",
                     self.name
@@ -385,7 +395,7 @@ impl PluginProcess {
                 }
             }
             Ok(Err(e)) => {
-                self.cleanup();
+                self.cleanup_async().await;
                 Err(ZeniiError::Plugin(format!(
                     "plugin '{}' read error: {e}",
                     self.name
@@ -393,7 +403,7 @@ impl PluginProcess {
             }
             Err(_) => {
                 // Timeout
-                self.cleanup();
+                self.cleanup_async().await;
                 Err(ZeniiError::Plugin(format!(
                     "plugin '{}' execute timed out after {}s",
                     self.name,
@@ -447,7 +457,7 @@ impl PluginProcess {
             let _ = tokio::time::timeout(Duration::from_secs(5), child.wait()).await;
         }
 
-        self.cleanup();
+        self.cleanup_async().await;
         debug!("Plugin '{}' shut down", self.name);
         Ok(())
     }
@@ -469,13 +479,24 @@ impl PluginProcess {
         );
 
         tokio::time::sleep(Duration::from_millis(backoff_ms)).await;
-        self.cleanup();
+        self.cleanup_async().await;
         self.spawn().await
     }
 
     fn cleanup(&mut self) {
         if let Some(mut child) = self.child.take() {
             let _ = child.start_kill();
+        }
+        self.stdin = None;
+        self.stdout_reader = None;
+    }
+
+    /// Kill the child and await its exit so it is reaped (no zombie). Use from async
+    /// paths; `cleanup()` remains the best-effort fallback for `Drop`.
+    async fn cleanup_async(&mut self) {
+        if let Some(mut child) = self.child.take() {
+            let _ = child.start_kill();
+            let _ = child.wait().await;
         }
         self.stdin = None;
         self.stdout_reader = None;
