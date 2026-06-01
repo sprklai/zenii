@@ -23,7 +23,7 @@ pub async fn heal(
     memory: &mut dyn FixMemory,
 ) -> Result<HealOutcome> {
     // 1. Episodic recall (Hermes): reuse a prior fix for this error signature.
-    if let Some(remembered) = memory.recall(&trace.signature) {
+    if let Some(remembered) = memory.recall(&trace.signature).await {
         let passing = evaluator.evaluate(&remembered).await?;
         if passing == test_ids {
             return Ok(HealOutcome {
@@ -75,8 +75,8 @@ pub async fn heal(
 
         if passing == test_ids {
             // Success — persist (Hermes: record + distill a reusable skill).
-            memory.record(&trace.signature, &patch);
-            memory.distill_skill(&trace, &patch);
+            memory.record(&trace.signature, &patch).await;
+            memory.distill_skill(&trace, &patch).await;
             return Ok(HealOutcome {
                 status: HealStatus::Fixed,
                 patch: Some(patch),
@@ -151,14 +151,15 @@ mod tests {
         recorded: Vec<(String, Patch)>,
         distilled: usize,
     }
+    #[async_trait]
     impl FixMemory for MockMemory {
-        fn recall(&self, _signature: &str) -> Option<Patch> {
+        async fn recall(&self, _signature: &str) -> Option<Patch> {
             self.recalled.clone()
         }
-        fn record(&mut self, signature: &str, patch: &Patch) {
+        async fn record(&mut self, signature: &str, patch: &Patch) {
             self.recorded.push((signature.to_string(), patch.clone()));
         }
-        fn distill_skill(&mut self, _trace: &FailureTrace, _patch: &Patch) {
+        async fn distill_skill(&mut self, _trace: &FailureTrace, _patch: &Patch) {
             self.distilled += 1;
         }
     }

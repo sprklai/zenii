@@ -11,11 +11,13 @@
 
 pub mod classify;
 pub mod frontier;
+pub mod memory_store;
 pub mod repair;
 
 use std::collections::BTreeSet;
 
 use async_trait::async_trait;
+use serde::{Deserialize, Serialize};
 
 use crate::Result;
 
@@ -34,7 +36,7 @@ pub struct FailureTrace {
 }
 
 /// A candidate fix.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Patch {
     /// Add (or pin) dependencies — a manifest mutation.
     Dependency { add: Vec<String> },
@@ -91,11 +93,15 @@ pub trait Evaluator: Send + Sync {
 }
 
 /// Episodic memory of fixes + skill distillation (Hermes).
+///
+/// Async because the live impl ([`memory_store::MemoryFixStore`]) is backed by the async
+/// `Memory` trait + SQLite skill proposals (no `block_on` per project rules).
+#[async_trait]
 pub trait FixMemory: Send {
     /// Recall a previously successful patch for this error signature.
-    fn recall(&self, signature: &str) -> Option<Patch>;
+    async fn recall(&self, signature: &str) -> Option<Patch>;
     /// Record a successful patch keyed by error signature.
-    fn record(&mut self, signature: &str, patch: &Patch);
+    async fn record(&mut self, signature: &str, patch: &Patch);
     /// Distill a successful fix into a reusable skill proposal.
-    fn distill_skill(&mut self, trace: &FailureTrace, patch: &Patch);
+    async fn distill_skill(&mut self, trace: &FailureTrace, patch: &Patch);
 }
