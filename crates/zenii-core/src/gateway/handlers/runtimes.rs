@@ -17,7 +17,11 @@ use crate::runtimes::doctor::Doctor;
 
 /// GET /runtimes/status -- report presence/version of all default runners.
 pub async fn runtime_status(State(mgr): State<Arc<RuntimeManager>>) -> impl IntoResponse {
-    Json(Doctor::new(mgr).status(DEFAULT_RUNNERS))
+    // Probes shell out (`which`/`--version`); run them off the async worker thread.
+    let reports = tokio::task::spawn_blocking(move || Doctor::new(mgr).status(DEFAULT_RUNNERS))
+        .await
+        .unwrap_or_default();
+    Json(reports)
 }
 
 #[derive(Debug, Deserialize)]
@@ -48,7 +52,11 @@ pub async fn runtime_install(
 
 /// POST /runtimes/recheck -- re-probe all default runners.
 pub async fn runtime_recheck(State(mgr): State<Arc<RuntimeManager>>) -> impl IntoResponse {
-    Json(Doctor::new(mgr).status(DEFAULT_RUNNERS))
+    // Probes shell out (`which`/`--version`); run them off the async worker thread.
+    let reports = tokio::task::spawn_blocking(move || Doctor::new(mgr).status(DEFAULT_RUNNERS))
+        .await
+        .unwrap_or_default();
+    Json(reports)
 }
 
 #[cfg(test)]
