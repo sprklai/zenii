@@ -984,7 +984,7 @@ All clients communicate via the HTTP+WebSocket gateway at `localhost:18981`. Rou
 | POST | `/embeddings/test` | Test embedding generation |
 | POST | `/embeddings/embed` | Embed arbitrary text |
 | POST | `/embeddings/download` | Download local embedding model |
-| POST | `/embeddings/reindex` | Re-embed all stored memories |
+| POST | `/embeddings/reindex` | Not implemented — returns `501 ZENII_NOT_IMPLEMENTED` |
 
 ### Plugins (9 routes)
 
@@ -1390,7 +1390,18 @@ Gateway embedding routes (5):
 - `POST /embeddings/test` -- test embedding generation
 - `POST /embeddings/embed` -- embed arbitrary text
 - `POST /embeddings/download` -- download local model
-- `POST /embeddings/reindex` -- re-embed all stored memories
+- `POST /embeddings/reindex` -- returns `501 ZENII_NOT_IMPLEMENTED` (re-embedding stored memories is not yet implemented)
+
+### Boot Wiring
+
+The credential store is initialized **before** the memory store in `boot.rs`, so the OpenAI
+embedding arm can resolve `api_key:openai` at startup. When `embedding_provider = "openai"`,
+boot resolves the existing OpenAI credential via `resolve_api_key_for_provider`, builds an
+`OpenAiEmbeddingProvider` (honoring `embedding_base_url` when set), and wires a `VectorIndex` +
+`LruEmbeddingCache` plus a warmup task that flips `embedding_model_available` once the provider
+responds. If no key is present (or vector init fails) it logs a `warn!` and falls back to
+FTS5-only memory. A private `init_vector_index(pool, dim)` helper DRYs the shared sqlite-vec
+auto-extension setup used by both the `local` and `openai` arms.
 
 ### Memory Quality Improvements
 

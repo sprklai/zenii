@@ -91,6 +91,7 @@ sequenceDiagram
     participant Cfg as Config
     participant DB as SQLite
     participant Cred as Keyring
+    participant MS as Memory Store
     participant AI as AI Providers
     participant GW as Gateway
 
@@ -99,6 +100,10 @@ sequenceDiagram
     App->>DB: Open/create database
     DB->>DB: Run pending migrations
     App->>Cred: Initialize credential store (KeyringStore / InMemoryStore)
+    App->>MS: Initialize SqliteMemoryStore (credentials first, so openai embeddings can resolve api_key:openai)
+    opt embedding_provider = openai/local
+        App->>MS: Build embedding provider + VectorIndex + cache (warn! + FTS-only fallback on failure)
+    end
     App->>AI: Register providers + load API keys
     App->>AI: Register 16 base + 3 feature-gated agent tools into ToolRegistry (DashMap)
     App->>App: Load identity (SoulLoader from data_dir/identity/)
