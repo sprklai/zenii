@@ -162,6 +162,9 @@ pub struct AppConfig {
     pub embedding_provider: String,
     pub embedding_model: String,
     pub embedding_download_dir: Option<String>,
+    /// Override base URL for OpenAI-compatible embedding endpoints (e.g. Ollama).
+    /// `None` uses the provider default (`https://api.openai.com`).
+    pub embedding_base_url: Option<String>,
 
     // Environment overrides
     /// User's display name (e.g., "John"). Used in greetings and personalization.
@@ -534,6 +537,7 @@ impl Default for AppConfig {
             embedding_provider: "none".into(),
             embedding_model: "bge-small-en-v1.5".into(),
             embedding_download_dir: None,
+            embedding_base_url: None,
 
             // Environment overrides
             user_name: None,

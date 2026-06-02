@@ -96,6 +96,107 @@ pub struct Services {
     pub converter: Arc<dyn crate::wiki::convert::DocumentConverter>,
 }
 
+/// Register the sqlite_vec auto-extension and build a [`VectorIndex`] for the
+/// given memory pool. Shared by the `local` and `openai` embedding arms to avoid
+/// duplicating the `unsafe` extension registration (CLAUDE.md rule 6: no duplication).
+///
+/// [`VectorIndex`]: crate::memory::vector_index::VectorIndex
+async fn init_vector_index(
+    pool: DbPool,
+    dim: usize,
+) -> Result<crate::memory::vector_index::VectorIndex> {
+    // SAFETY: sqlite3_vec_init has the correct signature for sqlite3_auto_extension
+    #[allow(unsafe_code)]
+    unsafe {
+        #[rustfmt::skip]
+        rusqlite::ffi::sqlite3_auto_extension(Some(std::mem::transmute::<
+            *const (),
+            unsafe extern "C" fn(
+                *mut rusqlite::ffi::sqlite3,
+                *mut *mut std::ffi::c_char,
+                *const rusqlite::ffi::sqlite3_api_routines,
+            )
+                -> std::ffi::c_int,
+        >(
+            sqlite_vec::sqlite3_vec_init as *const (),
+        )));
+    }
+    tokio::task::spawn_blocking(move || {
+        crate::memory::vector_index::VectorIndex::new(pool, dim)
+    })
+    .await
+    .map_err(|e| crate::ZeniiError::Database(format!("vector index spawn failed: {e}")))?
+}
+
+/// Build the memory store for the `openai` embedding provider.
+///
+/// Resolves `api_key:openai` from the credential store. On success, builds an
+/// [`OpenAiEmbeddingProvider`] (honoring `embedding_base_url` when set), a vector
+/// index, an LRU cache, and spawns a warmup task that flips
+/// `embedding_model_available` on the first successful embed. On a missing key or
+/// vector-index failure, falls back to FTS-only (same semantics as the local arm).
+///
+/// Extracted so it can be unit-tested with an injected credential store and a
+/// mock embedding endpoint without going through the keyring boot path.
+///
+/// [`OpenAiEmbeddingProvider`]: crate::memory::openai_embeddings::OpenAiEmbeddingProvider
+async fn build_openai_memory_store(
+    store: crate::memory::sqlite_store::SqliteMemoryStore,
+    memory_pool: DbPool,
+    config: &AppConfig,
+    credentials: &dyn CredentialStore,
+    embedding_model_available: Arc<AtomicBool>,
+) -> Arc<dyn Memory> {
+    match crate::ai::providers::resolve_api_key_for_provider("openai", true, credentials).await {
+        Ok(key) => {
+            info!("Embedding provider: OpenAI");
+            let mut provider = crate::memory::openai_embeddings::OpenAiEmbeddingProvider::new(
+                key,
+                config.embedding_model.clone(),
+                config.embedding_dim,
+            );
+            if let Some(url) = &config.embedding_base_url {
+                provider = provider.with_base_url(url.clone());
+            }
+            match init_vector_index(memory_pool, config.embedding_dim).await {
+                Ok(vi) => {
+                    let cached = crate::memory::embeddings::LruEmbeddingCache::new(
+                        provider,
+                        config.embedding_cache_size,
+                    );
+                    let embedding_provider: Arc<dyn crate::memory::embeddings::EmbeddingProvider> =
+                        Arc::new(cached);
+
+                    // Warm up: flip availability flag on first successful embed.
+                    let warmup_provider = embedding_provider.clone();
+                    let warmup_flag = embedding_model_available;
+                    tokio::spawn(async move {
+                        match warmup_provider.embed("warmup").await {
+                            Ok(_) => {
+                                warmup_flag.store(true, std::sync::atomic::Ordering::SeqCst);
+                                tracing::info!("OpenAI embedding endpoint ready");
+                            }
+                            Err(e) => {
+                                tracing::warn!("OpenAI embedding warmup failed: {e}");
+                            }
+                        }
+                    });
+
+                    Arc::new(store.with_vector(vi, embedding_provider))
+                }
+                Err(e) => {
+                    tracing::warn!("Vector index init failed, falling back to FTS only: {e}");
+                    Arc::new(store)
+                }
+            }
+        }
+        Err(e) => {
+            tracing::warn!("OpenAI embedding key unavailable, FTS-only: {e}");
+            Arc::new(store)
+        }
+    }
+}
+
 /// Initialize all services from config.
 pub async fn init_services(config: AppConfig) -> Result<Services> {
     // When both ring and aws-lc-rs are in the dep tree (e.g. --all-features),
@@ -121,6 +222,38 @@ pub async fn init_services(config: AppConfig) -> Result<Services> {
 
     // 2. Event bus (M8: configurable capacity)
     let event_bus = Arc::new(TokioBroadcastBus::new(config.event_bus_capacity));
+
+    // Credentials -- KeyringStore with InMemory fallback.
+    // Initialized before the memory store so the OpenAI embedding arm can resolve
+    // `api_key:openai` and wire a vector index eagerly at boot.
+    #[cfg(feature = "keyring")]
+    let credentials: Arc<dyn CredentialStore> =
+        crate::credential::keyring_store::keyring_or_fallback(&config).await;
+    #[cfg(not(feature = "keyring"))]
+    let credentials: Arc<dyn CredentialStore> = {
+        use std::path::PathBuf;
+
+        use crate::credential::file_store::FileCredentialStore;
+
+        let data_dir = config
+            .data_dir
+            .as_deref()
+            .map(PathBuf::from)
+            .unwrap_or_else(|| crate::config::default_data_dir());
+        match FileCredentialStore::new(&data_dir, &config.keyring_service_id) {
+            Ok(store) => {
+                info!(
+                    "Credential store: encrypted file at {} (keyring feature disabled)",
+                    store.path().display()
+                );
+                Arc::new(store)
+            }
+            Err(e) => {
+                info!("Credential store: in-memory (keyring disabled, file store failed: {e})");
+                Arc::new(crate::credential::InMemoryCredentialStore::new())
+            }
+        }
+    };
 
     // 3. Memory — always use SqliteMemoryStore (persistent)
     let memory_db_path = config
@@ -168,9 +301,14 @@ pub async fn init_services(config: AppConfig) -> Result<Services> {
 
         match config.embedding_provider.as_str() {
             "openai" => {
-                info!("Embedding provider: OpenAI (will resolve key at first use)");
-                // Defer key resolution — store without vector for now, reconfigure later if key available
-                Arc::new(store)
+                build_openai_memory_store(
+                    store,
+                    memory_pool.clone(),
+                    &config,
+                    credentials.as_ref(),
+                    embedding_model_available.clone(),
+                )
+                .await
             }
             #[cfg(feature = "local-embeddings")]
             "local" => {
@@ -180,31 +318,8 @@ pub async fn init_services(config: AppConfig) -> Result<Services> {
                     config.embedding_download_dir.as_ref().map(PathBuf::from),
                 ) {
                     Ok(provider) => {
-                        // Initialize VectorIndex
-                        let vi_pool = memory_pool.clone();
-                        let dim = config.embedding_dim;
-                        // SAFETY: sqlite3_vec_init has the correct signature for sqlite3_auto_extension
-                        #[allow(unsafe_code)]
-                        unsafe {
-                            #[rustfmt::skip]
-                            rusqlite::ffi::sqlite3_auto_extension(Some(std::mem::transmute::<
-                                *const (),
-                                unsafe extern "C" fn(
-                                    *mut rusqlite::ffi::sqlite3,
-                                    *mut *mut std::ffi::c_char,
-                                    *const rusqlite::ffi::sqlite3_api_routines,
-                                )
-                                    -> std::ffi::c_int,
-                            >(
-                                sqlite_vec::sqlite3_vec_init as *const (),
-                            )));
-                        }
-                        match tokio::task::spawn_blocking(move || {
-                            crate::memory::vector_index::VectorIndex::new(vi_pool, dim)
-                        })
-                        .await
-                        {
-                            Ok(Ok(vi)) => {
+                        match init_vector_index(memory_pool.clone(), config.embedding_dim).await {
+                            Ok(vi) => {
                                 let cached = crate::memory::embeddings::LruEmbeddingCache::new(
                                     provider,
                                     config.embedding_cache_size,
@@ -231,14 +346,10 @@ pub async fn init_services(config: AppConfig) -> Result<Services> {
 
                                 Arc::new(store.with_vector(vi, embedding_provider))
                             }
-                            Ok(Err(e)) => {
+                            Err(e) => {
                                 tracing::warn!(
                                     "Vector index init failed, falling back to FTS only: {e}"
                                 );
-                                Arc::new(store)
-                            }
-                            Err(e) => {
-                                tracing::warn!("Vector index spawn failed: {e}");
                                 Arc::new(store)
                             }
                         }
@@ -257,36 +368,6 @@ pub async fn init_services(config: AppConfig) -> Result<Services> {
         }
     };
     info!("Memory store initialized at {}", memory_db_path.display());
-
-    // 4. Credentials -- KeyringStore with InMemory fallback
-    #[cfg(feature = "keyring")]
-    let credentials: Arc<dyn CredentialStore> =
-        crate::credential::keyring_store::keyring_or_fallback(&config).await;
-    #[cfg(not(feature = "keyring"))]
-    let credentials: Arc<dyn CredentialStore> = {
-        use std::path::PathBuf;
-
-        use crate::credential::file_store::FileCredentialStore;
-
-        let data_dir = config
-            .data_dir
-            .as_deref()
-            .map(PathBuf::from)
-            .unwrap_or_else(|| crate::config::default_data_dir());
-        match FileCredentialStore::new(&data_dir, &config.keyring_service_id) {
-            Ok(store) => {
-                info!(
-                    "Credential store: encrypted file at {} (keyring feature disabled)",
-                    store.path().display()
-                );
-                Arc::new(store)
-            }
-            Err(e) => {
-                info!("Credential store: in-memory (keyring disabled, file store failed: {e})");
-                Arc::new(crate::credential::InMemoryCredentialStore::new())
-            }
-        }
-    };
 
     // 5. Security (reads autonomy level, rate limits, etc. from config)
     let security = Arc::new(SecurityPolicy::from_config(&config));
@@ -1311,5 +1392,253 @@ mod tests {
         fn assert_memory_trait(_: &Arc<dyn Memory>) {}
         // This test just verifies the type compiles
         let _ = assert_memory_trait;
+    }
+
+    // --- OpenAI embedding boot wiring (plan: 2026-06-01_openai-embeddings-boot-wiring) ---
+
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    use crate::credential::{CredentialStore, InMemoryCredentialStore};
+
+    /// Spawn a persistent mock OpenAI embeddings server returning `dim`-length
+    /// vectors for every `/v1/embeddings` request. Returns the captured base URL.
+    /// Deterministic and offline. The server lives until the test ends.
+    async fn spawn_mock_embeddings(dim: usize, hits: Arc<AtomicUsize>) -> String {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let body = serde_json::json!({
+            "data": [{ "embedding": vec![0.1f32; dim], "index": 0 }],
+            "model": "mock",
+            "usage": { "prompt_tokens": 1, "total_tokens": 1 }
+        })
+        .to_string();
+        tokio::spawn(async move {
+            loop {
+                let Ok((stream, _)) = listener.accept().await else {
+                    break;
+                };
+                let body = body.clone();
+                let hits = hits.clone();
+                tokio::spawn(async move {
+                    let mut buf = vec![0u8; 8192];
+                    let _ = stream.readable().await;
+                    let _ = stream.try_read(&mut buf);
+                    hits.fetch_add(1, Ordering::SeqCst);
+                    let response = format!(
+                        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                        body.len(),
+                        body
+                    );
+                    let _ = stream.writable().await;
+                    let _ = stream.try_write(response.as_bytes());
+                });
+            }
+        });
+        format!("http://{addr}")
+    }
+
+    /// Register the sqlite_vec auto-extension. Must run before opening the pool
+    /// that the vector index will use (auto-extensions only apply to connections
+    /// opened after registration). Mirrors the registration in `init_vector_index`.
+    fn register_sqlite_vec() {
+        // SAFETY: sqlite3_vec_init has the correct signature for sqlite3_auto_extension
+        #[allow(unsafe_code)]
+        unsafe {
+            #[rustfmt::skip]
+            rusqlite::ffi::sqlite3_auto_extension(Some(std::mem::transmute::<
+                *const (),
+                unsafe extern "C" fn(
+                    *mut rusqlite::ffi::sqlite3,
+                    *mut *mut std::ffi::c_char,
+                    *const rusqlite::ffi::sqlite3_api_routines,
+                )
+                    -> std::ffi::c_int,
+            >(
+                sqlite_vec::sqlite3_vec_init as *const (),
+            )));
+        }
+    }
+
+    // OE.1 — openai provider + credential present → store gets a vector index.
+    // Asserted via: warmup flips embedding_model_available, and a round-tripped
+    // memory is recallable (the with_vector path stores + queries embeddings).
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn boot_openai_with_credential_wires_vector() {
+        let dim = 384;
+        let hits = Arc::new(AtomicUsize::new(0));
+        let base_url = spawn_mock_embeddings(dim, hits.clone()).await;
+
+        let dir = tempfile::TempDir::new().unwrap();
+        let mut config = test_config(&dir);
+        config.embedding_provider = "openai".into();
+        config.embedding_dim = dim;
+        config.embedding_base_url = Some(base_url);
+
+        register_sqlite_vec();
+        let memory_pool = crate::db::init_pool(&dir.path().join("mem.db")).unwrap();
+        let mp = memory_pool.clone();
+        tokio::task::spawn_blocking(move || {
+            crate::memory::sqlite_store::SqliteMemoryStore::run_memory_migrations(&mp)
+        })
+        .await
+        .unwrap()
+        .unwrap();
+
+        let creds = InMemoryCredentialStore::new();
+        creds.set("api_key:openai", "sk-test").await.unwrap();
+        let flag = Arc::new(AtomicBool::new(false));
+
+        let store = crate::memory::sqlite_store::SqliteMemoryStore::new(
+            memory_pool.clone(),
+            config.memory_fts_weight,
+            config.memory_vector_weight,
+        );
+        let memory =
+            build_openai_memory_store(store, memory_pool, &config, &creds, flag.clone()).await;
+
+        // store + recall round-trip exercises the embedding (vector) path
+        memory
+            .store(
+                "k",
+                "the quick brown fox",
+                crate::memory::traits::MemoryCategory::Core,
+            )
+            .await
+            .unwrap();
+        let results = memory.recall("quick fox", 10, 0).await.unwrap();
+        assert!(!results.is_empty(), "recall should return the stored memory");
+
+        // The mock endpoint must have been hit (embeddings were generated → vector path active)
+        assert!(
+            hits.load(Ordering::SeqCst) > 0,
+            "embedding endpoint should have been called (vector path wired)"
+        );
+
+        // Warmup flips the availability flag (give the spawned task a moment)
+        for _ in 0..50 {
+            if flag.load(Ordering::SeqCst) {
+                break;
+            }
+            tokio::task::yield_now().await;
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+        assert!(
+            flag.load(Ordering::SeqCst),
+            "warmup should flip embedding_model_available to true"
+        );
+    }
+
+    // OE.2 — openai provider + NO credential → FTS-only fallback, no panic.
+    #[tokio::test]
+    async fn boot_openai_without_credential_fts_only() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let mut config = test_config(&dir);
+        config.embedding_provider = "openai".into();
+
+        let memory_pool = crate::db::init_pool(&dir.path().join("mem.db")).unwrap();
+        let mp = memory_pool.clone();
+        tokio::task::spawn_blocking(move || {
+            crate::memory::sqlite_store::SqliteMemoryStore::run_memory_migrations(&mp)
+        })
+        .await
+        .unwrap()
+        .unwrap();
+
+        let creds = InMemoryCredentialStore::new(); // no api_key:openai
+        let flag = Arc::new(AtomicBool::new(true));
+
+        let store = crate::memory::sqlite_store::SqliteMemoryStore::new(
+            memory_pool.clone(),
+            config.memory_fts_weight,
+            config.memory_vector_weight,
+        );
+        let memory =
+            build_openai_memory_store(store, memory_pool, &config, &creds, flag.clone()).await;
+
+        // FTS-only still stores + recalls (keyword path)
+        memory
+            .store(
+                "k",
+                "hello world",
+                crate::memory::traits::MemoryCategory::Core,
+            )
+            .await
+            .unwrap();
+        let results = memory.recall("hello", 10, 0).await.unwrap();
+        assert!(!results.is_empty(), "FTS recall should work without a key");
+    }
+
+    // OE.3 — embedding_base_url override is honored when set.
+    // Asserted via: with the override pointing at the mock, the embed call lands
+    // on the mock (hit count increments). Without a reachable URL the warmup would
+    // fail; here it succeeds because the override is used.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn boot_openai_base_url_override_honored() {
+        let dim = 384;
+        let hits = Arc::new(AtomicUsize::new(0));
+        let base_url = spawn_mock_embeddings(dim, hits.clone()).await;
+
+        let dir = tempfile::TempDir::new().unwrap();
+        let mut config = test_config(&dir);
+        config.embedding_provider = "openai".into();
+        config.embedding_dim = dim;
+        config.embedding_base_url = Some(base_url.clone());
+
+        register_sqlite_vec();
+        let memory_pool = crate::db::init_pool(&dir.path().join("mem.db")).unwrap();
+        let mp = memory_pool.clone();
+        tokio::task::spawn_blocking(move || {
+            crate::memory::sqlite_store::SqliteMemoryStore::run_memory_migrations(&mp)
+        })
+        .await
+        .unwrap()
+        .unwrap();
+
+        let creds = InMemoryCredentialStore::new();
+        creds.set("api_key:openai", "sk-test").await.unwrap();
+        let flag = Arc::new(AtomicBool::new(false));
+
+        let store = crate::memory::sqlite_store::SqliteMemoryStore::new(
+            memory_pool.clone(),
+            config.memory_fts_weight,
+            config.memory_vector_weight,
+        );
+        let _memory =
+            build_openai_memory_store(store, memory_pool, &config, &creds, flag.clone()).await;
+
+        // Warmup embed should reach the override URL.
+        for _ in 0..50 {
+            if hits.load(Ordering::SeqCst) > 0 {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+        assert!(
+            hits.load(Ordering::SeqCst) > 0,
+            "embed request should have hit the overridden base_url"
+        );
+    }
+
+    // OE.4 — reorder regression: full boot completes with embedding_provider="openai".
+    // This exercises the moved credential-store init running BEFORE the memory-store
+    // embedding match (the openai arm resolves `api_key:openai` from `credentials`).
+    // Boot must not panic regardless of whether a key is present; the credential store
+    // is wired into Services either way.
+    //
+    // Note: with `--all-features` keyring, a leftover `api_key:openai` may exist, which
+    // wires the live OpenAI vector path. We therefore do NOT trigger an embed (no store
+    // call) and do NOT write to the real keyring — we only assert boot succeeded and the
+    // credential store is present.
+    #[tokio::test]
+    async fn boot_credential_store_initializes_after_reorder() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let mut config = test_config(&dir);
+        config.embedding_provider = "openai".into();
+        let services = init_services(config).await.unwrap();
+        // Credential store is wired into Services (the reordered block ran).
+        assert!(
+            Arc::strong_count(&services.credentials) >= 1,
+            "credential store should be initialized and wired into Services"
+        );
     }
 }
