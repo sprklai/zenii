@@ -16,6 +16,7 @@ pub mod models;
 pub mod permissions;
 pub mod plugins;
 pub mod providers;
+pub mod runtimes;
 #[cfg(feature = "scheduler")]
 pub mod scheduler;
 pub mod sessions;
@@ -138,6 +139,11 @@ pub(crate) mod tests {
             user_learner,
             plugin_registry,
             plugin_installer,
+            runtime_manager: Arc::new(crate::runtimes::RuntimeManager::from_config(
+                dir.path().join("runtimes"),
+                dir.path().join("runtime-cache"),
+                false,
+            )),
             #[cfg(feature = "channels")]
             channel_registry,
             #[cfg(feature = "channels")]

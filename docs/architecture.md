@@ -984,7 +984,7 @@ All clients communicate via the HTTP+WebSocket gateway at `localhost:18981`. Rou
 | POST | `/embeddings/test` | Test embedding generation |
 | POST | `/embeddings/embed` | Embed arbitrary text |
 | POST | `/embeddings/download` | Download local embedding model |
-| POST | `/embeddings/reindex` | Re-embed all stored memories |
+| POST | `/embeddings/reindex` | Not implemented — returns `501 ZENII_NOT_IMPLEMENTED` |
 
 ### Plugins (9 routes)
 
@@ -1390,7 +1390,18 @@ Gateway embedding routes (5):
 - `POST /embeddings/test` -- test embedding generation
 - `POST /embeddings/embed` -- embed arbitrary text
 - `POST /embeddings/download` -- download local model
-- `POST /embeddings/reindex` -- re-embed all stored memories
+- `POST /embeddings/reindex` -- returns `501 ZENII_NOT_IMPLEMENTED` (re-embedding stored memories is not yet implemented)
+
+### Boot Wiring
+
+The credential store is initialized **before** the memory store in `boot.rs`, so the OpenAI
+embedding arm can resolve `api_key:openai` at startup. When `embedding_provider = "openai"`,
+boot resolves the existing OpenAI credential via `resolve_api_key_for_provider`, builds an
+`OpenAiEmbeddingProvider` (honoring `embedding_base_url` when set), and wires a `VectorIndex` +
+`LruEmbeddingCache` plus a warmup task that flips `embedding_model_available` once the provider
+responds. If no key is present (or vector init fails) it logs a `warn!` and falls back to
+FTS5-only memory. A private `init_vector_index(pool, dim)` helper DRYs the shared sqlite-vec
+auto-extension setup used by both the `local` and `openai` arms.
 
 ### Memory Quality Improvements
 
@@ -2270,6 +2281,34 @@ depends_on = ["fetch"]
 - `workflow_step_results` -- per-step results: id, run_id, step_name, output, success, duration_ms, error, executed_at
 
 ---
+
+## Polyglot Agent Runtime (PAR)
+
+PAR lets Zenii run external code pulled from GitHub (Python via `uvx`/`uv run`, Node via `npx`, extensible) **as tools/agents**, with dependencies installed **on demand into an isolated, shared cache** — no fat sidecar that bloats with every release. It **extends** the existing plugin + MCP subsystems rather than introducing a parallel one.
+
+### Two isolation layers
+Each runner-based tool keeps the host environment untouched via (1) **runtime-version isolation** (never use the system interpreter — `uv python` / `fnm`) and (2) **dependency isolation** (per-project env + content-addressed shared cache). `uv`/`uvx` cover Python; `npx`/`bunx` cover Node; each new language is one runner adapter.
+
+### Components
+- **`runtimes/` (new)** — `RuntimeManager` (detect / resolve app-managed-over-PATH / install) + `Doctor` (status, consent-gated install, `ensure(required_runtime)`). `SystemRuntimeProbe` (PATH + `--version`) and `DefaultRuntimeInstaller` (uv via the official script into the app data dir). Config: `runtimes_dir`, `runtime_cache_dir`, `runtime_auto_install`. Gateway: `GET /runtimes/status`, `POST /runtimes/{name}/install` (consent-gated), `POST /runtimes/recheck`. CLI: `zenii runtime status|recheck|install`.
+- **Manifest extension** — `PluginToolDef` gains `runner` (`uvx`/`npx`/`bunx`/`uv-run`/`node`), `package` (git/pkg spec), `required_runtime` (e.g. `python>=3.11`), and optional `tests` (self-heal eval cases). All `#[serde(default)]` — legacy manifests unaffected. `uvx`/`npx`/`bunx` require a `package`.
+- **Process extension** — `PluginProcess` builds the runner command (`uvx --from <pkg> <entry>`, `npx -y <pkg> <entry>`, `uv run <entry>`, `node <entry>`), prefers the app-managed runner path, and injects **secrets + `ZENII_AGENT_SCRATCH` via env (never argv)**.
+- **Installer extension** — installing a runner-based tool runs the doctor (`ensure` → abort if the runtime is missing and auto-install is off), prepares deps into the isolated env via an injectable `DependencyInstaller` (`uvx` cache-prime / `uv sync` / `npm install`), then registers a runner-based adapter. `refresh` re-resolves; `prune` GCs unreferenced cache entries.
+
+### Self-healing (GEPA + Hermes)
+When a runner-based tool that declares `tests` fails, the adapter triggers a bounded repair loop (`plugins/heal/`). The loop is **GEPA-inspired** — reflect on the execution trace, mutate a candidate, keep a Pareto frontier of candidates passing different test subsets — and **Hermes-inspired** — recall a prior fix for the same error signature before reflecting, and distill a successful fix into a skill proposal. It is decoupled from the toolchain via three seams, each with a live impl:
+
+| Seam | Live impl | Behavior |
+|------|-----------|----------|
+| `Reflector` | `AgentReflector` | Prompts the agent (via a mockable `ReflectionModel`) with the trace + prior-candidate side-info; parses a unified diff → `Patch::Code`. |
+| `Evaluator` | `RunnerEvaluator` | Copies the plugin to a temp scratch, applies the candidate (code via `diffy`, deps via uv `--with`), runs each `tests` case through the runner, returns the passing case-ids. |
+| `FixMemory` | `MemoryFixStore` | Episodic recall keyed `parheal:{signature}` over the memory store; distills successful fixes into `skill_proposals`. |
+
+Classification (`ModuleNotFoundError` → dependency repair; traceback → reflect; timeout → transient retry; missing credentials → user-actionable abort) short-circuits cheap cases. On a fix, the adapter auto-applies the validated patch to the installed plugin (deps→`--with`, code→patch entry) and retries once; bounded by `heal_max_attempts` + `heal_wall_clock_secs`. Config: `plugin_auto_repair_enabled`, `heal_max_attempts`, `heal_token_budget`, `heal_wall_clock_secs`. The trigger lives in `PluginToolAdapter::execute` — the single `Tool` entry point — so repair reaches the main agent, delegation sub-agents, and workflow steps alike.
+
+Because every external agent registers as a `Tool` in `ToolRegistry`, it is automatically available to the main agent, delegation sub-agents, workflows, CLI, TUI, and `GET /tools` — no per-consumer wiring. MCP-shaped GitHub code uses the MCP client path (below); arbitrary code uses the plugin JSON-RPC path.
+
+> Files: `crates/zenii-core/src/runtimes/{mod,doctor}.rs`, `plugins/{manifest,process,installer,adapter}.rs`, `plugins/heal/{mod,classify,frontier,repair,memory_store,evaluator,reflector,trigger}.rs`, `gateway/handlers/runtimes.rs`.
 
 ## MCP Integration
 

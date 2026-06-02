@@ -1,4 +1,5 @@
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
@@ -58,7 +59,28 @@ pub struct PluginProcess {
     execute_timeout: Duration,
     restart_attempts: u32,
     max_restart_attempts: u32,
+    // PAR: runner-based execution + isolation
+    runner: Option<String>,
+    package: Option<String>,
+    /// App-managed runner binary path (preferred over a bare PATH lookup), if resolved.
+    runner_path: Option<PathBuf>,
+    /// Secrets injected into the child's environment (never passed on argv).
+    secrets: std::collections::HashMap<String, String>,
+    /// Per-agent scratch dir, exported to the child as `ZENII_AGENT_SCRATCH`.
+    scratch_dir: Option<PathBuf>,
+    /// Ephemeral extra dependencies injected via `uv --with` (self-heal dependency fixes).
+    extra_deps: Vec<String>,
+    /// Captured tail of the child's stderr (for self-heal failure classification).
+    stderr_buf: Arc<tokio::sync::Mutex<String>>,
+    /// Exit code observed the last time the child was found terminated.
+    last_exit_code: Option<i32>,
 }
+
+/// Env var name for the per-agent scratch directory passed to runner-based plugins.
+pub const SCRATCH_ENV: &str = "ZENII_AGENT_SCRATCH";
+
+/// Max bytes of stderr retained for failure classification.
+const STDERR_CAP: usize = 64 * 1024;
 
 impl PluginProcess {
     pub fn new(
@@ -77,7 +99,133 @@ impl PluginProcess {
             execute_timeout: Duration::from_secs(execute_timeout_secs),
             restart_attempts: 0,
             max_restart_attempts,
+            runner: None,
+            package: None,
+            runner_path: None,
+            secrets: std::collections::HashMap::new(),
+            scratch_dir: None,
+            extra_deps: Vec::new(),
+            stderr_buf: Arc::new(tokio::sync::Mutex::new(String::new())),
+            last_exit_code: None,
         }
+    }
+
+    /// Configure runner-based execution (uvx/npx/uv-run/node) with an optional resolved
+    /// runner binary path (preferred over a bare PATH name).
+    pub fn with_runner(
+        mut self,
+        runner: Option<String>,
+        package: Option<String>,
+        runner_path: Option<PathBuf>,
+    ) -> Self {
+        self.runner = runner;
+        self.package = package;
+        self.runner_path = runner_path;
+        self
+    }
+
+    /// Provide secrets to inject into the child's environment.
+    pub fn with_secrets(mut self, secrets: std::collections::HashMap<String, String>) -> Self {
+        self.secrets = secrets;
+        self
+    }
+
+    /// Provide a scratch directory exported to the child.
+    pub fn with_scratch_dir(mut self, scratch_dir: Option<PathBuf>) -> Self {
+        self.scratch_dir = scratch_dir;
+        self
+    }
+
+    /// Inject ephemeral extra dependencies (uv `--with`) for uv-based runners.
+    pub fn with_extra_deps(mut self, extra_deps: Vec<String>) -> Self {
+        self.extra_deps = extra_deps;
+        self
+    }
+
+    /// Add extra dependencies at runtime (self-heal dependency fixes); deduped. Takes effect
+    /// on the next spawn.
+    pub fn add_extra_deps(&mut self, deps: Vec<String>) {
+        for d in deps {
+            if !self.extra_deps.contains(&d) {
+                self.extra_deps.push(d);
+            }
+        }
+    }
+
+    /// The captured tail of the child's stderr (for self-heal classification).
+    pub async fn last_stderr(&self) -> String {
+        self.stderr_buf.lock().await.clone()
+    }
+
+    /// The exit code observed the last time the child was found terminated, if any.
+    pub fn last_exit_code(&self) -> Option<i32> {
+        self.last_exit_code
+    }
+
+    /// Build the `(program, args)` used to spawn this plugin. Secrets are NOT included here
+    /// (they go via env — see [`Self::env_vars`]).
+    pub fn command_parts(&self) -> (PathBuf, Vec<String>) {
+        let entry = self.binary_path.to_string_lossy().to_string();
+        // Prefer the app-managed runner path over a bare PATH name.
+        let program = |default: &str| -> PathBuf {
+            self.runner_path
+                .clone()
+                .unwrap_or_else(|| PathBuf::from(default))
+        };
+        // For package-based runners, append the package spec (when present) then the entry.
+        let with_pkg = |mut args: Vec<String>| -> Vec<String> {
+            if let Some(pkg) = &self.package {
+                args.push(pkg.clone());
+            }
+            args.push(entry.clone());
+            args
+        };
+        // `--with <dep>` pairs for uv-based runners (ephemeral isolated dependency fixes).
+        let with_deps = || -> Vec<String> {
+            self.extra_deps
+                .iter()
+                .flat_map(|d| ["--with".to_string(), d.clone()])
+                .collect()
+        };
+
+        match self.runner.as_deref() {
+            None => (self.binary_path.clone(), Vec::new()),
+            Some("uvx") => {
+                let mut args = with_deps();
+                args.push("--from".to_string());
+                (program("uvx"), with_pkg(args))
+            }
+            Some("npx") => (program("npx"), with_pkg(vec!["-y".to_string()])),
+            Some("bunx") => (program("bunx"), with_pkg(Vec::new())),
+            Some("uv-run") => {
+                let mut args = vec!["run".to_string()];
+                // Pin the project to the entry's directory so uv resolves the synced
+                // environment from the plugin dir, not the daemon's cwd.
+                if let Some(parent) = self
+                    .binary_path
+                    .parent()
+                    .filter(|p| !p.as_os_str().is_empty())
+                {
+                    args.push("--project".to_string());
+                    args.push(parent.to_string_lossy().to_string());
+                }
+                args.extend(with_deps());
+                args.push(entry);
+                (program("uv"), args)
+            }
+            Some("node") => (program("node"), vec![entry]),
+            // Unknown runner is rejected at manifest validation; fall back to bare invocation.
+            Some(other) => (program(other), vec![entry]),
+        }
+    }
+
+    /// Environment variables to set on the child: secrets + scratch dir.
+    pub fn env_vars(&self) -> std::collections::HashMap<String, String> {
+        let mut env = self.secrets.clone();
+        if let Some(scratch) = &self.scratch_dir {
+            env.insert(SCRATCH_ENV.to_string(), scratch.to_string_lossy().to_string());
+        }
+        env
     }
 
     /// Spawn the plugin process.
@@ -86,16 +234,37 @@ impl PluginProcess {
             return Ok(());
         }
 
+        // Create the per-agent scratch dir before spawning, if configured.
+        if let Some(scratch) = &self.scratch_dir {
+            std::fs::create_dir_all(scratch).map_err(|e| {
+                ZeniiError::Plugin(format!(
+                    "failed to create scratch dir for plugin '{}': {e}",
+                    self.name
+                ))
+            })?;
+        }
+
+        let (program, args) = self.command_parts();
         debug!(
-            "Spawning plugin process: {} ({})",
+            "Spawning plugin process: {} ({} {})",
             self.name,
-            self.binary_path.display()
+            program.display(),
+            args.join(" ")
         );
 
-        let mut child = Command::new(&self.binary_path)
+        // Reset captured stderr for this run.
+        self.stderr_buf.lock().await.clear();
+        self.last_exit_code = None;
+
+        let mut command = Command::new(&program);
+        command.args(&args);
+        for (key, value) in self.env_vars() {
+            command.env(key, value);
+        }
+        let mut child = command
             .stdin(std::process::Stdio::piped())
             .stdout(std::process::Stdio::piped())
-            .stderr(std::process::Stdio::null())
+            .stderr(std::process::Stdio::piped())
             .kill_on_drop(true)
             .spawn()
             .map_err(|e| {
@@ -109,6 +278,29 @@ impl PluginProcess {
             ZeniiError::Plugin(format!("plugin '{}' stdout not available", self.name))
         })?;
 
+        // Drain stderr into a capped buffer so self-heal can classify failures.
+        if let Some(stderr) = child.stderr.take() {
+            let buf = self.stderr_buf.clone();
+            tokio::spawn(async move {
+                let mut reader = BufReader::new(stderr);
+                let mut line = String::new();
+                loop {
+                    line.clear();
+                    match reader.read_line(&mut line).await {
+                        Ok(0) | Err(_) => break,
+                        Ok(_) => {
+                            let mut g = buf.lock().await;
+                            g.push_str(&line);
+                            if g.len() > STDERR_CAP {
+                                let cut = g.len() - STDERR_CAP;
+                                *g = g.split_off(cut);
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
         self.child = Some(child);
         self.stdin = Some(stdin);
         self.stdout_reader = Some(BufReader::new(stdout));
@@ -118,10 +310,17 @@ impl PluginProcess {
         Ok(())
     }
 
-    /// Check if the process is running.
+    /// Check if the process is running. Captures the exit code when the child has terminated.
     pub fn is_running(&mut self) -> bool {
         if let Some(ref mut child) = self.child {
-            matches!(child.try_wait(), Ok(None))
+            match child.try_wait() {
+                Ok(None) => true,
+                Ok(Some(status)) => {
+                    self.last_exit_code = status.code();
+                    false
+                }
+                Err(_) => false,
+            }
         } else {
             false
         }
@@ -171,7 +370,7 @@ impl PluginProcess {
         match read_result {
             Ok(Ok(0)) => {
                 // Process closed stdout — it crashed
-                self.cleanup();
+                self.cleanup_async().await;
                 Err(ZeniiError::Plugin(format!(
                     "plugin '{}' closed unexpectedly",
                     self.name
@@ -196,7 +395,7 @@ impl PluginProcess {
                 }
             }
             Ok(Err(e)) => {
-                self.cleanup();
+                self.cleanup_async().await;
                 Err(ZeniiError::Plugin(format!(
                     "plugin '{}' read error: {e}",
                     self.name
@@ -204,7 +403,7 @@ impl PluginProcess {
             }
             Err(_) => {
                 // Timeout
-                self.cleanup();
+                self.cleanup_async().await;
                 Err(ZeniiError::Plugin(format!(
                     "plugin '{}' execute timed out after {}s",
                     self.name,
@@ -258,7 +457,7 @@ impl PluginProcess {
             let _ = tokio::time::timeout(Duration::from_secs(5), child.wait()).await;
         }
 
-        self.cleanup();
+        self.cleanup_async().await;
         debug!("Plugin '{}' shut down", self.name);
         Ok(())
     }
@@ -280,13 +479,24 @@ impl PluginProcess {
         );
 
         tokio::time::sleep(Duration::from_millis(backoff_ms)).await;
-        self.cleanup();
+        self.cleanup_async().await;
         self.spawn().await
     }
 
     fn cleanup(&mut self) {
         if let Some(mut child) = self.child.take() {
             let _ = child.start_kill();
+        }
+        self.stdin = None;
+        self.stdout_reader = None;
+    }
+
+    /// Kill the child and await its exit so it is reaped (no zombie). Use from async
+    /// paths; `cleanup()` remains the best-effort fallback for `Drop`.
+    async fn cleanup_async(&mut self) {
+        if let Some(mut child) = self.child.take() {
+            let _ = child.start_kill();
+            let _ = child.wait().await;
         }
         self.stdin = None;
         self.stdout_reader = None;
@@ -302,6 +512,148 @@ impl Drop for PluginProcess {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // --- PAR.2: runner command construction ---
+
+    fn proc_with(
+        binary: &str,
+        runner: Option<&str>,
+        package: Option<&str>,
+        runner_path: Option<&str>,
+    ) -> PluginProcess {
+        PluginProcess::new("t", PathBuf::from(binary), 60, 3).with_runner(
+            runner.map(String::from),
+            package.map(String::from),
+            runner_path.map(PathBuf::from),
+        )
+    }
+
+    #[test]
+    fn command_none_is_direct_binary() {
+        let p = proc_with("tool.sh", None, None, None);
+        let (program, args) = p.command_parts();
+        assert_eq!(program, PathBuf::from("tool.sh"));
+        assert!(args.is_empty());
+    }
+
+    #[test]
+    fn command_uvx_from_git() {
+        let p = proc_with(
+            "main.py",
+            Some("uvx"),
+            Some("git+https://github.com/u/r@v1"),
+            None,
+        );
+        let (program, args) = p.command_parts();
+        assert_eq!(program, PathBuf::from("uvx"));
+        assert_eq!(
+            args,
+            vec![
+                "--from".to_string(),
+                "git+https://github.com/u/r@v1".to_string(),
+                "main.py".to_string()
+            ]
+        );
+    }
+
+    #[test]
+    fn command_npx_package() {
+        let p = proc_with("cli.js", Some("npx"), Some("@scope/pkg@1.2"), None);
+        let (program, args) = p.command_parts();
+        assert_eq!(program, PathBuf::from("npx"));
+        assert_eq!(
+            args,
+            vec![
+                "-y".to_string(),
+                "@scope/pkg@1.2".to_string(),
+                "cli.js".to_string()
+            ]
+        );
+    }
+
+    #[test]
+    fn command_uv_run_script() {
+        let p = proc_with("main.py", Some("uv-run"), None, None);
+        let (program, args) = p.command_parts();
+        assert_eq!(program, PathBuf::from("uv"));
+        assert_eq!(args, vec!["run".to_string(), "main.py".to_string()]);
+    }
+
+    #[test]
+    fn command_node_script() {
+        let p = proc_with("server.js", Some("node"), None, None);
+        let (program, args) = p.command_parts();
+        assert_eq!(program, PathBuf::from("node"));
+        assert_eq!(args, vec!["server.js".to_string()]);
+    }
+
+    #[test]
+    fn command_uv_run_injects_extra_deps() {
+        let p = proc_with("main.py", Some("uv-run"), None, None)
+            .with_extra_deps(vec!["rich".to_string(), "httpx".to_string()]);
+        let (program, args) = p.command_parts();
+        assert_eq!(program, PathBuf::from("uv"));
+        assert_eq!(
+            args,
+            vec![
+                "run".to_string(),
+                "--with".to_string(),
+                "rich".to_string(),
+                "--with".to_string(),
+                "httpx".to_string(),
+                "main.py".to_string()
+            ]
+        );
+    }
+
+    #[test]
+    fn command_uvx_injects_extra_deps_before_from() {
+        let p = proc_with("main.py", Some("uvx"), Some("pkg@1"), None)
+            .with_extra_deps(vec!["rich".to_string()]);
+        let (_program, args) = p.command_parts();
+        assert_eq!(
+            args,
+            vec![
+                "--with".to_string(),
+                "rich".to_string(),
+                "--from".to_string(),
+                "pkg@1".to_string(),
+                "main.py".to_string()
+            ]
+        );
+    }
+
+    #[test]
+    fn command_uses_app_managed_runner_path() {
+        let p = proc_with("main.py", Some("uv-run"), None, Some("/data/runtimes/uv"));
+        let (program, _args) = p.command_parts();
+        assert_eq!(program, PathBuf::from("/data/runtimes/uv"));
+    }
+
+    #[test]
+    fn secrets_injected_as_env_absent_from_argv() {
+        let mut secrets = std::collections::HashMap::new();
+        secrets.insert("API_KEY".to_string(), "super-secret".to_string());
+        let p = proc_with("main.py", Some("uv-run"), None, None).with_secrets(secrets);
+
+        let (_program, args) = p.command_parts();
+        assert!(
+            !args.iter().any(|a| a.contains("super-secret")),
+            "secret leaked into argv"
+        );
+        assert_eq!(p.env_vars().get("API_KEY").map(String::as_str), Some("super-secret"));
+    }
+
+    #[test]
+    fn scratch_env_set_when_configured() {
+        let p = proc_with("main.py", Some("uv-run"), None, None)
+            .with_scratch_dir(Some(PathBuf::from("/data/plugins/x/.scratch")));
+        let env = p.env_vars();
+        assert_eq!(
+            env.get(SCRATCH_ENV).map(String::as_str),
+            Some("/data/plugins/x/.scratch")
+        );
+    }
 
     fn mock_plugin_script() -> (tempfile::TempDir, PathBuf) {
         let dir = tempfile::TempDir::new().unwrap();
@@ -418,6 +770,53 @@ done
         let result = process.execute(serde_json::json!({})).await;
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("timed out"));
+    }
+
+    // PAR.7d — stderr is captured for self-heal classification
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn stderr_is_captured_for_classification() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let script_path = dir.path().join("err-plugin.sh");
+        std::fs::write(
+            &script_path,
+            "#!/bin/bash\necho 'ModuleNotFoundError: No module named foo' >&2\nexit 1\n",
+        )
+        .unwrap();
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&script_path, std::fs::Permissions::from_mode(0o755)).unwrap();
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+
+        let mut process = PluginProcess::new("err", script_path, 5, 0);
+        process.spawn().await.unwrap();
+
+        // Poll until the drain task records stderr (process exits immediately).
+        let mut captured = String::new();
+        for _ in 0..50 {
+            captured = process.last_stderr().await;
+            if !captured.is_empty() {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        }
+        assert!(
+            captured.contains("ModuleNotFoundError"),
+            "expected stderr captured, got: {captured:?}"
+        );
+    }
+
+    #[test]
+    fn add_extra_deps_dedups() {
+        let mut p = proc_with("main.py", Some("uv-run"), None, None);
+        p.add_extra_deps(vec!["rich".to_string(), "rich".to_string()]);
+        p.add_extra_deps(vec!["httpx".to_string()]);
+        let (_program, args) = p.command_parts();
+        let withs: Vec<&String> = args.iter().filter(|a| a.as_str() != "--with").collect();
+        // entry + rich + httpx, rich only once
+        assert_eq!(args.iter().filter(|a| a.as_str() == "rich").count(), 1);
+        assert!(withs.iter().any(|a| a.as_str() == "httpx"));
     }
 
     // 9.0.10 — Process crash recovery

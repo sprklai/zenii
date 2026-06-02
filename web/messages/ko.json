@@ -352,8 +352,6 @@
   "settings_embeddings_provider_none": "없음 (FTS5만 사용)",
   "settings_embeddings_provider_openai": "OpenAI API",
   "settings_embeddings_provider_title": "공급자 선택",
-  "settings_embeddings_reindex_button": "모든 메모리 재인덱스",
-  "settings_embeddings_reindexing_button": "재인덱스 중...",
   "settings_embeddings_status_dimensions": "차원:",
   "settings_embeddings_status_model": "모델:",
   "settings_embeddings_status_provider": "공급자:",

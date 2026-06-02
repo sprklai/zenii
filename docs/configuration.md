@@ -298,12 +298,16 @@ context_summary_model = ""
 | `embedding_provider` | String | `"none"` | Embedding provider type: `none` (FTS5 only), `openai`, or `local` (FastEmbed) |
 | `embedding_model` | String | `"BAAI/bge-small-en-v1.5"` | Model ID for embedding generation |
 | `embedding_download_dir` | Option\<String\> | `null` | Directory for local embedding model downloads (defaults to data dir) |
+| `embedding_base_url` | Option\<String\> | `null` | Override base URL for OpenAI-compatible embedding endpoints (used when `embedding_provider = "openai"`) |
 
 ```toml
 embedding_provider = "local"
 embedding_model = "BAAI/bge-small-en-v1.5"
 # embedding_download_dir = "/custom/path/models"
+# embedding_base_url = "https://api.openai.com/v1"
 ```
+
+When `embedding_provider = "openai"`, the provider reuses the existing `api_key:openai` credential. If no key is present (or vector init fails), Zenii logs a warning and falls back to FTS5-only memory.
 
 ### Reasoning
 

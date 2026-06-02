@@ -352,8 +352,6 @@
   "settings_embeddings_provider_none": "なし（FTS5 のみ）",
   "settings_embeddings_provider_openai": "OpenAI API",
   "settings_embeddings_provider_title": "プロバイダー選択",
-  "settings_embeddings_reindex_button": "全メモリを再インデックス",
-  "settings_embeddings_reindexing_button": "再インデックス中...",
   "settings_embeddings_status_dimensions": "次元数：",
   "settings_embeddings_status_model": "モデル：",
   "settings_embeddings_status_provider": "プロバイダー：",

@@ -91,6 +91,7 @@ sequenceDiagram
     participant Cfg as Config
     participant DB as SQLite
     participant Cred as Keyring
+    participant MS as Memory Store
     participant AI as AI Providers
     participant GW as Gateway
 
@@ -99,6 +100,10 @@ sequenceDiagram
     App->>DB: Open/create database
     DB->>DB: Run pending migrations
     App->>Cred: Initialize credential store (KeyringStore / InMemoryStore)
+    App->>MS: Initialize SqliteMemoryStore (credentials first, so openai embeddings can resolve api_key:openai)
+    opt embedding_provider = openai/local
+        App->>MS: Build embedding provider + VectorIndex + cache (warn! + FTS-only fallback on failure)
+    end
     App->>AI: Register providers + load API keys
     App->>AI: Register 16 base + 3 feature-gated agent tools into ToolRegistry (DashMap)
     App->>App: Load identity (SoulLoader from data_dir/identity/)
@@ -1104,3 +1109,67 @@ sequenceDiagram
 - `GET /workflows/{id}/runs/{run_id}` -- get run details with per-step results
 
 **Key files**: `workflows/executor.rs`, `workflows/runtime.rs`, `workflows/templates.rs`, `workflows/definition.rs`, `workflows/mod.rs`, `gateway/handlers/workflows.rs`
+
+## Polyglot Agent Runtime Flow
+
+Installing a runner-based plugin tool (external GitHub Python/Node code) detects/installs the runtime on demand, installs dependencies into an isolated cache, and registers the tool — no fat sidecar.
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant Inst as PluginInstaller
+    participant Doc as Doctor / RuntimeManager
+    participant Dep as DependencyInstaller
+    participant TR as ToolRegistry
+
+    User->>Inst: install (manifest has runner=uvx, required_runtime)
+    Inst->>Doc: ensure(required_runtime)
+    alt runtime missing and auto-install off
+        Doc-->>Inst: Err (abort with install instructions)
+    else runtime present / installed
+        Doc-->>Inst: Ok
+        Inst->>Dep: prepare(runner, package, plugin_dir, cache_dir)
+        Note over Dep: uvx cache-prime / uv sync / npm install (isolated, shared cache)
+        Dep-->>Inst: Ok
+        Inst->>Doc: resolve_runner_path(runner)
+        Doc-->>Inst: app-managed runner path
+        Inst->>TR: register runner-based PluginProcess adapter
+    end
+```
+
+At call time the adapter lazily spawns the runner command (`uvx --from <pkg> <entry>`, etc.) with secrets and `ZENII_AGENT_SCRATCH` injected via env (never argv). The registered tool is then usable by the agent, delegation, workflows, CLI, and TUI. `refresh` re-resolves deps; `prune` GCs unreferenced cache entries.
+
+### Self-heal repair loop
+
+When a runner-based tool with declared `tests` fails, `PluginToolAdapter::execute` triggers a bounded GEPA+Hermes loop before surfacing the error.
+
+```mermaid
+sequenceDiagram
+    participant Caller as Agent / delegation / workflow
+    participant Ad as PluginToolAdapter
+    participant H as Healer
+    participant Ev as RunnerEvaluator
+    participant Rf as AgentReflector
+    participant Mem as MemoryFixStore
+
+    Caller->>Ad: execute(args)  [Tool interface]
+    Ad->>Ad: run once → failure (stderr/exit captured)
+    Ad->>H: repair(trace)  [auto_repair + tool has tests]
+    H->>Mem: recall(signature)
+    alt known fix
+        Mem-->>H: prior patch → Ev.evaluate → pass → Fixed
+    else classify + GEPA loop (≤ max_attempts, wall-clock bound)
+        H->>Rf: reflect(trace, prior)  (non-dependency)
+        Rf-->>H: Patch::Code(diff)
+        H->>Ev: evaluate(patch) in isolated scratch copy
+        Ev-->>H: passing case-ids → Pareto frontier
+        H->>Mem: record + distill_skill (on full pass)
+    end
+    H-->>Ad: HealOutcome{Fixed, patch}
+    Ad->>Ad: apply patch to installed plugin (deps→--with / code→entry), respawn
+    Ad->>Caller: retry once → success
+```
+
+Classification routes cheap cases (dependency → add `--with`; transient → retry; missing credentials → abort with instructions). Candidates always run in an isolated copy, so a bad patch never corrupts the registered plugin. Bounded by `heal_max_attempts` + `heal_wall_clock_secs`; gated by `plugin_auto_repair_enabled`.
+
+**Key files**: `runtimes/{mod,doctor}.rs`, `plugins/{manifest,process,installer,adapter}.rs`, `plugins/heal/{mod,classify,frontier,repair,memory_store,evaluator,reflector,trigger}.rs`, `gateway/handlers/runtimes.rs`

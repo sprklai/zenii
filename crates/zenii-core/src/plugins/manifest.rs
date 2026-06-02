@@ -31,9 +31,37 @@ pub struct PluginMeta {
 pub struct PluginToolDef {
     pub name: String,
     pub description: String,
+    /// Entry point: a binary path (direct exec) or, for runner-based tools, the entry name/script.
     pub binary: String,
     #[serde(default)]
     pub permissions: PluginPermissions,
+    // PAR: runner-based execution (uvx/npx/uv-run/node). `None` = direct binary exec (legacy).
+    #[serde(default)]
+    pub runner: Option<String>,
+    /// Package/source spec for `uvx`/`npx`/`bunx` (e.g. `git+https://github.com/u/r@v1` or `pkg@1.2`).
+    #[serde(default)]
+    pub package: Option<String>,
+    /// Required runtime constraint the doctor must satisfy (e.g. `python>=3.11`).
+    #[serde(default)]
+    pub required_runtime: Option<String>,
+    /// Optional evaluation cases used by the self-heal loop (PAR.5).
+    #[serde(default)]
+    pub tests: Vec<PluginToolTest>,
+}
+
+/// Known runner kinds. `None` runner = direct binary execution.
+pub const KNOWN_RUNNERS: &[&str] = &["uvx", "npx", "bunx", "uv-run", "node"];
+/// Runners that fetch from a package/source and therefore require `package`.
+pub const RUNNERS_REQUIRING_PACKAGE: &[&str] = &["uvx", "npx", "bunx"];
+
+/// An optional evaluation case for a plugin tool (used by the self-heal loop in PAR.5).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PluginToolTest {
+    /// Input arguments passed to the tool.
+    pub input: toml::Value,
+    /// Expected outcome (shape defined in PAR.5). Optional for smoke-only cases.
+    #[serde(default)]
+    pub expect: Option<toml::Value>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -99,13 +127,30 @@ impl PluginManifest {
                 "plugin name must be alphanumeric with hyphens/underscores only".into(),
             ));
         }
-        // Validate tool binary paths are relative
+        // Validate tool binary paths are relative + runner constraints
         for tool in &self.tools {
             if Path::new(&tool.binary).is_absolute() {
                 return Err(ZeniiError::Plugin(format!(
                     "tool '{}' binary path must be relative",
                     tool.name
                 )));
+            }
+            if let Some(runner) = &tool.runner {
+                if !KNOWN_RUNNERS.contains(&runner.as_str()) {
+                    return Err(ZeniiError::Plugin(format!(
+                        "tool '{}' has unknown runner '{runner}' (known: {})",
+                        tool.name,
+                        KNOWN_RUNNERS.join(", ")
+                    )));
+                }
+                if RUNNERS_REQUIRING_PACKAGE.contains(&runner.as_str())
+                    && tool.package.as_deref().unwrap_or("").is_empty()
+                {
+                    return Err(ZeniiError::Plugin(format!(
+                        "tool '{}' runner '{runner}' requires a `package`",
+                        tool.name
+                    )));
+                }
             }
         }
         // Validate skill file paths are relative
@@ -124,6 +169,126 @@ impl PluginManifest {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // --- PAR.2: runner-based tool manifest ---
+
+    // PAR.2 — legacy manifest without runner still parses (regression).
+    #[test]
+    fn existing_manifest_without_runner_still_parses() {
+        let toml = r#"
+[plugin]
+name = "legacy"
+version = "1.0.0"
+description = "legacy plugin"
+
+[[tools]]
+name = "legacy-tool"
+description = "direct binary"
+binary = "tool.sh"
+"#;
+        let m = PluginManifest::parse(toml).unwrap();
+        assert!(m.tools[0].runner.is_none());
+        assert!(m.tools[0].package.is_none());
+        assert!(m.tools[0].tests.is_empty());
+    }
+
+    // PAR.2 — runner/package/required_runtime parse.
+    #[test]
+    fn manifest_parses_runner_package_required_runtime() {
+        let toml = r#"
+[plugin]
+name = "py-agent"
+version = "0.1.0"
+description = "python agent"
+
+[[tools]]
+name = "analyze"
+description = "analyze repo"
+binary = "main.py"
+runner = "uvx"
+package = "git+https://github.com/u/r@v1"
+required_runtime = "python>=3.11"
+"#;
+        let m = PluginManifest::parse(toml).unwrap();
+        let t = &m.tools[0];
+        assert_eq!(t.runner.as_deref(), Some("uvx"));
+        assert_eq!(t.package.as_deref(), Some("git+https://github.com/u/r@v1"));
+        assert_eq!(t.required_runtime.as_deref(), Some("python>=3.11"));
+    }
+
+    // PAR.2 — optional tests section parses.
+    #[test]
+    fn manifest_parses_optional_tests_section() {
+        let toml = r#"
+[plugin]
+name = "py-agent"
+version = "0.1.0"
+description = "python agent"
+
+[[tools]]
+name = "analyze"
+description = "analyze"
+binary = "main.py"
+runner = "uv-run"
+
+[[tools.tests]]
+input = { path = "fixtures/a.json" }
+expect = { ok = true }
+"#;
+        let m = PluginManifest::parse(toml).unwrap();
+        assert_eq!(m.tools[0].tests.len(), 1);
+        assert!(m.tools[0].tests[0].expect.is_some());
+    }
+
+    // PAR.2 — unknown runner rejected.
+    #[test]
+    fn manifest_rejects_unknown_runner_value() {
+        let toml = r#"
+[plugin]
+name = "x"
+version = "0.1.0"
+description = "x"
+
+[[tools]]
+name = "t"
+description = "t"
+binary = "main.py"
+runner = "frobnicate"
+"#;
+        assert!(PluginManifest::parse(toml).is_err());
+    }
+
+    // PAR.2 — uvx/npx require a package; uv-run/node do not.
+    #[test]
+    fn manifest_runner_requires_package_for_uvx_npx() {
+        let no_pkg = r#"
+[plugin]
+name = "x"
+version = "0.1.0"
+description = "x"
+
+[[tools]]
+name = "t"
+description = "t"
+binary = "main.py"
+runner = "uvx"
+"#;
+        assert!(PluginManifest::parse(no_pkg).is_err());
+
+        let uv_run_ok = r#"
+[plugin]
+name = "x"
+version = "0.1.0"
+description = "x"
+
+[[tools]]
+name = "t"
+description = "t"
+binary = "main.py"
+runner = "uv-run"
+"#;
+        assert!(PluginManifest::parse(uv_run_ok).is_ok());
+    }
 
     // 9.0.1 — Parse valid manifest
     #[test]

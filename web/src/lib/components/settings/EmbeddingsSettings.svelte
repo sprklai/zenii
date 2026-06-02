@@ -10,7 +10,6 @@
 
 	let testResult = $state<{ success: boolean; dimensions?: number; latency_ms: number; error?: string } | null>(null);
 	let testing = $state(false);
-	let reindexing = $state(false);
 	let switching = $state(false);
 	let pollInterval: ReturnType<typeof setInterval> | undefined;
 
@@ -81,16 +80,6 @@
 		}
 	}
 
-	async function triggerReindex() {
-		reindexing = true;
-		try {
-			await embeddingsStore.reindex();
-		} catch (e) {
-			console.error('[Embeddings] Reindex failed:', e);
-		} finally {
-			reindexing = false;
-		}
-	}
 </script>
 
 {#if embeddingsStore.loading}
@@ -201,14 +190,6 @@
 				<div class="flex gap-2 pt-2">
 					<Button variant="outline" size="sm" onclick={runTest} disabled={testing || !embeddingsStore.status.model_available}>
 						{testing ? m.settings_embeddings_testing_button() : m.settings_embeddings_test_connection_button()}
-					</Button>
-					<Button
-						variant="outline"
-						size="sm"
-						onclick={triggerReindex}
-						disabled={reindexing || !embeddingsStore.status.model_available}
-					>
-						{reindexing ? m.settings_embeddings_reindexing_button() : m.settings_embeddings_reindex_button()}
 					</Button>
 				</div>
 

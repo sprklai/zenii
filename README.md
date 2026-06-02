@@ -109,6 +109,7 @@ One Rust library crate (`zenii-core`) holds all business logic. Five thin binary
 | **Workflows** | TOML/YAML DAG chains — tools, conditionals, loops, parallel steps, run history, cancellation |
 | **Scheduler** | Cron + interval jobs, each run as a full agent turn with access to all tools |
 | **Channels** | Telegram · Discord · Slack — inbound routing, unified inbox, threaded conversations (feature-gated) |
+| **PAR (Polyglot Agent Runtime)** | Run external GitHub code (Python via `uvx`, Node via `npx`) as tools — dependencies installed on demand into an isolated cache (no bundled sidecar), with self-healing on failure |
 | **MCP** | Server: expose all tools to Claude Code, Cursor, Gemini CLI, Windsurf · Client: consume external MCP servers |
 | **Security** | OS keyring · AES-256-GCM encryption · surface-based permission model (CLI/desktop/TUI/MCP/API) |
 
@@ -189,6 +190,69 @@ Full guide: [docs.zenii.sprklai.com/wiki](https://docs.zenii.sprklai.com/wiki)
 **[AGENT.md](AGENT.md)** — a machine-readable guide written for AI coding agents (Claude Code, Cursor, Gemini CLI, Windsurf, Codex). Drop it in your project or point your agent at it to give it a complete map of Zenii's API surface.
 
 Full guide: [docs.zenii.sprklai.com/mcp](https://docs.zenii.sprklai.com/mcp)
+
+---
+
+## Polyglot Agent Runtime (PAR)
+
+Run external code from GitHub as Zenii tools. Write a Python script or Node module, declare it in a manifest, and Zenii handles everything: dependency installation, runtime detection, isolation, and automatic repair on failure.
+
+### Install a Python Tool
+
+```bash
+# Check runtimes
+zenii runtime status
+
+# Install uv (Python runtime) if needed
+zenii runtime install uv
+
+# Install a Python tool from GitHub
+zenii plugin install https://github.com/yourteam/repo-analyzer
+
+# Use it immediately
+zenii chat
+# > analyze the complexity of my Python project
+```
+
+### Write Your Own Tool
+
+**zenii-plugin.toml:**
+```toml
+[plugin]
+name = "repo-analyzer"
+version = "0.1.0"
+description = "Analyze repository structure"
+
+[[tools]]
+name = "analyze"
+description = "Analyze repo complexity"
+binary = "main.py"
+runner = "uvx"
+package = "git+https://github.com/yourteam/repo-analyzer@v0.1.0"
+required_runtime = "python>=3.11"
+
+[[tools.tests]]
+input = { repo_path = "." }
+expect = { file_count = { ">": 0 } }
+```
+
+**main.py:**
+```python
+import sys, json
+# Tool receives JSON on stdin, returns JSON on stdout
+data = json.loads(sys.stdin.read())
+result = analyze(data["repo_path"])
+print(json.dumps({"success": True, "output": result}))
+```
+
+### Key Features
+
+- **On-demand deps** — installed via `uv`/`npx` into an isolated cache (no fat sidecar)
+- **Runtime auto-detect** — doctor probes for Python, Node.js, etc.; users can install with `zenii runtime install uv`
+- **Self-healing** — tools with declared `tests` auto-repair on failure: dependency errors get the missing module added, logic bugs get a reflective patch
+- **Works everywhere** — available in chat, delegation, workflows, CLI, desktop, and MCP
+
+Full guide: [docs.zenii.sprklai.com/par-guide](https://docs.zenii.sprklai.com/par-guide)
 
 ---
 
@@ -302,7 +366,9 @@ Zenii runs on ARM — same binary, same API. Deploy it on a Raspberry Pi, attach
 - [API Reference](https://docs.zenii.sprklai.com/api-reference)
 - [CLI Reference](https://docs.zenii.sprklai.com/cli-reference)
 - [Configuration](https://docs.zenii.sprklai.com/configuration)
+- [Polyglot Agent Runtime (PAR)](https://docs.zenii.sprklai.com/par-guide) — run external code as tools
 - [LLM Wiki](https://docs.zenii.sprklai.com/wiki)
+- [Workflows & Scheduler](https://docs.zenii.sprklai.com/workflows)
 - [Architecture](https://docs.zenii.sprklai.com/architecture)
 - [AGENT.md](AGENT.md) — guide for AI coding agents
 - [CHANGELOG.md](CHANGELOG.md)

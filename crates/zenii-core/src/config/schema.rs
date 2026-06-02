@@ -162,6 +162,9 @@ pub struct AppConfig {
     pub embedding_provider: String,
     pub embedding_model: String,
     pub embedding_download_dir: Option<String>,
+    /// Override base URL for OpenAI-compatible embedding endpoints (e.g. Ollama).
+    /// `None` uses the provider default (`https://api.openai.com`).
+    pub embedding_base_url: Option<String>,
 
     // Environment overrides
     /// User's display name (e.g., "John"). Used in greetings and personalization.
@@ -182,6 +185,22 @@ pub struct AppConfig {
     pub plugin_execute_timeout_secs: u64,
     pub plugin_auto_update: bool,
     pub official_plugins_repo: String,
+
+    // PAR: Polyglot Agent Runtime (runtimes for external agents)
+    /// Directory for app-managed runtime binaries (uv, node, ...). Defaults under data dir.
+    pub runtimes_dir: Option<String>,
+    /// Shared dependency cache dir for runners (uv/npx). Defaults under data dir.
+    pub runtime_cache_dir: Option<String>,
+    /// Install missing runtimes automatically without prompting. Default: false (instructions only).
+    pub runtime_auto_install: bool,
+    /// PAR.7: auto-repair failing runner-based plugin tools via the self-heal loop. Default: true.
+    pub plugin_auto_repair_enabled: bool,
+    /// Max self-heal candidate attempts per failure. Default: 3.
+    pub heal_max_attempts: u32,
+    /// Token budget hint for reflection (0 = unbounded; used to cap the prompt trace). Default: 0.
+    pub heal_token_budget: u32,
+    /// Wall-clock budget for a single heal attempt, in seconds. Default: 120.
+    pub heal_wall_clock_secs: u64,
 
     // Phase 8.12: Notification Routing
     pub notification_routing: NotificationRouting,
@@ -518,6 +537,7 @@ impl Default for AppConfig {
             embedding_provider: "none".into(),
             embedding_model: "bge-small-en-v1.5".into(),
             embedding_download_dir: None,
+            embedding_base_url: None,
 
             // Environment overrides
             user_name: None,
@@ -532,6 +552,15 @@ impl Default for AppConfig {
             plugin_execute_timeout_secs: 60,
             plugin_auto_update: false,
             official_plugins_repo: "https://github.com/sprklai/zenii-plugins.git".into(),
+
+            // PAR: Polyglot Agent Runtime
+            runtimes_dir: None,
+            runtime_cache_dir: None,
+            runtime_auto_install: false,
+            plugin_auto_repair_enabled: true,
+            heal_max_attempts: 3,
+            heal_token_budget: 0,
+            heal_wall_clock_secs: 120,
 
             // Tool Deduplication
             tool_dedup_enabled: true,
@@ -845,6 +874,16 @@ mod tests {
         assert_eq!(config.context_summary_provider_id, "openai");
         assert_eq!(config.context_reinject_gap_minutes, 30);
         assert_eq!(config.context_reinject_message_count, 20);
+    }
+
+    // PAR.7d — self-heal config defaults
+    #[test]
+    fn config_heal_defaults() {
+        let config = AppConfig::default();
+        assert!(config.plugin_auto_repair_enabled);
+        assert_eq!(config.heal_max_attempts, 3);
+        assert_eq!(config.heal_token_budget, 0);
+        assert_eq!(config.heal_wall_clock_secs, 120);
     }
 
     // 15.3.41 — config evolution defaults

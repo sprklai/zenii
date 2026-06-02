@@ -1,16 +1,128 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use tokio::sync::Mutex;
 use tracing::info;
 
-use super::adapter::PluginToolAdapter;
-use super::manifest::PluginManifest;
+use std::time::Duration;
+
+use super::adapter::{PluginToolAdapter, RepairContext};
+use super::heal::evaluator::RunnerEvaluator;
+use super::heal::memory_store::MemoryFixStore;
+use super::heal::trigger::Healer;
+use super::heal::{FixMemory, HealConfig, Reflector};
+use super::manifest::{PluginManifest, PluginToolDef};
 use super::process::PluginProcess;
 use super::registry::{InstalledPlugin, PluginRegistry, PluginSource};
+use crate::memory::traits::Memory;
+use crate::runtimes::RuntimeManager;
+use crate::runtimes::doctor::Doctor;
 use crate::skills::SkillRegistry;
 use crate::tools::ToolRegistry;
+use crate::tools::skill_proposal::SkillProposalTool;
 use crate::{Result, ZeniiError};
+
+/// Prepares dependencies for a runner-based plugin tool into an isolated env / shared cache.
+/// Injectable so installs can be unit-tested without network or real toolchains.
+#[async_trait::async_trait]
+pub trait DependencyInstaller: Send + Sync {
+    async fn prepare(
+        &self,
+        runner: &str,
+        package: Option<&str>,
+        plugin_dir: &Path,
+        cache_dir: &Path,
+    ) -> Result<()>;
+}
+
+/// Resolve a runner tool's entry. File-based runners (`uv-run`/`node`) take a local script and
+/// must resolve it against the install dir (the child is not spawned with that cwd); package
+/// runners (`uvx`/`npx`/`bunx`) take a package-provided command name and use it as-is.
+pub(crate) fn resolve_runner_entry(runner: &str, install_path: &Path, binary: &str) -> PathBuf {
+    match runner {
+        "uv-run" | "node" => install_path.join(binary),
+        _ => PathBuf::from(binary),
+    }
+}
+
+/// Map a runner name to its program (e.g. `uv-run` runs via the `uv` binary).
+pub fn runner_program_name(runner: &str) -> &str {
+    match runner {
+        "uv-run" => "uv",
+        other => other,
+    }
+}
+
+/// Derive a stable cache-entry name from a package spec (best-effort, for pruning).
+fn cache_entry_name(pkg: &str) -> String {
+    pkg.chars()
+        .map(|c| if c.is_alphanumeric() { c } else { '_' })
+        .collect()
+}
+
+/// Production dependency installer: primes/installs deps via uv/npm into the isolated env.
+pub struct DefaultDependencyInstaller;
+
+#[async_trait::async_trait]
+impl DependencyInstaller for DefaultDependencyInstaller {
+    async fn prepare(
+        &self,
+        runner: &str,
+        package: Option<&str>,
+        plugin_dir: &Path,
+        cache_dir: &Path,
+    ) -> Result<()> {
+        use tokio::process::Command;
+        match runner {
+            "uvx" => {
+                // Prime the shared uv cache by resolving the package once.
+                let Some(pkg) = package else { return Ok(()) };
+                let _ = Command::new("uvx")
+                    .env("UV_CACHE_DIR", cache_dir)
+                    .args(["--from", pkg, "--help"])
+                    .status()
+                    .await;
+            }
+            "uv-run" => {
+                // Sync the project's deps into an isolated env if it declares any.
+                let status = Command::new("uv")
+                    .env("UV_CACHE_DIR", cache_dir)
+                    .current_dir(plugin_dir)
+                    .arg("sync")
+                    .status()
+                    .await
+                    .map_err(|e| ZeniiError::Plugin(format!("uv sync failed to start: {e}")))?;
+                if !status.success() {
+                    return Err(ZeniiError::Plugin(format!(
+                        "uv sync failed for '{}' (exit {:?})",
+                        plugin_dir.display(),
+                        status.code()
+                    )));
+                }
+            }
+            "npx" | "bunx" | "node" => {
+                if !plugin_dir.join("package.json").exists() {
+                    return Ok(());
+                }
+                let status = Command::new("npm")
+                    .current_dir(plugin_dir)
+                    .arg("install")
+                    .status()
+                    .await
+                    .map_err(|e| ZeniiError::Plugin(format!("npm install failed to start: {e}")))?;
+                if !status.success() {
+                    return Err(ZeniiError::Plugin(format!(
+                        "npm install failed for '{}' (exit {:?})",
+                        plugin_dir.display(),
+                        status.code()
+                    )));
+                }
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+}
 
 /// Handles plugin install/update/remove operations.
 pub struct PluginInstaller {
@@ -19,6 +131,17 @@ pub struct PluginInstaller {
     skill_registry: Arc<SkillRegistry>,
     execute_timeout_secs: u64,
     max_restart_attempts: u32,
+    /// PAR: runtime doctor for `required_runtime` checks + runner-path resolution.
+    runtime_manager: Option<Arc<RuntimeManager>>,
+    /// PAR: dependency preparation for runner-based tools.
+    dep_installer: Arc<dyn DependencyInstaller>,
+    /// PAR.7d: self-heal wiring (absent → no auto-repair).
+    reflector: Option<Arc<dyn Reflector>>,
+    heal_memory: Option<Arc<dyn Memory>>,
+    heal_skill_sink: Option<Arc<SkillProposalTool>>,
+    auto_repair_enabled: bool,
+    heal_max_attempts: u32,
+    heal_wall_clock_secs: u64,
 }
 
 impl PluginInstaller {
@@ -35,7 +158,153 @@ impl PluginInstaller {
             skill_registry,
             execute_timeout_secs,
             max_restart_attempts,
+            runtime_manager: None,
+            dep_installer: Arc::new(DefaultDependencyInstaller),
+            reflector: None,
+            heal_memory: None,
+            heal_skill_sink: None,
+            auto_repair_enabled: false,
+            heal_max_attempts: 3,
+            heal_wall_clock_secs: 120,
         }
+    }
+
+    /// Wire the runtime manager + dependency installer (enables runner-based plugins).
+    pub fn with_runtime(
+        mut self,
+        runtime_manager: Arc<RuntimeManager>,
+        dep_installer: Arc<dyn DependencyInstaller>,
+    ) -> Self {
+        self.runtime_manager = Some(runtime_manager);
+        self.dep_installer = dep_installer;
+        self
+    }
+
+    /// Wire self-heal (PAR.7d): runner tools with declared `tests` auto-repair on failure.
+    #[allow(clippy::too_many_arguments)]
+    pub fn with_self_heal(
+        mut self,
+        reflector: Arc<dyn Reflector>,
+        memory: Arc<dyn Memory>,
+        skill_sink: Arc<SkillProposalTool>,
+        auto_repair_enabled: bool,
+        max_attempts: u32,
+        wall_clock_secs: u64,
+    ) -> Self {
+        self.reflector = Some(reflector);
+        self.heal_memory = Some(memory);
+        self.heal_skill_sink = Some(skill_sink);
+        self.auto_repair_enabled = auto_repair_enabled;
+        self.heal_max_attempts = max_attempts;
+        self.heal_wall_clock_secs = wall_clock_secs;
+        self
+    }
+
+    /// Build a self-heal [`RepairContext`] for a runner tool, when auto-repair is enabled,
+    /// the tool declares test cases, and all heal dependencies are wired.
+    fn build_repair_context(
+        &self,
+        plugin: &InstalledPlugin,
+        tool_def: &PluginToolDef,
+    ) -> Option<RepairContext> {
+        if !self.auto_repair_enabled || tool_def.tests.is_empty() {
+            return None;
+        }
+        let (reflector, memory, skill_sink, runtime_manager) = match (
+            &self.reflector,
+            &self.heal_memory,
+            &self.heal_skill_sink,
+            &self.runtime_manager,
+        ) {
+            (Some(r), Some(m), Some(s), Some(rt)) => (r.clone(), m.clone(), s.clone(), rt.clone()),
+            _ => return None,
+        };
+        let evaluator = Arc::new(RunnerEvaluator::new(
+            plugin.install_path.clone(),
+            tool_def.clone(),
+            runtime_manager,
+            self.resolve_cache_dir(plugin),
+            self.execute_timeout_secs,
+            0,
+        ));
+        let memfix: Arc<Mutex<dyn FixMemory>> =
+            Arc::new(Mutex::new(MemoryFixStore::new(memory, skill_sink)));
+        let healer = Arc::new(Healer::new(
+            reflector,
+            evaluator,
+            memfix,
+            tool_def.tests.len(),
+            HealConfig {
+                max_attempts: self.heal_max_attempts,
+            },
+            Duration::from_secs(self.heal_wall_clock_secs),
+        ));
+        Some(RepairContext {
+            healer,
+            plugin_dir: plugin.install_path.clone(),
+            entry: tool_def.binary.clone(),
+            has_tests: true,
+        })
+    }
+
+    /// Re-resolve dependencies for an installed plugin's runner-based tools.
+    pub async fn refresh(&self, name: &str) -> Result<()> {
+        let plugin = self
+            .registry
+            .get(name)
+            .ok_or_else(|| ZeniiError::PluginNotFound(name.to_string()))?;
+        let cache_dir = self.resolve_cache_dir(&plugin);
+        for tool_def in &plugin.manifest.tools {
+            if let Some(runner) = &tool_def.runner {
+                self.dep_installer
+                    .prepare(
+                        runner,
+                        tool_def.package.as_deref(),
+                        &plugin.install_path,
+                        &cache_dir,
+                    )
+                    .await?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Remove cache entries not referenced by any installed plugin. Returns count removed.
+    pub fn prune(&self, cache_dir: &Path) -> Result<usize> {
+        if !cache_dir.exists() {
+            return Ok(0);
+        }
+        let referenced: std::collections::HashSet<String> = self
+            .registry
+            .list()
+            .iter()
+            .flat_map(|p| p.manifest.tools.iter().filter_map(|t| t.package.clone()))
+            .map(|pkg| cache_entry_name(&pkg))
+            .collect();
+        let mut removed = 0;
+        for entry in std::fs::read_dir(cache_dir)
+            .map_err(|e| ZeniiError::Plugin(format!("read cache dir failed: {e}")))?
+        {
+            let entry = entry.map_err(|e| ZeniiError::Plugin(format!("cache entry error: {e}")))?;
+            if !entry.path().is_dir() {
+                continue;
+            }
+            let name = entry.file_name().to_string_lossy().to_string();
+            if !referenced.contains(&name) {
+                std::fs::remove_dir_all(entry.path())
+                    .map_err(|e| ZeniiError::Plugin(format!("prune remove failed: {e}")))?;
+                removed += 1;
+            }
+        }
+        Ok(removed)
+    }
+
+    /// Resolve the dependency cache dir (shared runtime cache, else a per-plugin fallback).
+    fn resolve_cache_dir(&self, plugin: &InstalledPlugin) -> std::path::PathBuf {
+        self.runtime_manager
+            .as_ref()
+            .map(|m| m.cache_dir().to_path_buf())
+            .unwrap_or_else(|| plugin.install_path.join(".cache"))
     }
 
     /// Install a plugin from a git URL.
@@ -274,6 +543,12 @@ impl PluginInstaller {
     async fn register_plugin_assets(&self, plugin: &InstalledPlugin) -> Result<()> {
         // Register tools
         for tool_def in &plugin.manifest.tools {
+            // PAR: runner-based tools take a different install/registration path.
+            if tool_def.runner.is_some() {
+                self.register_runner_tool(plugin, tool_def).await?;
+                continue;
+            }
+
             let binary = plugin.install_path.join(&tool_def.binary);
 
             // Fetch real schema from the plugin's info() JSON-RPC method
@@ -322,6 +597,73 @@ impl PluginInstaller {
             }
         }
 
+        Ok(())
+    }
+
+    /// Install deps + register a single runner-based tool (PAR.3).
+    async fn register_runner_tool(
+        &self,
+        plugin: &InstalledPlugin,
+        tool_def: &PluginToolDef,
+    ) -> Result<()> {
+        let runner = tool_def.runner.as_deref().unwrap_or_default();
+
+        // 1. Ensure the required runtime is present (abort if missing/unsatisfied).
+        if let Some(required) = &tool_def.required_runtime {
+            let manager = self.runtime_manager.clone().ok_or_else(|| {
+                ZeniiError::Plugin(format!(
+                    "plugin '{}' tool '{}' requires runtime '{required}' but no runtime manager is configured",
+                    plugin.manifest.plugin.name, tool_def.name
+                ))
+            })?;
+            Doctor::new(manager).ensure(required).await?;
+        }
+
+        // 2. Prepare dependencies into the isolated env / shared cache.
+        let cache_dir = self.resolve_cache_dir(plugin);
+        self.dep_installer
+            .prepare(
+                runner,
+                tool_def.package.as_deref(),
+                &plugin.install_path,
+                &cache_dir,
+            )
+            .await?;
+
+        // 3. Register a runner-based process (lazy spawn; entry = the manifest `binary`).
+        let runner_path = self
+            .runtime_manager
+            .as_ref()
+            .and_then(|m| m.resolve_runner_path(runner_program_name(runner)));
+        let process = PluginProcess::new(
+            &tool_def.name,
+            resolve_runner_entry(runner, &plugin.install_path, &tool_def.binary),
+            self.execute_timeout_secs,
+            self.max_restart_attempts,
+        )
+        .with_runner(Some(runner.to_string()), tool_def.package.clone(), runner_path)
+        .with_scratch_dir(Some(plugin.install_path.join(".scratch")));
+
+        let adapter = PluginToolAdapter::new(
+            tool_def.name.clone(),
+            tool_def.description.clone(),
+            serde_json::json!({}),
+            Arc::new(Mutex::new(process)),
+        );
+        // PAR.7d: attach the self-heal trigger when configured + the tool has test cases.
+        let adapter = match self.build_repair_context(plugin, tool_def) {
+            Some(ctx) => adapter.with_repair(ctx),
+            None => adapter,
+        };
+        self.tool_registry
+            .register(Arc::new(adapter))
+            .unwrap_or_else(|e| {
+                tracing::warn!(
+                    "Failed to register runner tool '{}' from plugin '{}': {e}",
+                    tool_def.name,
+                    plugin.manifest.plugin.name
+                );
+            });
         Ok(())
     }
 
@@ -411,6 +753,317 @@ binary = "{name}-tool"
         }
 
         plugin_dir
+    }
+
+    // --- PAR.3: runner dependency lifecycle ---
+
+    use std::sync::Mutex as StdMutex;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    use crate::runtimes::{RuntimeInstaller, RuntimeProbe};
+
+    struct MockProbe {
+        present: bool,
+    }
+    impl RuntimeProbe for MockProbe {
+        fn which(&self, _name: &str) -> Option<PathBuf> {
+            self.present.then(|| PathBuf::from("/usr/bin/python"))
+        }
+        fn version(&self, _path: &Path) -> Option<String> {
+            self.present.then(|| "3.11.5".to_string())
+        }
+    }
+
+    struct NoopRtInstaller;
+    #[async_trait::async_trait]
+    impl RuntimeInstaller for NoopRtInstaller {
+        async fn install(&self, _name: &str, dest: &Path) -> Result<PathBuf> {
+            Ok(dest.join("x"))
+        }
+    }
+
+    fn mock_runtime(present: bool, auto_install: bool, dir: &Path) -> Arc<RuntimeManager> {
+        Arc::new(RuntimeManager::new(
+            dir.join("rt"),
+            dir.join("cache"),
+            auto_install,
+            Arc::new(MockProbe { present }),
+            Arc::new(NoopRtInstaller),
+        ))
+    }
+
+    #[derive(Default)]
+    struct SpyDep {
+        calls: AtomicUsize,
+        last_pkg: StdMutex<Option<String>>,
+    }
+    #[async_trait::async_trait]
+    impl DependencyInstaller for SpyDep {
+        async fn prepare(
+            &self,
+            _runner: &str,
+            package: Option<&str>,
+            _plugin_dir: &Path,
+            _cache_dir: &Path,
+        ) -> Result<()> {
+            self.calls.fetch_add(1, Ordering::SeqCst);
+            *self.last_pkg.lock().unwrap() = package.map(String::from);
+            Ok(())
+        }
+    }
+
+    fn create_runner_plugin(dir: &TempDir, name: &str, required_runtime: Option<&str>) -> PathBuf {
+        let plugin_dir = dir.path().join(format!("source-{name}"));
+        std::fs::create_dir_all(&plugin_dir).unwrap();
+        let req_line = required_runtime
+            .map(|r| format!("required_runtime = \"{r}\"\n"))
+            .unwrap_or_default();
+        let manifest = format!(
+            r#"[plugin]
+name = "{name}"
+version = "1.0.0"
+description = "runner plugin {name}"
+
+[[tools]]
+name = "{name}-tool"
+description = "runner tool"
+binary = "main.py"
+runner = "uvx"
+package = "git+https://github.com/u/{name}@v1"
+{req_line}"#
+        );
+        std::fs::write(plugin_dir.join("zenii-plugin.toml"), manifest).unwrap();
+        plugin_dir
+    }
+
+    #[tokio::test]
+    async fn install_runner_tool_invokes_doctor_for_required_runtime() {
+        let (plugins_dir, _s, registry, tools, skills) = setup_test_env();
+        let src = TempDir::new().unwrap();
+        let path = create_runner_plugin(&src, "rt-present", Some("python>=3.11"));
+        let dep = Arc::new(SpyDep::default());
+        let installer = PluginInstaller::new(registry, tools, skills, 60, 3)
+            .with_runtime(mock_runtime(true, false, plugins_dir.path()), dep.clone());
+        let res = installer.install_from_local(&path).await;
+        assert!(res.is_ok(), "present runtime should install: {res:?}");
+        assert_eq!(dep.calls.load(Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn install_aborts_when_required_runtime_missing_and_autoinstall_off() {
+        let (plugins_dir, _s, registry, tools, skills) = setup_test_env();
+        let src = TempDir::new().unwrap();
+        let path = create_runner_plugin(&src, "rt-missing", Some("python>=3.11"));
+        let dep = Arc::new(SpyDep::default());
+        let installer = PluginInstaller::new(registry, tools, skills, 60, 3)
+            .with_runtime(mock_runtime(false, false, plugins_dir.path()), dep.clone());
+        let res = installer.install_from_local(&path).await;
+        assert!(res.is_err(), "missing runtime + auto-install off must abort");
+        assert_eq!(
+            dep.calls.load(Ordering::SeqCst),
+            0,
+            "deps must not be prepared when runtime missing"
+        );
+    }
+
+    #[tokio::test]
+    async fn install_primes_dependency_cache_for_runner() {
+        let (plugins_dir, _s, registry, tools, skills) = setup_test_env();
+        let src = TempDir::new().unwrap();
+        let path = create_runner_plugin(&src, "rt-prime", None);
+        let dep = Arc::new(SpyDep::default());
+        let installer = PluginInstaller::new(registry, tools, skills, 60, 3)
+            .with_runtime(mock_runtime(true, false, plugins_dir.path()), dep.clone());
+        installer.install_from_local(&path).await.unwrap();
+        assert_eq!(dep.calls.load(Ordering::SeqCst), 1);
+        assert_eq!(
+            dep.last_pkg.lock().unwrap().as_deref(),
+            Some("git+https://github.com/u/rt-prime@v1")
+        );
+    }
+
+    #[tokio::test]
+    async fn install_direct_binary_path_unchanged() {
+        let (plugins_dir, _s, registry, tools, skills) = setup_test_env();
+        let src = TempDir::new().unwrap();
+        let path = create_local_plugin(&src, "direct");
+        let dep = Arc::new(SpyDep::default());
+        let installer = PluginInstaller::new(registry.clone(), tools, skills, 60, 3)
+            .with_runtime(mock_runtime(true, false, plugins_dir.path()), dep.clone());
+        installer.install_from_local(&path).await.unwrap();
+        assert_eq!(
+            dep.calls.load(Ordering::SeqCst),
+            0,
+            "direct-binary plugins must not invoke dep installer"
+        );
+        assert!(registry.get("direct").is_some());
+    }
+
+    #[tokio::test]
+    async fn refresh_invokes_dependency_resolver() {
+        let (plugins_dir, _s, registry, tools, skills) = setup_test_env();
+        let src = TempDir::new().unwrap();
+        let path = create_runner_plugin(&src, "rt-refresh", None);
+        let dep = Arc::new(SpyDep::default());
+        let installer = PluginInstaller::new(registry, tools, skills, 60, 3)
+            .with_runtime(mock_runtime(true, false, plugins_dir.path()), dep.clone());
+        installer.install_from_local(&path).await.unwrap();
+        let before = dep.calls.load(Ordering::SeqCst);
+        installer.refresh("rt-refresh").await.unwrap();
+        assert!(dep.calls.load(Ordering::SeqCst) > before);
+    }
+
+    #[tokio::test]
+    async fn prune_removes_unreferenced_cache_entries() {
+        let (plugins_dir, _s, registry, tools, skills) = setup_test_env();
+        let cache = plugins_dir.path().join("cache");
+        std::fs::create_dir_all(cache.join("stray-entry")).unwrap();
+        let installer = PluginInstaller::new(registry, tools, skills, 60, 3);
+        let removed = installer.prune(&cache).unwrap();
+        assert_eq!(removed, 1);
+        assert!(!cache.join("stray-entry").exists());
+    }
+
+    // PAR.6 — a runner-based external agent lands in ToolRegistry, the single propagation
+    // point every consumer (main agent, delegation sub-agents, workflows, CLI, TUI, gateway
+    // `GET /tools`) reads. Resolvable by name + listed ⇒ usable everywhere.
+    #[tokio::test]
+    async fn runner_tool_registered_and_resolvable() {
+        let (plugins_dir, _s, registry, tools, skills) = setup_test_env();
+        let src = TempDir::new().unwrap();
+        let path = create_runner_plugin(&src, "rt-visible", None);
+        let dep = Arc::new(SpyDep::default());
+        let installer = PluginInstaller::new(registry, tools.clone(), skills, 60, 3)
+            .with_runtime(mock_runtime(true, false, plugins_dir.path()), dep);
+        installer.install_from_local(&path).await.unwrap();
+
+        assert!(
+            tools.get("rt-visible-tool").is_some(),
+            "runner tool resolvable by name (delegation/workflow lookup)"
+        );
+        assert!(
+            tools.list().iter().any(|t| t.name == "rt-visible-tool"),
+            "runner tool listed (GET /tools discovery)"
+        );
+    }
+
+    // --- PAR.7d: self-heal injection at registration ---
+
+    use crate::memory::in_memory_store::InMemoryStore;
+    use crate::plugins::heal::{Candidate, FailureTrace, Patch};
+    use crate::plugins::manifest::{PluginPermissions, PluginToolTest};
+    use std::sync::atomic::AtomicBool;
+
+    struct NoReflector;
+    #[async_trait::async_trait]
+    impl Reflector for NoReflector {
+        async fn reflect(&self, _t: &FailureTrace, _p: &[Candidate]) -> Result<Patch> {
+            Ok(Patch::Retry)
+        }
+    }
+
+    fn installed_plugin(install_path: PathBuf) -> InstalledPlugin {
+        let manifest = PluginManifest::parse(
+            "[plugin]\nname = \"p\"\nversion = \"1.0.0\"\ndescription = \"d\"\n",
+        )
+        .unwrap();
+        InstalledPlugin {
+            manifest,
+            install_path,
+            enabled: true,
+            installed_at: "now".into(),
+            source: PluginSource::Bundled,
+        }
+    }
+
+    fn runner_tool(tests: Vec<PluginToolTest>) -> PluginToolDef {
+        PluginToolDef {
+            name: "a".into(),
+            description: "d".into(),
+            binary: "main.py".into(),
+            permissions: PluginPermissions::default(),
+            runner: Some("uv-run".into()),
+            package: None,
+            required_runtime: None,
+            tests,
+        }
+    }
+
+    fn installer_with_self_heal(enabled: bool) -> (TempDir, PluginInstaller) {
+        let (plugins_dir, _s, registry, tools, skills) = setup_test_env();
+        let pool = crate::db::init_pool(&plugins_dir.path().join("t.db")).unwrap();
+        let skill = Arc::new(SkillProposalTool::new(pool, Arc::new(AtomicBool::new(true))));
+        let memory: Arc<dyn Memory> = Arc::new(InMemoryStore::new());
+        let rt = mock_runtime(true, false, plugins_dir.path());
+        let installer = PluginInstaller::new(registry, tools, skills, 60, 0)
+            .with_runtime(rt, Arc::new(DefaultDependencyInstaller))
+            .with_self_heal(Arc::new(NoReflector), memory, skill, enabled, 3, 120);
+        (plugins_dir, installer)
+    }
+
+    fn one_test_case() -> Vec<PluginToolTest> {
+        vec![PluginToolTest {
+            input: toml::from_str("x = 1").unwrap(),
+            expect: None,
+        }]
+    }
+
+    #[test]
+    fn repair_context_built_when_configured_and_tests_present() {
+        let (_dir, installer) = installer_with_self_heal(true);
+        let pdir = TempDir::new().unwrap();
+        let plugin = installed_plugin(pdir.path().to_path_buf());
+        assert!(
+            installer
+                .build_repair_context(&plugin, &runner_tool(one_test_case()))
+                .is_some()
+        );
+    }
+
+    #[test]
+    fn repair_context_none_without_tests() {
+        let (_dir, installer) = installer_with_self_heal(true);
+        let pdir = TempDir::new().unwrap();
+        let plugin = installed_plugin(pdir.path().to_path_buf());
+        assert!(
+            installer
+                .build_repair_context(&plugin, &runner_tool(vec![]))
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn repair_context_none_when_auto_repair_disabled() {
+        let (_dir, installer) = installer_with_self_heal(false);
+        let pdir = TempDir::new().unwrap();
+        let plugin = installed_plugin(pdir.path().to_path_buf());
+        assert!(
+            installer
+                .build_repair_context(&plugin, &runner_tool(one_test_case()))
+                .is_none()
+        );
+    }
+
+    // PAR.7d follow-up — runner entry resolution.
+    #[test]
+    fn runner_entry_file_based_resolves_against_install_dir() {
+        let base = Path::new("/data/plugins/x");
+        assert_eq!(
+            resolve_runner_entry("uv-run", base, "main.py"),
+            PathBuf::from("/data/plugins/x/main.py")
+        );
+        assert_eq!(
+            resolve_runner_entry("node", base, "server.js"),
+            PathBuf::from("/data/plugins/x/server.js")
+        );
+    }
+
+    #[test]
+    fn runner_entry_package_runner_stays_bare() {
+        let base = Path::new("/data/plugins/x");
+        assert_eq!(resolve_runner_entry("uvx", base, "tool-cmd"), PathBuf::from("tool-cmd"));
+        assert_eq!(resolve_runner_entry("npx", base, "cli"), PathBuf::from("cli"));
+        assert_eq!(resolve_runner_entry("bunx", base, "cli"), PathBuf::from("cli"));
     }
 
     // 9.0.17 — Install from local path

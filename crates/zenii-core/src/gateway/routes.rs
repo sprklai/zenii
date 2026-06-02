@@ -267,6 +267,8 @@ pub fn build_router(state: Arc<AppState>) -> Router {
             "/plugins/{name}/config",
             get(handlers::plugins::get_plugin_config).put(handlers::plugins::update_plugin_config),
         )
+        // PAR: Runtime doctor/install (own state, baked in via with_state)
+        .merge(runtimes_routes(state.runtime_manager.clone()))
         // Channel credential test (always available, no feature gate)
         .route(
             "/channels/{name}/test",
@@ -312,6 +314,20 @@ pub fn build_router(state: Arc<AppState>) -> Router {
         // Tracing
         .layer(TraceLayer::new_for_http())
         .with_state(state)
+}
+
+/// Build PAR runtime routes with their own `Arc<RuntimeManager>` state baked in.
+fn runtimes_routes(
+    manager: Arc<crate::runtimes::RuntimeManager>,
+) -> Router<Arc<AppState>> {
+    Router::new()
+        .route("/runtimes/status", get(handlers::runtimes::runtime_status))
+        .route(
+            "/runtimes/{name}/install",
+            post(handlers::runtimes::runtime_install),
+        )
+        .route("/runtimes/recheck", post(handlers::runtimes::runtime_recheck))
+        .with_state(manager)
 }
 
 /// Build channel routes, conditionally compiled.

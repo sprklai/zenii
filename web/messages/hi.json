@@ -352,8 +352,6 @@
   "settings_embeddings_provider_none": "कोई नहीं (केवल FTS5)",
   "settings_embeddings_provider_openai": "OpenAI API",
   "settings_embeddings_provider_title": "प्रदाता चयन",
-  "settings_embeddings_reindex_button": "सभी मेमोरी पुनः इंडेक्स करें",
-  "settings_embeddings_reindexing_button": "पुनः इंडेक्स हो रहा है...",
   "settings_embeddings_status_dimensions": "डाइमेंशन:",
   "settings_embeddings_status_model": "मॉडल:",
   "settings_embeddings_status_provider": "प्रदाता:",

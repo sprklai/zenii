@@ -785,6 +785,63 @@ zenii plugin info weather
 
 ---
 
+### `runtime` -- Manage external agent runtimes
+
+Manage external-agent runtimes (Python via `uv`, Node/TypeScript via `npx`, etc.) for the Polyglot Agent Runtime (PAR). See the **[PAR Guide](./par-guide)** for detailed examples and best practices.
+
+#### `runtime status`
+
+Show presence and version of all detected runtimes.
+
+```bash
+zenii runtime status
+```
+
+Example output:
+```
+  uv       present  0.4.21
+  node     present  20.11.1
+  python   MISSING
+           Run: curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+#### `runtime recheck`
+
+Re-probe all runtimes (after installing them manually).
+
+```bash
+zenii runtime recheck
+```
+
+#### `runtime install <name>`
+
+Install a specific runtime. Running this command is explicit consent to install.
+
+```
+zenii runtime install <NAME>
+```
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `<NAME>` | Yes | Runtime to install: `uv` (Python runtime), `node` (Node.js), or others |
+
+Examples:
+
+```bash
+# Install uv (includes Python)
+zenii runtime install uv
+
+# Install Node.js
+zenii runtime install node
+
+# Re-check after manual install
+zenii runtime recheck
+```
+
+**Note:** If `runtime_auto_install = false` in `zenii.toml` (the default), the daemon will show install instructions instead of auto-installing when a runtime is missing. Plugins can still specify `required_runtime` in their manifest, and users can manually install.
+
+---
+
 ### `workflow` -- Manage workflows
 
 Create, run, and manage TOML-defined multi-step workflow pipelines. Requires the `workflows` feature flag.

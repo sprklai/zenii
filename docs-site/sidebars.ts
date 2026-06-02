@@ -17,6 +17,7 @@ const sidebars: SidebarsConfig = {
       label: "Guides",
       collapsed: false,
       items: [
+        "par-guide",
         "deployment",
         "scheduling",
         "wiki",

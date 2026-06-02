@@ -51,10 +51,6 @@ function createEmbeddingsStore() {
     async download(): Promise<{ status: string; model: string }> {
       return apiPost("/embeddings/download", {});
     },
-
-    async reindex(): Promise<{ status: string }> {
-      return apiPost("/embeddings/reindex", {});
-    },
   };
 }
 

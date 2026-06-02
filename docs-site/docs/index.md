@@ -14,16 +14,18 @@ Zenii is a local AI backend for developers who want one service behind their scr
 - **[API Reference](./api-reference)** — HTTP and WebSocket endpoints
 - **[CLI Reference](./cli-reference)** — Command-line usage and recipes
 - **[Configuration](./configuration)** — Runtime settings and defaults
+- **[Polyglot Agent Runtime (PAR)](./par-guide)** — Run external Python/Node code as tools
 - **[Architecture](./architecture)** — System design and internals
 - **[Deployment](./deployment)** — Native, Docker, and server deployment
 - **[Development](./development)** — Build, test, and contribute
 
 ## What Ships Today
 
-- **Daemon API** — Local REST and WebSocket service at `http://localhost:18981`
+- **Daemon API** — Local REST and WebSocket service at `http://localhost:18981` (55+ routes)
 - **Shipped interfaces** — Desktop app, CLI, TUI, and MCP server
 - **Persistent memory** — Shared local state across interfaces and automations
-- **Built-in tools** — 19 tools total (16 base + 3 feature-gated: channels, scheduler, workflows)
+- **Built-in tools** — 16 base tools, with channels, scheduler, and workflows behind feature flags
+- **Polyglot Agent Runtime (PAR)** — Run external Python (via `uv`) and Node.js (via `npx`) code as tools; self-healing on failure
 - **Local-first deployment** — Self-hosted, MIT licensed, zero telemetry in the product surface
 
 ## Good Fit

@@ -352,8 +352,6 @@
   "settings_embeddings_provider_none": "Nenhum (apenas FTS5)",
   "settings_embeddings_provider_openai": "OpenAI API",
   "settings_embeddings_provider_title": "Seleção de Provedor",
-  "settings_embeddings_reindex_button": "Re-indexar Todas as Memórias",
-  "settings_embeddings_reindexing_button": "Re-indexando...",
   "settings_embeddings_status_dimensions": "Dimensões:",
   "settings_embeddings_status_model": "Modelo:",
   "settings_embeddings_status_provider": "Provedor:",

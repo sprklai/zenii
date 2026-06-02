@@ -73,6 +73,7 @@ pub struct AppState {
     pub user_learner: Arc<UserLearner>,
     pub plugin_registry: Arc<PluginRegistry>,
     pub plugin_installer: Arc<PluginInstaller>,
+    pub runtime_manager: Arc<crate::runtimes::RuntimeManager>,
     #[cfg(feature = "channels")]
     pub channel_registry: Arc<ChannelRegistry>,
     #[cfg(feature = "channels")]
