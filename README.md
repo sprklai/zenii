@@ -22,7 +22,7 @@
     <img src="https://img.shields.io/badge/license-MIT-green?style=flat-square" alt="MIT license" />
   </a>
   <a href="https://github.com/sprklai/zenii/actions/workflows/ci.yml">
-    <img src="https://img.shields.io/badge/tests-1790-blue?style=flat-square" alt="1790 tests" />
+    <img src="https://img.shields.io/badge/tests-1900-blue?style=flat-square" alt="1900 tests" />
   </a>
   <a href="https://github.com/sprklai/zenii/pulls">
     <img src="https://img.shields.io/badge/PRs-welcome-brightgreen?style=flat-square" alt="PRs welcome" />

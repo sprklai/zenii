@@ -1,5 +1,5 @@
 {
-  "version": "0.2.5",
+  "version": "0.2.6",
   "agentTools": 16,
   "llmProviders": 6,
   "messagingChannels": 3,
@@ -7,7 +7,7 @@
   "binarySize": 20,
   "debRpmSize": 16,
   "startupSeconds": 3,
-  "totalEndpoints": 137,
+  "totalEndpoints": 136,
   "crates": 6,
   "securityLayers": 6,
   "platformTargets": 10,

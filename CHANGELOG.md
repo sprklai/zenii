@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.6] - 2026-06-02
+
+### Added
+- PAR: Polyglot Agent Runtime PAR.1–3 — runtimes, manifest/process model, doctor tool
+- PAR.4: launch MCP servers via uvx/npx (build_mcp_stdio_connector)
+- PAR.5: self-heal repair loop (GEPA + Hermes) — deterministic patch/verify cycle
+- PAR.6: verify runner agents propagate via ToolRegistry
+- PAR.7a–d: live self-heal pipeline — FixMemory, Evaluator, Reflector, end-to-end trigger
+- Core: wire OpenAI embedding provider at boot
+
+### Fixed
+- Heal: prevent patch targets from escaping the plugin directory
+- Heal: honor `heal_token_budget` for the reflection trace cap
+- Gateway: return 501 for unimplemented embeddings reindex; run runtime probes off async worker thread
+- Runtimes: auto-install a missing required runtime when enabled
+- Plugins: abort install when dependency setup fails; execute uv-run in plugin project dir; resolve file-based runner entry against install dir
+
+### Changed
+- Style: apply cargo fmt across plugins, heal, mcp, runtimes modules
+- Docs: comprehensive PAR guide with real-life examples; document OpenAI embedding boot wiring
+
 ## [0.2.5] - 2026-05-24
 
 ### Fixed
