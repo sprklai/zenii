@@ -164,7 +164,11 @@ mod tests {
             Duration::from_secs(10),
         );
         let out = h
-            .repair(build_trace(String::new(), "Traceback: boom".into(), Some(1)))
+            .repair(build_trace(
+                String::new(),
+                "Traceback: boom".into(),
+                Some(1),
+            ))
             .await
             .unwrap();
         assert_eq!(out.status, HealStatus::Fixed);
@@ -180,7 +184,11 @@ mod tests {
             Duration::from_millis(50),
         );
         let out = h
-            .repair(build_trace(String::new(), "Traceback: boom".into(), Some(1)))
+            .repair(build_trace(
+                String::new(),
+                "Traceback: boom".into(),
+                Some(1),
+            ))
             .await
             .unwrap();
         assert_eq!(out.status, HealStatus::GaveUp);
@@ -201,7 +209,11 @@ mod tests {
 
     #[test]
     fn build_trace_sets_signature() {
-        let t = build_trace("out".into(), "ModuleNotFoundError: No module named 'x'".into(), Some(1));
+        let t = build_trace(
+            "out".into(),
+            "ModuleNotFoundError: No module named 'x'".into(),
+            Some(1),
+        );
         assert_eq!(t.signature, "missing-module:x");
         assert_eq!(t.exit_code, Some(1));
     }

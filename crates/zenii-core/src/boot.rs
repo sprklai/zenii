@@ -121,11 +121,9 @@ async fn init_vector_index(
             sqlite_vec::sqlite3_vec_init as *const (),
         )));
     }
-    tokio::task::spawn_blocking(move || {
-        crate::memory::vector_index::VectorIndex::new(pool, dim)
-    })
-    .await
-    .map_err(|e| crate::ZeniiError::Database(format!("vector index spawn failed: {e}")))?
+    tokio::task::spawn_blocking(move || crate::memory::vector_index::VectorIndex::new(pool, dim))
+        .await
+        .map_err(|e| crate::ZeniiError::Database(format!("vector index spawn failed: {e}")))?
 }
 
 /// Build the memory store for the `openai` embedding provider.
@@ -1506,7 +1504,10 @@ mod tests {
             .await
             .unwrap();
         let results = memory.recall("quick fox", 10, 0).await.unwrap();
-        assert!(!results.is_empty(), "recall should return the stored memory");
+        assert!(
+            !results.is_empty(),
+            "recall should return the stored memory"
+        );
 
         // The mock endpoint must have been hit (embeddings were generated → vector path active)
         assert!(

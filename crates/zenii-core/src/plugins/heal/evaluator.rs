@@ -123,10 +123,11 @@ impl Evaluator for RunnerEvaluator {
 fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<()> {
     std::fs::create_dir_all(dst)
         .map_err(|e| ZeniiError::Plugin(format!("heal evaluate: create dir: {e}")))?;
-    for entry in
-        std::fs::read_dir(src).map_err(|e| ZeniiError::Plugin(format!("heal evaluate: read dir: {e}")))?
+    for entry in std::fs::read_dir(src)
+        .map_err(|e| ZeniiError::Plugin(format!("heal evaluate: read dir: {e}")))?
     {
-        let entry = entry.map_err(|e| ZeniiError::Plugin(format!("heal evaluate: dir entry: {e}")))?;
+        let entry =
+            entry.map_err(|e| ZeniiError::Plugin(format!("heal evaluate: dir entry: {e}")))?;
         let path = entry.path();
         let dest = dst.join(entry.file_name());
         if path.is_dir() {
@@ -316,7 +317,10 @@ mod tests {
         let diff = diffy::create_patch("a\nb\n", "a\nc\n").to_string();
         apply_code_patch(&work, &diff, "main.py").unwrap();
 
-        assert_eq!(std::fs::read_to_string(work.join("main.py")).unwrap(), "a\nc\n");
+        assert_eq!(
+            std::fs::read_to_string(work.join("main.py")).unwrap(),
+            "a\nc\n"
+        );
         assert_eq!(
             std::fs::read_to_string(src.path().join("main.py")).unwrap(),
             "a\nb\n",
@@ -340,7 +344,10 @@ mod tests {
     #[test]
     fn safe_join_rejects_traversal_and_absolute() {
         let base = Path::new("/tmp/work");
-        assert_eq!(safe_join(base, "src/main.py"), Some(base.join("src/main.py")));
+        assert_eq!(
+            safe_join(base, "src/main.py"),
+            Some(base.join("src/main.py"))
+        );
         assert_eq!(safe_join(base, "../../etc/passwd"), None);
         assert_eq!(safe_join(base, "/etc/passwd"), None);
         assert_eq!(safe_join(base, "a/../../b"), None);
@@ -415,7 +422,9 @@ mod tests {
 
     /// A PEP723 JSON-RPC plugin whose `execute` returns `40 + ADDEND`.
     fn write_agent(dir: &Path, addend: u32, extra_import: Option<&str>) {
-        let import = extra_import.map(|m| format!("import {m}\n")).unwrap_or_default();
+        let import = extra_import
+            .map(|m| format!("import {m}\n"))
+            .unwrap_or_default();
         let script = format!(
             "import sys, json\n{import}\n\
              for line in sys.stdin:\n\
@@ -443,13 +452,19 @@ mod tests {
         }
         let plugin = tempfile::TempDir::new().unwrap();
         write_agent(plugin.path(), 1, None); // buggy: outputs "41"
-        let tests = vec![case("answer = 42", r#"ok = true
-output_contains = "42""#)];
+        let tests = vec![case(
+            "answer = 42",
+            r#"ok = true
+output_contains = "42""#,
+        )];
         let eval = evaluator_for(plugin.path().to_path_buf(), "main.py", tests);
 
         // No patch → buggy output "41" → no case passes.
         let none = eval.evaluate(&Patch::Retry).await.unwrap();
-        assert!(none.is_empty(), "buggy agent should fail the case, got {none:?}");
+        assert!(
+            none.is_empty(),
+            "buggy agent should fail the case, got {none:?}"
+        );
 
         // Code patch flipping 40+1 → 40+2 makes the case pass.
         let buggy = std::fs::read_to_string(plugin.path().join("main.py")).unwrap();

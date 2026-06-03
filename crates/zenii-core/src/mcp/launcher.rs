@@ -134,7 +134,8 @@ mod tests {
         let cfg = build_mcp_stdio_config(&s).unwrap();
         let (_c, args, _e) = stdio(&cfg);
         assert!(
-            args.iter().any(|a| a == "git+https://github.com/u/r@v1.2.0"),
+            args.iter()
+                .any(|a| a == "git+https://github.com/u/r@v1.2.0"),
             "ref not pinned in args: {args:?}"
         );
     }
@@ -142,8 +143,7 @@ mod tests {
     #[test]
     fn mcp_config_secrets_in_env_not_args() {
         let mut s = spec("uvx", "git+https://github.com/u/r", Some("server"));
-        s.secrets
-            .insert("API_KEY".into(), "super-secret".into());
+        s.secrets.insert("API_KEY".into(), "super-secret".into());
         let cfg = build_mcp_stdio_config(&s).unwrap();
         let (_c, args, env) = stdio(&cfg);
         assert_eq!(env.get("API_KEY").map(String::as_str), Some("super-secret"));
@@ -246,7 +246,11 @@ for line in sys.stdin:
     #[cfg(feature = "mcp-client")]
     #[tokio::test]
     async fn launcher_config_connects_via_mcp_client_manager() {
-        let mut s = spec("uvx", "git+https://github.com/u/does-not-exist", Some("server"));
+        let mut s = spec(
+            "uvx",
+            "git+https://github.com/u/does-not-exist",
+            Some("server"),
+        );
         s.id = "ext-fixture".into();
         s.runner_path = Some("/nonexistent/uvx".into());
         let cfg = build_mcp_stdio_config(&s).unwrap();

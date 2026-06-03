@@ -137,9 +137,17 @@ impl Tool for PluginToolAdapter {
             Err(e) => e.to_string(),
             Ok(r) => r.output.clone(),
         };
-        let stderr = if stderr.trim().is_empty() { fallback } else { stderr };
+        let stderr = if stderr.trim().is_empty() {
+            fallback
+        } else {
+            stderr
+        };
 
-        match ctx.healer.repair(build_trace(String::new(), stderr, exit)).await {
+        match ctx
+            .healer
+            .repair(build_trace(String::new(), stderr, exit))
+            .await
+        {
             Ok(outcome) if outcome.status == HealStatus::Fixed => {
                 if let Some(patch) = &outcome.patch
                     && let Err(e) = self.apply_live(ctx, patch).await
@@ -147,7 +155,11 @@ impl Tool for PluginToolAdapter {
                     tracing::warn!("self-heal: applying fix for '{}' failed: {e}", self.name);
                     return result;
                 }
-                tracing::info!("self-heal: repaired '{}' ({}); retrying", self.name, outcome.report);
+                tracing::info!(
+                    "self-heal: repaired '{}' ({}); retrying",
+                    self.name,
+                    outcome.report
+                );
                 self.run_once(args).await
             }
             Ok(outcome) => {
@@ -470,7 +482,9 @@ done
 
     use crate::plugins::heal::evaluator::RunnerEvaluator;
     use crate::plugins::heal::trigger::Healer;
-    use crate::plugins::heal::{Candidate, Evaluator, FailureTrace, FixMemory, HealConfig, Reflector};
+    use crate::plugins::heal::{
+        Candidate, Evaluator, FailureTrace, FixMemory, HealConfig, Reflector,
+    };
     use crate::plugins::manifest::{PluginPermissions, PluginToolDef, PluginToolTest};
     use crate::runtimes::RuntimeManager;
     use async_trait::async_trait as par_async_trait;
@@ -536,11 +550,24 @@ done
             entry: "main.py".into(),
             has_tests: true,
         };
-        let mut proc = PluginProcess::new("t", dir.path().join("main.py"), 5, 0)
-            .with_runner(Some("uv-run".into()), None, None);
-        apply_patch(&Patch::Dependency { add: vec!["cowsay".into()] }, &ctx, &mut proc).unwrap();
+        let mut proc = PluginProcess::new("t", dir.path().join("main.py"), 5, 0).with_runner(
+            Some("uv-run".into()),
+            None,
+            None,
+        );
+        apply_patch(
+            &Patch::Dependency {
+                add: vec!["cowsay".into()],
+            },
+            &ctx,
+            &mut proc,
+        )
+        .unwrap();
         let (_program, args) = proc.command_parts();
-        assert!(args.iter().any(|a| a == "cowsay"), "extra dep not injected: {args:?}");
+        assert!(
+            args.iter().any(|a| a == "cowsay"),
+            "extra dep not injected: {args:?}"
+        );
     }
 
     fn write_buggy_agent(dir: &Path) {
@@ -607,7 +634,9 @@ done
         #[par_async_trait]
         impl Reflector for CannedReflector {
             async fn reflect(&self, _t: &FailureTrace, _p: &[Candidate]) -> Result<Patch> {
-                Ok(Patch::Code { diff: self.0.clone() })
+                Ok(Patch::Code {
+                    diff: self.0.clone(),
+                })
             }
         }
         struct NoopMem;
@@ -629,20 +658,27 @@ done
         ));
 
         let process = Arc::new(Mutex::new(
-            PluginProcess::new("fix", plugin.path().join("main.py"), 60, 0)
-                .with_runner(Some("uv-run".into()), None, None),
+            PluginProcess::new("fix", plugin.path().join("main.py"), 60, 0).with_runner(
+                Some("uv-run".into()),
+                None,
+                None,
+            ),
         ));
-        let adapter = PluginToolAdapter::new("fix".into(), "d".into(), serde_json::json!({}), process)
-            .with_repair(RepairContext {
-                healer,
-                plugin_dir: plugin.path().to_path_buf(),
-                entry: "main.py".into(),
-                has_tests: true,
-            });
+        let adapter =
+            PluginToolAdapter::new("fix".into(), "d".into(), serde_json::json!({}), process)
+                .with_repair(RepairContext {
+                    healer,
+                    plugin_dir: plugin.path().to_path_buf(),
+                    entry: "main.py".into(),
+                    has_tests: true,
+                });
 
         let tool: &dyn Tool = &adapter;
         let result = tool.execute(serde_json::json!({"x": 1})).await.unwrap();
-        assert!(result.success, "auto-repair should fix + retry, got: {result:?}");
+        assert!(
+            result.success,
+            "auto-repair should fix + retry, got: {result:?}"
+        );
         assert!(
             std::fs::read_to_string(plugin.path().join("main.py"))
                 .unwrap()

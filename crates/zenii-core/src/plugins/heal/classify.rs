@@ -140,7 +140,10 @@ mod tests {
 
     #[test]
     fn classify_unknown_defaults_to_runtime() {
-        assert_eq!(classify("something odd happened", Some(1)), FailureClass::Runtime);
+        assert_eq!(
+            classify("something odd happened", Some(1)),
+            FailureClass::Runtime
+        );
     }
 
     #[test]

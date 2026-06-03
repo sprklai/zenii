@@ -186,7 +186,10 @@ mod tests {
         Candidate {
             id: id.into(),
             patch,
-            passing: passing.iter().map(|s| s.to_string()).collect::<BTreeSet<_>>(),
+            passing: passing
+                .iter()
+                .map(|s| s.to_string())
+                .collect::<BTreeSet<_>>(),
         }
     }
 
@@ -223,7 +226,13 @@ mod tests {
 
     #[test]
     fn build_prompt_includes_prior_candidates() {
-        let prior = [candidate("c1", Patch::Dependency { add: vec!["numpy".into()] }, &["t1"])];
+        let prior = [candidate(
+            "c1",
+            Patch::Dependency {
+                add: vec!["numpy".into()],
+            },
+            &["t1"],
+        )];
         let p = build_reflection_prompt(&trace("boom", Some(1)), &prior, DEFAULT_TRACE_CHAR_LIMIT);
         assert!(p.contains("c1"));
         assert!(p.contains("passed 1 case"));
@@ -266,7 +275,10 @@ mod tests {
     async fn reflect_returns_code_patch_from_model() {
         let model = Arc::new(MockModel(format!("```diff\n{SAMPLE_DIFF}```")));
         let reflector = AgentReflector::new(model);
-        let patch = reflector.reflect(&trace("ValueError", Some(1)), &[]).await.unwrap();
+        let patch = reflector
+            .reflect(&trace("ValueError", Some(1)), &[])
+            .await
+            .unwrap();
         match patch {
             Patch::Code { diff } => assert!(diff.contains("+x = 2")),
             other => panic!("expected Code patch, got {other:?}"),

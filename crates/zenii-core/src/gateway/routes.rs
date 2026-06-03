@@ -317,16 +317,17 @@ pub fn build_router(state: Arc<AppState>) -> Router {
 }
 
 /// Build PAR runtime routes with their own `Arc<RuntimeManager>` state baked in.
-fn runtimes_routes(
-    manager: Arc<crate::runtimes::RuntimeManager>,
-) -> Router<Arc<AppState>> {
+fn runtimes_routes(manager: Arc<crate::runtimes::RuntimeManager>) -> Router<Arc<AppState>> {
     Router::new()
         .route("/runtimes/status", get(handlers::runtimes::runtime_status))
         .route(
             "/runtimes/{name}/install",
             post(handlers::runtimes::runtime_install),
         )
-        .route("/runtimes/recheck", post(handlers::runtimes::runtime_recheck))
+        .route(
+            "/runtimes/recheck",
+            post(handlers::runtimes::runtime_recheck),
+        )
         .with_state(manager)
 }
 

@@ -223,7 +223,10 @@ impl PluginProcess {
     pub fn env_vars(&self) -> std::collections::HashMap<String, String> {
         let mut env = self.secrets.clone();
         if let Some(scratch) = &self.scratch_dir {
-            env.insert(SCRATCH_ENV.to_string(), scratch.to_string_lossy().to_string());
+            env.insert(
+                SCRATCH_ENV.to_string(),
+                scratch.to_string_lossy().to_string(),
+            );
         }
         env
     }
@@ -641,7 +644,10 @@ mod tests {
             !args.iter().any(|a| a.contains("super-secret")),
             "secret leaked into argv"
         );
-        assert_eq!(p.env_vars().get("API_KEY").map(String::as_str), Some("super-secret"));
+        assert_eq!(
+            p.env_vars().get("API_KEY").map(String::as_str),
+            Some("super-secret")
+        );
     }
 
     #[test]

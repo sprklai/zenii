@@ -231,7 +231,11 @@ mod tests {
         .await
         .unwrap();
         assert_eq!(out.status, HealStatus::Transient);
-        assert_eq!(refl.calls.load(Ordering::SeqCst), 0, "no mutation on transient");
+        assert_eq!(
+            refl.calls.load(Ordering::SeqCst),
+            0,
+            "no mutation on transient"
+        );
     }
 
     #[tokio::test]
@@ -263,7 +267,9 @@ mod tests {
             passing: ids(&["t1"]),
         };
         let mut mem = MockMemory {
-            recalled: Some(Patch::Code { diff: "remembered".into() }),
+            recalled: Some(Patch::Code {
+                diff: "remembered".into(),
+            }),
             ..Default::default()
         };
         let out = heal(

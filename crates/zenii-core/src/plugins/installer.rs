@@ -641,7 +641,11 @@ impl PluginInstaller {
             self.execute_timeout_secs,
             self.max_restart_attempts,
         )
-        .with_runner(Some(runner.to_string()), tool_def.package.clone(), runner_path)
+        .with_runner(
+            Some(runner.to_string()),
+            tool_def.package.clone(),
+            runner_path,
+        )
         .with_scratch_dir(Some(plugin.install_path.join(".scratch")));
 
         let adapter = PluginToolAdapter::new(
@@ -858,7 +862,10 @@ package = "git+https://github.com/u/{name}@v1"
         let installer = PluginInstaller::new(registry, tools, skills, 60, 3)
             .with_runtime(mock_runtime(false, false, plugins_dir.path()), dep.clone());
         let res = installer.install_from_local(&path).await;
-        assert!(res.is_err(), "missing runtime + auto-install off must abort");
+        assert!(
+            res.is_err(),
+            "missing runtime + auto-install off must abort"
+        );
         assert_eq!(
             dep.calls.load(Ordering::SeqCst),
             0,
@@ -992,7 +999,10 @@ package = "git+https://github.com/u/{name}@v1"
     fn installer_with_self_heal(enabled: bool) -> (TempDir, PluginInstaller) {
         let (plugins_dir, _s, registry, tools, skills) = setup_test_env();
         let pool = crate::db::init_pool(&plugins_dir.path().join("t.db")).unwrap();
-        let skill = Arc::new(SkillProposalTool::new(pool, Arc::new(AtomicBool::new(true))));
+        let skill = Arc::new(SkillProposalTool::new(
+            pool,
+            Arc::new(AtomicBool::new(true)),
+        ));
         let memory: Arc<dyn Memory> = Arc::new(InMemoryStore::new());
         let rt = mock_runtime(true, false, plugins_dir.path());
         let installer = PluginInstaller::new(registry, tools, skills, 60, 0)
@@ -1061,9 +1071,18 @@ package = "git+https://github.com/u/{name}@v1"
     #[test]
     fn runner_entry_package_runner_stays_bare() {
         let base = Path::new("/data/plugins/x");
-        assert_eq!(resolve_runner_entry("uvx", base, "tool-cmd"), PathBuf::from("tool-cmd"));
-        assert_eq!(resolve_runner_entry("npx", base, "cli"), PathBuf::from("cli"));
-        assert_eq!(resolve_runner_entry("bunx", base, "cli"), PathBuf::from("cli"));
+        assert_eq!(
+            resolve_runner_entry("uvx", base, "tool-cmd"),
+            PathBuf::from("tool-cmd")
+        );
+        assert_eq!(
+            resolve_runner_entry("npx", base, "cli"),
+            PathBuf::from("cli")
+        );
+        assert_eq!(
+            resolve_runner_entry("bunx", base, "cli"),
+            PathBuf::from("cli")
+        );
     }
 
     // 9.0.17 — Install from local path

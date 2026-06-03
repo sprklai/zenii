@@ -377,7 +377,11 @@ async fn install_uv(name: &str, dest: &Path) -> Result<PathBuf> {
         "powershell -ExecutionPolicy ByPass -c \"irm https://astral.sh/uv/install.ps1 | iex\"",
     );
     #[cfg(unix)]
-    let (shell, flag, script) = ("sh", "-c", "curl -LsSf https://astral.sh/uv/install.sh | sh");
+    let (shell, flag, script) = (
+        "sh",
+        "-c",
+        "curl -LsSf https://astral.sh/uv/install.sh | sh",
+    );
 
     let status = tokio::process::Command::new(shell)
         .arg(flag)
