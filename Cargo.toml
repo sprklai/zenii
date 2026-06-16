@@ -73,7 +73,7 @@ arc-swap = "1"
 clap = { version = "4", features = ["derive"] }
 
 # Phase 2: Memory + Tools
-sysinfo = "0.38.3"
+sysinfo = "0.39.3"
 websearch = "0.1.1"
 ignore = "0.4.26"
 globset = "0.4"
