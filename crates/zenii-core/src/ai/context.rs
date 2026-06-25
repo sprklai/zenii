@@ -1086,12 +1086,14 @@ pub fn convert_session_message(msg: &crate::ai::session::Message) -> Option<RigM
         "user" => Some(RigMessage::User {
             content: OneOrMany::one(UserContent::Text(Text {
                 text: msg.content.clone(),
+                additional_params: Default::default(),
             })),
         }),
         "assistant" => Some(RigMessage::Assistant {
             id: None,
             content: OneOrMany::one(AssistantContent::Text(Text {
                 text: msg.content.clone(),
+                additional_params: Default::default(),
             })),
         }),
         _ => None, // system, tool, etc. are skipped
@@ -2119,6 +2121,7 @@ mod tests {
         RigMessage::User {
             content: OneOrMany::one(UserContent::Text(Text {
                 text: text.to_string(),
+                additional_params: Default::default(),
             })),
         }
     }
@@ -2128,6 +2131,7 @@ mod tests {
             id: None,
             content: OneOrMany::one(AssistantContent::Text(Text {
                 text: text.to_string(),
+                additional_params: Default::default(),
             })),
         }
     }
