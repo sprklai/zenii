@@ -124,7 +124,7 @@ jobs:
     name: Check Embedded (aarch64-musl)
     runs-on: ubuntu-24.04
     env:
-      CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER: aarch64-linux-gnu-gcc
+      CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER: aarch64-linux-musl-gcc
     steps:
       - uses: actions/checkout@v7
 
