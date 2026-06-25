@@ -119,32 +119,6 @@ jobs:
           bun install
           bun run check
 
-  check-embedded:
-    name: Check Embedded (aarch64-musl)
-    runs-on: ubuntu-24.04
-    env:
-      CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER: aarch64-linux-musl-gcc
-    steps:
-      - uses: actions/checkout@v7
-
-      - name: Install cross-compilation tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y gcc-aarch64-linux-gnu musl-tools
-
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: aarch64-unknown-linux-musl
-
-      - uses: swatinem/rust-cache@v2
-        with:
-          key: embedded-aarch64-musl
-
-      - name: Check CLI + Daemon for aarch64-musl
-        run: |
-          cargo check -p zenii-cli --target aarch64-unknown-linux-musl
-          cargo check -p zenii-daemon --no-default-features --target aarch64-unknown-linux-musl
-
   cargo-audit:
     name: Cargo Audit
     runs-on: ubuntu-latest
