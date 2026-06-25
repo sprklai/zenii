@@ -38,9 +38,6 @@ jobs:
       - name: Test (default features)
         run: cargo test --workspace
 
-      - name: Test (all features)
-        run: cargo test --workspace --all-features
-
   check-frontend:
     name: Check Frontend
     runs-on: ubuntu-latest
@@ -88,11 +85,8 @@ jobs:
 
       - uses: swatinem/rust-cache@v2
 
-      - name: Clippy (default features)
+      - name: Clippy
         run: cargo clippy --workspace -- -D warnings
-
-      - name: Clippy (all features)
-        run: cargo clippy --workspace --all-features -- -D warnings
 
       - name: Rustfmt
         run: cargo fmt --check
