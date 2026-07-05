@@ -12,4 +12,9 @@ ignore = [
     "RUSTSEC-2026-0099",
     # rustls-webpki CRL parsing panic — same stuck branches (0.101.7 via websearch→reqwest 0.11, 0.102.8 via serenity→rustls 0.22)
     "RUSTSEC-2026-0104",
+    # quick-xml namespace allocation DoS — 0.31.0 (websearch 0.1.1), 0.37.5 (tauri-winrt-notification 0.7.2), 0.39.4 (plist 1.9.0)
+    # Unable to upgrade transitive deps to 0.41.0+ without major version bumps
+    "RUSTSEC-2026-0195",
+    # quick-xml quadratic runtime — same sources as above
+    "RUSTSEC-2026-0194",
 ]
