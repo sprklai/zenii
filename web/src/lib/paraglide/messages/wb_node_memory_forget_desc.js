@@ -1,0 +1,59 @@
+/* eslint-disable */
+import { getLocale, experimentalStaticLocale } from '../runtime.js';
+
+/** @typedef {import('../runtime.js').LocalizedString} LocalizedString */
+
+/** @typedef {{}} Wb_Node_Memory_Forget_DescInputs */
+
+const en_wb_node_memory_forget_desc = /** @type {(inputs: Wb_Node_Memory_Forget_DescInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`Delete from memory`)
+};
+
+const zh_cn2_wb_node_memory_forget_desc = /** @type {(inputs: Wb_Node_Memory_Forget_DescInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`从记忆中删除`)
+};
+
+const es_wb_node_memory_forget_desc = /** @type {(inputs: Wb_Node_Memory_Forget_DescInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`Eliminar de memoria`)
+};
+
+const ja_wb_node_memory_forget_desc = /** @type {(inputs: Wb_Node_Memory_Forget_DescInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`メモリから削除`)
+};
+
+const hi_wb_node_memory_forget_desc = /** @type {(inputs: Wb_Node_Memory_Forget_DescInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`मेमोरी से हटाएँ`)
+};
+
+const pt_br2_wb_node_memory_forget_desc = /** @type {(inputs: Wb_Node_Memory_Forget_DescInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`Excluir da memória`)
+};
+
+const ko_wb_node_memory_forget_desc = /** @type {(inputs: Wb_Node_Memory_Forget_DescInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`메모리에서 삭제`)
+};
+
+const fr_wb_node_memory_forget_desc = /** @type {(inputs: Wb_Node_Memory_Forget_DescInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`Supprimer de la mémoire`)
+};
+
+/**
+* | output |
+* | --- |
+* | "Delete from memory" |
+*
+* @param {Wb_Node_Memory_Forget_DescInputs} inputs
+* @param {{ locale?: "en" | "zh-CN" | "es" | "ja" | "hi" | "pt-BR" | "ko" | "fr" }} options
+* @returns {LocalizedString}
+*/
+export const wb_node_memory_forget_desc = /** @type {((inputs?: Wb_Node_Memory_Forget_DescInputs, options?: { locale?: "en" | "zh-CN" | "es" | "ja" | "hi" | "pt-BR" | "ko" | "fr" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Wb_Node_Memory_Forget_DescInputs, { locale?: "en" | "zh-CN" | "es" | "ja" | "hi" | "pt-BR" | "ko" | "fr" }, {}>} */ ((inputs = {}, options = {}) => {
+	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
+	if (locale === "en") return en_wb_node_memory_forget_desc(inputs)
+	if (locale === "zh-CN") return zh_cn2_wb_node_memory_forget_desc(inputs)
+	if (locale === "es") return es_wb_node_memory_forget_desc(inputs)
+	if (locale === "ja") return ja_wb_node_memory_forget_desc(inputs)
+	if (locale === "hi") return hi_wb_node_memory_forget_desc(inputs)
+	if (locale === "pt-BR") return pt_br2_wb_node_memory_forget_desc(inputs)
+	if (locale === "ko") return ko_wb_node_memory_forget_desc(inputs)
+	return fr_wb_node_memory_forget_desc(inputs)
+});
