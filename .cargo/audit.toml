@@ -17,4 +17,10 @@ ignore = [
     "RUSTSEC-2026-0195",
     # quick-xml quadratic runtime — same sources as above
     "RUSTSEC-2026-0194",
+    # proc-macro-error unmaintained — transitive from glib-macros (gtk/linux desktop UI)
+    # Used by libappindicator via tauri desktop shell. No fix available without major Tauri upgrade.
+    "RUSTSEC-2024-0370",
+    # crossbeam-epoch pointer dereference — transitive from parking_lot/dashmap ecosystem
+    # Affects display formatting of invalid pointers, unlikely in practice but can't easily upgrade.
+    "RUSTSEC-2026-0204",
 ]
