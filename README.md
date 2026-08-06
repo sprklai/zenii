@@ -1,5 +1,7 @@
 # Zenii *(zen-ee-eye)*
 
+[![MCP Toplist](https://mcptoplist.com/badge/glama%2Fsprklai%2Fzenii.svg)](https://mcptoplist.com/server/glama%2Fsprklai%2Fzenii)
+
 <p align="center">
   <img src="assets/zenii-master.gif" alt="Zenii demo" width="720" />
 </p>
